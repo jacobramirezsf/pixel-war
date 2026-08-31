@@ -66,6 +66,7 @@ function cellBlock(w: World, tx: number, ty: number, team: number, type: BldKey)
   if (t !== 0 && t !== 1) return 'bad ground';
   if (bldAt(w, tx, ty)) return 'occupied';
   if (nearBase(m, tx, ty)) return 'base ground';
+  for (const s of w.slots) for (const b of s.settlements) if (b.hp > 0 && Math.abs(b.x - (tx * TILE + 4)) <= 20 && Math.abs(b.y - (ty * TILE + 4)) <= 12) return 'base ground';
   for (let i = 0; i < w.nP; i++) {
     if (allied(w, i, team) || !w.slots[i].alive) continue;
     for (const eb of w.slots[i].settlements) if (Math.hypot(tx * TILE + 4 - eb.x, ty * TILE + 4 - eb.y) < 36) return 'too close to enemy base';
@@ -75,6 +76,22 @@ function cellBlock(w: World, tx: number, ty: number, team: number, type: BldKey)
     const cx = tx * TILE + 4, cy = ty * TILE + 4;
     for (const u of w.units) if (u.hp > 0 && Math.abs(u.x - cx) < 6 && Math.abs(u.y - cy) < 6) return 'unit in the way';
   }
+  return null;
+}
+
+/** A settlement needs a 5x3 clear footprint of grass or road with nothing on it. */
+export function canPlaceSettlement(w: World, tx: number, ty: number): string | null {
+  const m = w.map;
+  for (let dy = -1; dy <= 1; dy++)
+    for (let dx = -2; dx <= 2; dx++) {
+      const x = tx + dx, y = ty + dy;
+      if (x < 1 || y < 1 || x >= m.cols - 1 || y >= m.rows - 1) return 'too close to the edge';
+      const t = m.tiles[y * m.cols + x];
+      if (t !== 0 && t !== 1) return 'needs open ground';
+      if (bldAt(w, x, y)) return 'buildings in the way';
+    }
+  for (const s of w.slots) for (const b of s.settlements) if (b.hp > 0 && Math.abs(b.x - (tx * TILE + 4)) < 48 && Math.abs(b.y - (ty * TILE + 4)) < 40) return 'too close to another settlement';
+  for (const q of w.mines) if (Math.abs(q.x - (tx * TILE + 4)) < 20 && Math.abs(q.y - (ty * TILE + 4)) < 16) return 'mine ground';
   return null;
 }
 

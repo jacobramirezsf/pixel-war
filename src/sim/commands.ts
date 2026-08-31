@@ -8,6 +8,7 @@ import { addBld, bldAtPx, canBuild, gateDir, passableFor, removeBld } from './bu
 import { clamp, TILE } from './map.ts';
 import type { Action, Command, Target, TargetRef, Unit, World } from './types.ts';
 import { buildTime, mkUnit } from './units.ts';
+import { canSettle, placeSettlement, startUpgrade, TIERS } from './conquest.ts';
 import { allied, count, mapH, mapW, say as worldSay } from './world.ts';
 
 /** Queued and in-production units count toward the army cap. */
@@ -64,6 +65,26 @@ export function applyCommand(w: World, c: Command, quiet = false): boolean {
       s.queue.splice(c.payload.index, 1);
       s.gold += TYPES[q.unit].cost;
       say(TYPES[q.unit].name + ' cancelled, gold refunded', 1);
+      return true;
+    }
+    case 'settle': {
+      if (w.mode !== 'conquest') return false;
+      const why = canSettle(w, slot, c.payload.x, c.payload.y);
+      if (why) { say('Cannot settle: ' + why, 1.5); return false; }
+      if (s.gold < TIERS.village.cost) { say('Need ' + TIERS.village.cost + ' gold', 1.2); return false; }
+      s.gold -= TIERS.village.cost;
+      const b = placeSettlement(w, slot, c.payload.x, c.payload.y, 'village');
+      say('Village founded in ' + w.regions[b.region].name + '. Hold it 30s to claim.', 2.5);
+      return true;
+    }
+    case 'upgrade': {
+      if (w.mode !== 'conquest') return false;
+      const b = s.settlements.find((x) => x.id === c.payload.id);
+      if (!b || b.hp <= 0 || b.tier !== 'village' || b.buildT > 0) { say('Pick a finished village of yours', 1.2); return false; }
+      if (s.gold < TIERS.fortress.cost) { say('Need ' + TIERS.fortress.cost + ' gold', 1.2); return false; }
+      s.gold -= TIERS.fortress.cost;
+      startUpgrade(b);
+      say('Upgrading to a fortress. It is weak until done.', 2.5);
       return true;
     }
     case 'rally': {

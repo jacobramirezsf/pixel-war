@@ -121,10 +121,11 @@ export function wireViewButtons(app: App): void {
 
 export function updateUI(app: App): void {
   const w = app.world, B = (id: string): HTMLElement => $(id);
-  const sand = w?.mode === 'sand', map = !!app.editor, edit = w?.phase === 'edit';
+  const sand = w?.mode === 'sand', map = !!app.editor, edit = w?.phase === 'edit', conq = w?.mode === 'conquest';
   const vis: Record<string, boolean> = {
     bAll: !map && !edit, bCharge: !map && !edit, bHold: !map && !edit, bRetreat: !map && !edit, bRally: !map && !edit && !sand, bPause: !map && !edit, bEdit: sand && !edit,
     bG1: !map && !edit && !sand, bG2: !map && !edit && !sand, bG3: !map && !edit && !sand,
+    bSettle: conq, bFort: conq, bSave: conq, bLand: conq, bSpeed: conq,
     bErase: sand && edit, bMirror: sand && edit, bClear: sand && edit, bMap: sand && edit, bPlay: sand && edit,
     bSize: map, bRandom: map, bMirrorMap: map, bClearMap: map, bCode: map, bDone: map,
   };
@@ -139,6 +140,10 @@ export function updateUI(app: App): void {
   show($('tstrip'), map);
   B('bErase').classList.toggle('on', app.tool === 'erase');
   B('bRally').classList.toggle('on', app.tool === 'rally');
+  B('bSettle').classList.toggle('on', app.tool === 'settle');
+  B('bFort').classList.toggle('on', app.tool === 'upgrade');
+  B('bLand').classList.toggle('on', app.overlay);
+  B('bSpeed').textContent = app.speed + '×';
   for (const n of [1, 2, 3]) B('bG' + n).classList.toggle('has', app.groups.has(n));
   B('bPause').classList.toggle('on', app.paused);
   B('bPause').textContent = app.paused ? 'RESUME' : 'PAUSE';
@@ -205,6 +210,13 @@ export function renderHud(app: App): void {
     sel.textContent = 'Sel ' + selectedUnits(app).length;
   } else {
     const gold = w.slots[0].gold;
+    if (w.mode === 'conquest') {
+      const net = w.net[0];
+      const secs = net < 0 ? gold / -net : Infinity;
+      tl.innerHTML = 'Gold <b>' + Math.floor(gold) + '</b> <span class="net' + (net < 0 ? ' neg' : '') + '">' + (net >= 0 ? '+' : '') + net.toFixed(1) + '/s</span>' + (secs < 60 ? ' <span class="warn">' + Math.ceil(secs) + 's of gold left</span>' : '');
+      const held = w.regions.filter((r) => r.owner === 0), broken = held.filter((r) => !r.connected).length, weak = held.filter((r) => r.garrison < r.need).length;
+      wave.textContent = 'Regions ' + held.length + '/' + w.regions.length + (broken ? ' · ' + broken + ' cut off' : '') + (weak ? ' · ' + weak + ' undermanned' : '');
+    } else {
     tl.innerHTML = 'Gold <b>' + (Number.isFinite(gold) ? Math.floor(gold) : '∞') + '</b> <span class="inc' + (w.incFlash > 0 ? ' flash' : '') + '">+' + w.income.toFixed(1) + '/s</span> <span class="race">' + RACES[w.slots[0].race].name + '</span>';
     if (w.mode === 'dom') wave.textContent = '⚑ ' + Math.floor(w.score[0]) + ':' + Math.floor(w.score[1]) + ' of 150';
     else if (w.mode === 'multi') {
@@ -216,6 +228,7 @@ export function renderHud(app: App): void {
       let held = 0, moving = 0;
       for (const u of w.units) if (u.team !== 0 && !allied(w, 0, u.team)) { if (u.held) held++; else moving++; }
       wave.textContent = moving > held ? 'Enemy attacking: ' + moving : held ? 'Enemy massing: ' + held : 'Enemy quiet';
+    }
     }
     for (const k of roster(ctlRace(app))) unitBtns[k].classList.toggle('dis', gold < TYPES[k].cost);
     for (const k of BORDER) bldBtns[k].classList.toggle('dis', gold < BLD[k].cost);

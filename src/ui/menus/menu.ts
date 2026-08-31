@@ -8,6 +8,7 @@ import { decodeMap, encodeMap } from '../../sim/map.ts';
 import type { Mode } from '../../sim/types.ts';
 import { allied, count } from '../../sim/world.ts';
 import { hideOverlay, openEditor, say, setEditorMap, startGame, type App } from '../app.ts';
+import { continueConquest, hasSave, saveConquest, startConquest } from '../conquest.ts';
 import { $, on } from '../dom.ts';
 import { startBattle, toEdit } from '../hud/commands.ts';
 
@@ -29,6 +30,7 @@ function wireDiff(app: App, rerender: () => void): void {
 }
 
 export function showMenu(app: App): void {
+  if (app.world?.mode === 'conquest' && app.running) saveConquest(app);
   app.running = false;
   const m = app.curMap;
   ov().innerHTML = `<div>
@@ -38,7 +40,8 @@ export function showMenu(app: App): void {
     <div class="row"><button class="pick" id="mRace">YOU: ${RACES[app.race].name}<span>change</span></button><button class="pick" id="mFoe">FOE: ${raceName(app.foeRace)}<span>change</span></button></div>
     <p class="blurb">${RACES[app.race].blurb}</p>
     ${diffRowHtml(app)}
-    <button class="gold" data-mode="skirmish">SKIRMISH<small>1v1. Destroy the enemy base. It sits behind a fort, so bring siege.</small></button>
+    <button class="gold" data-mode="conquest">CONQUEST<small>One world, nine regions, one rival. Take land, pay to hold it. ${hasSave(app) ? 'A saved game is waiting.' : ''}</small></button>
+    <button data-mode="skirmish">SKIRMISH<small>1v1. Destroy the enemy base. It sits behind a fort, so bring siege.</small></button>
     <button data-mode="multi">MULTI WAR<small>Up to 5 armies. Teams or free for all. Last alliance standing.</small></button>
     <button data-mode="dom">DOMINATION<small>Hold the mines to fill your meter. First to 150 points wins.</small></button>
     <button data-mode="rich">UNLIMITED GOLD<small>Bottomless treasury. Enemy income doubled, army cap 60.</small></button>
@@ -51,12 +54,27 @@ export function showMenu(app: App): void {
       const mode = b.dataset.mode as Mode;
       if (mode === 'dom' && !app.curMap.mines.length) { b.textContent = 'THIS MAP HAS NO MINES'; return; }
       if (mode === 'multi') { showSetup(app); return; }
+      if (mode === 'conquest') { showConquest(app); return; }
       startGame(app, mode);
     });
   on($('mMap'), 'click', () => showMaps(app));
   on($('mRace'), 'click', () => { app.race = nextRace(app.race, false)!; showMenu(app); });
   on($('mFoe'), 'click', () => { app.foeRace = nextRace(app.foeRace, true); showMenu(app); });
   wireDiff(app, () => showMenu(app));
+  ov().classList.remove('hide');
+}
+
+export function showConquest(app: App): void {
+  const saved = hasSave(app);
+  ov().innerHTML = '<div><h2>CONQUEST</h2>'
+    + '<p>You start with one village in a corner. Found villages in the regions next to yours and hold them for 30 seconds to claim them. Every unit and building costs gold per second. Regions cut off from your capital pay nothing. Take the rival capital to win.</p>'
+    + (saved ? '<button class="gold" id="cqCont">CONTINUE<small>Pick up the saved game.</small></button>' : '')
+    + '<button ' + (saved ? '' : 'class="gold"') + ' id="cqNew">NEW WORLD<small>' + (saved ? 'Replaces the saved game.' : 'A fresh world with a new rival.') + '</small></button>'
+    + '<button id="cqBack">BACK</button></div>';
+  const c = document.getElementById('cqCont');
+  if (c) on(c, 'click', () => { if (!continueConquest(app)) { say(app, 'Save could not be read', 2); showMenu(app); } });
+  on($('cqNew'), 'click', () => startConquest(app));
+  on($('cqBack'), 'click', () => showMenu(app));
   ov().classList.remove('hide');
 }
 
@@ -136,6 +154,13 @@ export function endScreen(app: App): void {
     body = 'Fight lasted ' + Math.floor(w.t) + 's. Survivors: ' + count(w, 0) + ' blue, ' + count(w, 1) + ' red.';
     tip = '';
     btns = '<button class="gold" id="eReplay">REPLAY</button><button id="eEdit">EDIT ARMIES</button><button id="eMenu">MENU</button>';
+  } else if (w.mode === 'conquest') {
+    h1 = win ? '<span>THE WORLD IS YOURS</span>' : 'YOUR LAST SETTLEMENT FELL';
+    const held = w.regions.filter((r) => r.owner === 0).length;
+    body = (win ? 'The rival capital fell after ' : 'Lost after ') + Math.floor(w.t / 60) + ' minutes, holding ' + held + ' of ' + w.regions.length + ' regions.';
+    tip = win ? 'Tip: try a harder rival or a different race.' : 'Tip: claim fewer regions and garrison them. Net income tells you when to stop.';
+    btns = '<button class="gold" id="eAgain">NEW WORLD</button><button id="eMenu">MENU</button>';
+    app.storage.remove('conquest-save');
   } else {
     h1 = win ? '<span>VICTORY</span>' : 'DEFEAT';
     body = (w.mode === 'dom' ? 'Final control ' + Math.floor(w.score[0]) + ':' + Math.floor(w.score[1]) + '. ' : '') + (win ? 'Won in ' + Math.floor(w.t) + 's on ' + w.map.name + '.' : 'Lost at ' + Math.floor(w.t) + 's on ' + w.map.name + '.');
@@ -150,7 +175,7 @@ export function endScreen(app: App): void {
   }
   ov().innerHTML = '<div><h1>' + h1 + '</h1><p>' + body + '</p><p>' + tip + '</p>' + btns + '</div>';
   const a = document.getElementById('eAgain'), e = document.getElementById('eEdit'), r = document.getElementById('eReplay');
-  if (a) on(a, 'click', () => startGame(app, w.mode, w.slots.map((s) => s.ally), w.slots.map((s) => s.race)));
+  if (a) on(a, 'click', () => { if (w.mode === 'conquest') startConquest(app); else startGame(app, w.mode, w.slots.map((s) => s.ally), w.slots.map((s) => s.race)); });
   if (e) on(e, 'click', () => toEdit(app));
   if (r) on(r, 'click', () => startBattle(app));
   on($('eMenu'), 'click', () => showMenu(app));

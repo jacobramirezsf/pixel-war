@@ -6,7 +6,7 @@ import type { RaceKey } from '../data/races.ts';
 import type { BldKey, BldKind } from '../data/buildings.ts';
 import { TILE, type MapDef, type TilePos } from './map.ts';
 import { makeRng, type Rng } from './rng.ts';
-import type { Building, Command, Fx, Mode, Order, Outcome, Phase, QueueItem, SandSnap, Settlement, Slot, Target, Unit, World, WorldConfig } from './types.ts';
+import type { Building, Command, Fx, Mode, Order, Outcome, Phase, QueueItem, Region, Rules, SandSnap, Settlement, Slot, Target, Unit, World, WorldConfig } from './types.ts';
 
 export const BASE_HP = 400;
 export const ARMY_CAP = 40;
@@ -21,7 +21,7 @@ export function reset(map: MapDef, cfg?: Partial<WorldConfig>): World {
   let nextId = 1;
   const slots: Slot[] = allies.map((ally, i) => {
     const b = map.bases[i];
-    const base: Settlement = { ent: 'base', id: nextId++, team: i, x: b.tx * TILE + 4, y: b.ty * TILE + 4, hp: BASE_HP, max: BASE_HP, cd: 0 };
+    const base: Settlement = { ent: 'base', id: nextId++, team: i, x: b.tx * TILE + 4, y: b.ty * TILE + 4, hp: BASE_HP, max: BASE_HP, cd: 0, tier: 'village', region: -1, buildT: 0 };
     const ai = cfg?.ai ? !!cfg.ai[i] : i !== 0;
     const race: RaceKey = cfg?.races?.[i] ?? 'kingdom';
     return { ally, race, diff: cfg?.diffs?.[i] ?? diff, alive: true, gold: i === 0 ? 60 : 40, settlements: [base], ai, aiT: 1.5, aiWant: null, aiLast: 0, queue: [], rally: null };
@@ -62,6 +62,12 @@ export function reset(map: MapDef, cfg?: Partial<WorldConfig>): World {
     queue: [],
     log: [],
     fxRng: makeRng((cfg?.seed ?? 1) ^ 0x5f3759df),
+    regions: [],
+    regionOf: null,
+    rules: { upkeep: false, connection: false, garrison: false, unrest: false },
+    net: Array.from({ length: nP }, () => 0),
+    broke: Array.from({ length: nP }, () => 0),
+    capitals: Array.from({ length: nP }, () => -1),
   };
 }
 
@@ -84,9 +90,10 @@ export function say(w: World, t: string, d = 2): void {
   w.msgT = d;
 }
 
-/** The settlement units spawn from and workers return to. Skirmish has exactly one. */
+/** The settlement units spawn from and workers return to: the capital while it stands, else the first living one. */
 export function primaryBase(w: World, team: number): Settlement {
-  return w.slots[team].settlements[0];
+  const list = w.slots[team].settlements;
+  return list.find((b) => b.hp > 0) ?? list[0];
 }
 
 export function hasLivingSettlement(w: World, team: number): boolean {
@@ -131,6 +138,7 @@ export interface Snapshot {
   flow: (number[] | null)[] | null; home: (number[] | null)[] | null; flowDirty: boolean; flowTick: number;
   wave: number; waveN: number; nextId: number; rng: Rng; msg: string; msgT: number; snap: SandSnap | null;
   queue: Command[]; log: Command[]; fxRng: Rng;
+  regions: Region[]; regionOf: number[] | null; rules: Rules; net: number[]; broke: number[]; capitals: number[];
 }
 
 const copyCmd = (c: Command): Command => JSON.parse(JSON.stringify(c)) as Command;
@@ -174,6 +182,8 @@ export function snapshot(w: World): Snapshot {
     flowDirty: w.flowDirty, flowTick: w.flowTick, wave: w.wave, waveN: w.waveN, nextId: w.nextId, rng: { s: w.rng.s }, msg: w.msg, msgT: w.msgT,
     snap: w.snap ? { units: w.snap.units.map((u) => ({ ...u })), blds: w.snap.blds.map((b) => ({ ...b })) } : null,
     queue: w.queue.map(copyCmd), log: w.log.map(copyCmd), fxRng: { s: w.fxRng.s },
+    regions: w.regions.map((r) => ({ ...r, adj: r.adj.slice() })), regionOf: w.regionOf ? Array.from(w.regionOf) : null,
+    rules: { ...w.rules }, net: w.net.slice(), broke: w.broke.slice(), capitals: w.capitals.slice(),
   };
 }
 
@@ -219,6 +229,9 @@ export function restore(s: Snapshot): World {
     flowDirty: s.flowDirty, flowTick: s.flowTick, grid: null, auras: null, wave: s.wave, waveN: s.waveN, nextId: s.nextId, rng: { s: s.rng.s }, msg: s.msg, msgT: s.msgT,
     snap: s.snap ? { units: s.snap.units.map((u) => ({ ...u })), blds: s.snap.blds.map((b) => ({ ...b })) } : null,
     queue: s.queue.map(copyCmd), log: s.log.map(copyCmd), fxRng: { s: s.fxRng.s },
+    regions: (s.regions ?? []).map((r) => ({ ...r, adj: r.adj.slice() })), regionOf: s.regionOf ? Uint8Array.from(s.regionOf) : null,
+    rules: { ...(s.rules ?? { upkeep: false, connection: false, garrison: false, unrest: false }) },
+    net: (s.net ?? slots.map(() => 0)).slice(), broke: (s.broke ?? slots.map(() => 0)).slice(), capitals: (s.capitals ?? slots.map(() => -1)).slice(),
   };
 }
 

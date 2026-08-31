@@ -18,6 +18,11 @@ export interface DragRect {
 
 function drawBase(ctx: CanvasRenderingContext2D, b: Settlement, H: number): void {
   const x = b.x - 12, y = b.y - 8;
+  if (b.tier === 'fortress' && b.hp > 0) {
+    // A fortress gets a second story and corner towers.
+    ctx.fillStyle = '#4a4f5e'; ctx.fillRect(x - 3, y - 2, 30, 20);
+    ctx.fillStyle = '#6e7480'; ctx.fillRect(x - 3, y - 2, 4, 6); ctx.fillRect(x + 23, y - 2, 4, 6); ctx.fillRect(x - 3, y + 12, 4, 6); ctx.fillRect(x + 23, y + 12, 4, 6);
+  }
   if (b.hp <= 0) {
     ctx.fillStyle = '#2c2f3a'; ctx.fillRect(x, y + 6, 24, 10);
     ctx.fillStyle = '#454a5a'; ctx.fillRect(x + 2, y + 4, 6, 4); ctx.fillRect(x + 14, y + 3, 7, 5);
@@ -33,6 +38,12 @@ function drawBase(ctx: CanvasRenderingContext2D, b: Settlement, H: number): void
   ctx.fillStyle = TEAM[b.team]; ctx.fillRect(x + 22, y - 5, 3, 3);
   ctx.fillStyle = '#111'; ctx.fillRect(x, y - 9, 24, 2);
   ctx.fillStyle = TEAM[b.team]; ctx.fillRect(x, y - 9, Math.round((24 * b.hp) / b.max), 2);
+  if (b.buildT > 0) {
+    // Scaffold while building or upgrading.
+    ctx.fillStyle = 'rgba(242,211,74,.75)';
+    for (let i = 0; i < 24; i += 6) ctx.fillRect(x + i, y + 2, 1, 14);
+    ctx.fillStyle = '#f2d34a'; ctx.fillRect(x, y - 12, 24, 1);
+  }
 }
 
 function drawMine(ctx: CanvasRenderingContext2D, m: Mine): void {
@@ -102,7 +113,7 @@ export function drawEditor(ctx: CanvasRenderingContext2D, bg: HTMLCanvasElement,
   for (let y = TILE; y < H; y += TILE) { ctx.moveTo(0, y + 0.5); ctx.lineTo(W, y + 0.5); }
   ctx.stroke();
   for (const q of m.mines) drawMine(ctx, { x: q.tx * TILE + 4, y: q.ty * TILE + 4, owner: -1, prev: -1 });
-  m.bases.forEach((b, i) => drawBase(ctx, { ent: 'base', id: 0, team: i, x: b.tx * TILE + 4, y: b.ty * TILE + 4, hp: BASE_HP, max: BASE_HP, cd: 0 }, H));
+  m.bases.forEach((b, i) => drawBase(ctx, { ent: 'base', id: 0, team: i, x: b.tx * TILE + 4, y: b.ty * TILE + 4, hp: BASE_HP, max: BASE_HP, cd: 0, tier: 'village', region: -1, buildT: 0 }, H));
 }
 
 export interface ViewState {
@@ -117,6 +128,42 @@ export interface ViewState {
   hover: number | null;
   cam: Camera;
   dpr: number;
+  /** Territory overlay with region outlines and names. */
+  overlay: boolean;
+}
+
+let tintCanvas: HTMLCanvasElement | null = null, tintKey = '';
+
+/** Ownership tint, cached until ownership or connection changes. */
+function tintLayer(w: World): HTMLCanvasElement | null {
+  if (!w.regionOf) return null;
+  const key = w.regions.map((r) => r.owner + (r.connected ? '' : '!') + (r.contested ? '?' : '') + (r.garrison < r.need ? '-' : '')).join(',') + '/' + w.map.cols + 'x' + w.map.rows;
+  if (tintCanvas && key === tintKey) return tintCanvas;
+  tintKey = key;
+  const c = tintCanvas ?? document.createElement('canvas');
+  tintCanvas = c;
+  c.width = w.map.cols * TILE; c.height = w.map.rows * TILE;
+  const g = c.getContext('2d')!;
+  g.clearRect(0, 0, c.width, c.height);
+  const cols = w.map.cols;
+  for (let ty = 0; ty < w.map.rows; ty++)
+    for (let tx = 0; tx < cols; tx++) {
+      const r = w.regions[w.regionOf[ty * cols + tx]];
+      if (r.owner < 0 && !r.contested) continue;
+      g.fillStyle = r.owner >= 0 ? TEAM[r.owner] : '#ffffff';
+      g.globalAlpha = r.contested ? ((tx + ty) % 2 ? 0.28 : 0.08) : r.connected ? 0.16 : 0.08;
+      g.fillRect(tx * TILE, ty * TILE, TILE, TILE);
+    }
+  g.globalAlpha = 1;
+  // Borders between regions.
+  g.fillStyle = 'rgba(255,255,255,.22)';
+  for (let ty = 0; ty < w.map.rows; ty++)
+    for (let tx = 0; tx < cols; tx++) {
+      const a = w.regionOf[ty * cols + tx];
+      if (tx + 1 < cols && w.regionOf[ty * cols + tx + 1] !== a) g.fillRect(tx * TILE + TILE - 1, ty * TILE, 1, TILE);
+      if (ty + 1 < w.map.rows && w.regionOf[(ty + 1) * cols + tx] !== a) g.fillRect(tx * TILE, ty * TILE + TILE - 1, TILE, 1);
+    }
+  return c;
 }
 
 export function drawWorld(ctx: CanvasRenderingContext2D, bg: HTMLCanvasElement, w: World, v: ViewState): void {
@@ -124,6 +171,7 @@ export function drawWorld(ctx: CanvasRenderingContext2D, bg: HTMLCanvasElement, 
   const r = beginView(ctx, cam, v.dpr);
   const vis = (x: number, y: number, pad = 16): boolean => x > r.x0 - pad && x < r.x1 + pad && y > r.y0 - pad && y < r.y1 + pad;
   ctx.drawImage(bg, 0, 0);
+  if (w.regionOf && (v.overlay || w.regions.some((r) => r.contested))) { const t = tintLayer(w); if (t) ctx.drawImage(t, 0, 0); }
   const H = mapH(w);
   for (const m of w.mines) if (vis(m.x, m.y)) drawMine(ctx, m);
   for (const s of w.slots) for (const b of s.settlements) if (vis(b.x, b.y, 24)) drawBase(ctx, b, H);
@@ -152,6 +200,24 @@ export function drawWorld(ctx: CanvasRenderingContext2D, bg: HTMLCanvasElement, 
     if (u.rootT > 0) { ctx.fillStyle = '#4caf50'; ctx.fillRect(x, y + sz - 1, sz, 1); }
     else if (u.slowT > 0) { ctx.fillStyle = '#dde2ec'; ctx.fillRect(x, y + sz - 1, sz, 1); }
     if (hidden) ctx.globalAlpha = 1;
+  }
+  // Region names and state on the overlay.
+  if (v.overlay && w.regionOf) {
+    ctx.font = '6px monospace';
+    ctx.textAlign = 'center';
+    for (const r of w.regions) {
+      if (!vis(r.cx, r.cy, 40)) continue;
+      const own = r.owner === v.viewer;
+      let tag = '';
+      if (own && !r.connected) tag = ' CUT OFF';
+      else if (own && r.garrison < r.need) tag = ' NEEDS ' + Math.ceil(r.need - r.garrison);
+      else if (r.contested) tag = ' CONTESTED';
+      ctx.fillStyle = 'rgba(0,0,0,.55)';
+      ctx.fillRect(r.cx - 22, r.cy - 5, 44, 8);
+      ctx.fillStyle = r.owner >= 0 ? TEAM[r.owner] : '#dde2ec';
+      ctx.fillText(r.name.toUpperCase() + tag, r.cx, r.cy + 1);
+    }
+    ctx.textAlign = 'left';
   }
   // Rally flag for the viewer's slot.
   const rally = w.slots[v.viewer]?.rally;

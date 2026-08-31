@@ -77,6 +77,19 @@ export function toolAt(app: App, x: number, y: number, ts: ToolState, first: boo
     return true;
   }
   if (app.tool === 'sell') { if (first) issueAction(app, { type: 'sell', payload: { x, y } }); return true; }
+  if (app.tool === 'settle') {
+    if (first) { if (issueAction(app, { type: 'settle', payload: { x, y } })) { app.tool = 'cmd'; app.ui.updateUI(); } }
+    return true;
+  }
+  if (app.tool === 'upgrade') {
+    if (first) {
+      const w2 = app.world!;
+      const b = w2.slots[app.ctl].settlements.find((q) => q.hp > 0 && Math.abs(q.x - x) < 16 && Math.abs(q.y - y) < 12);
+      if (b) { issueAction(app, { type: 'upgrade', payload: { id: b.id } }); app.tool = 'cmd'; app.ui.updateUI(); }
+      else say(app, 'Tap one of your villages', 1.2);
+    }
+    return true;
+  }
   if (app.tool === 'rally') {
     if (first) { issueAction(app, { type: 'rally', payload: { x, y } }); app.tool = 'cmd'; app.ui.updateUI(); }
     return true;
@@ -93,5 +106,5 @@ export function toolAt(app: App, x: number, y: number, ts: ToolState, first: boo
 }
 
 export function usesTool(app: App): boolean {
-  return !!app.editor || app.tool === 'build' || app.tool === 'sell' || app.tool === 'rally' || app.world?.phase === 'edit';
+  return !!app.editor || app.tool === 'build' || app.tool === 'sell' || app.tool === 'rally' || app.tool === 'settle' || app.tool === 'upgrade' || app.world?.phase === 'edit';
 }

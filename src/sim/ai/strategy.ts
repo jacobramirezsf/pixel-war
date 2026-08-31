@@ -9,6 +9,7 @@ import { applyCommand, cmd } from '../commands.ts';
 import { rand } from '../rng.ts';
 import type { Settlement, Unit, World } from '../types.ts';
 import { allied, slotDiff } from '../world.ts';
+import { canSettle, TIERS } from '../conquest.ts';
 import { pickUnit, roleMix } from './composition.ts';
 import { PROFILES, type AiProfile } from './profiles.ts';
 import { hostileValueNear, mineTargets, moveTo, nearestHostileBase, order, ownValueNear, pullBack, rallyPoint } from './tactics.ts';
@@ -87,11 +88,49 @@ function buy(w: World, slot: number, unit: UnitKey, held: boolean): boolean {
   return applyCommand(w, cmd(w, slot, { type: 'buy', payload: { unit, held } }), true);
 }
 
+function settleCandidates(w: World, slot: number): import('../types.ts').Region[] {
+  return w.regions.filter((r) => r.owner < 0 && r.adj.some((x) => w.regions[x].owner === slot));
+}
+
+/** Conquest: with a free region next door and a standing army, hold gold back for a village. */
+function savingForLand(w: World, slot: number, a: Assessment): boolean {
+  if (w.mode !== 'conquest' || a.threat > 0 || a.own.length < 4) return false;
+  return settleCandidates(w, slot).length > 0 && w.slots[slot].gold < TIERS.village.cost + 60;
+}
+
+/** Conquest: settle the nearest adjacent free region when the treasury allows, upgrade a border village when rich. */
+function expandTerritory(w: World, slot: number, a: Assessment): boolean {
+  const s = w.slots[slot];
+  if (w.mode !== 'conquest' || a.threat > 0) return false;
+  if (s.gold >= TIERS.village.cost + 60 && w.net[slot] > 0.5) {
+    const own = w.regions.filter((r) => r.owner === slot);
+    const cands = settleCandidates(w, slot);
+    const home = s.settlements.find((b) => b.hp > 0);
+    cands.sort((x, y) => (home ? Math.hypot(x.cx - home.x, x.cy - home.y) - Math.hypot(y.cx - home.x, y.cy - home.y) : 0));
+    for (const r of cands) {
+      // Try the center, then a ring of spots around it.
+      for (let k = 0; k < 9; k++) {
+        const ang = (k * 2 * Math.PI) / 8, rad = k === 0 ? 0 : 24;
+        const x = r.cx + Math.cos(ang) * rad, y = r.cy + Math.sin(ang) * rad;
+        if (!canSettle(w, slot, x, y)) { applyCommand(w, cmd(w, slot, { type: 'settle', payload: { x, y } }), true); return true; }
+      }
+    }
+    if (own.length && s.gold >= TIERS.fortress.cost + 120) {
+      const v = s.settlements.find((b) => b.hp > 0 && b.tier === 'village' && b.buildT <= 0 && w.regions[b.region].adj.some((x) => { const o = w.regions[x].owner; return o >= 0 && !allied(w, o, slot); }));
+      if (v) { applyCommand(w, cmd(w, slot, { type: 'upgrade', payload: { id: v.id } }), true); return true; }
+    }
+  }
+  return false;
+}
+
 /** One decision for one faction. Runs every `react` seconds. */
 export function decide(w: World, slot: number): void {
   const s = w.slots[slot], P = PROFILES[s.diff];
   const a = assess(w, slot);
-  shop(w, slot, a, P);
+  if (expandTerritory(w, slot, a)) return;
+  // In Conquest the army has to be paid, and land costs gold. Hold back when either says so.
+  const holdGold = w.mode === 'conquest' && ((w.net[slot] < 0.3 && a.own.length > 4) || savingForLand(w, slot, a));
+  if (!holdGold) shop(w, slot, a, P);
   const home = s.settlements.find((b) => b.hp > 0);
   if (!home) return;
   // Chances are per second of game time, so a fast thinker does not act more often than a slow one.

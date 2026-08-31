@@ -63,6 +63,7 @@ export function incomeRate(w: World, slot: number, mcount: number[]): number {
 }
 
 export function incomeTick(w: World, dt: number, mcount: number[]): void {
+  if (w.mode === 'conquest') return;
   w.income = incomeRate(w, 0, mcount);
   for (let i = 0; i < w.nP; i++) {
     if (!w.slots[i].alive) continue;

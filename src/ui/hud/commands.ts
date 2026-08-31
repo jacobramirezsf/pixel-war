@@ -5,6 +5,7 @@ import { TYPES } from '../../data/units.ts';
 import { unitsOf } from '../../sim/queries.ts';
 import { recallGroup, retreat, setGroup } from '../input/hotkeys.ts';
 import { hideOverlay, issueAction, leaveEditor, openEditor, say, selectedUnits, type App } from '../app.ts';
+import { saveConquest } from '../conquest.ts';
 import { $, on } from '../dom.ts';
 
 export function selectAll(app: App): void {
@@ -51,6 +52,17 @@ export function wireCommands(app: App): void {
     app.ui.updateUI();
     say(app, 'Tap the map to set where new units gather', 2);
   });
+  const toolToggle = (tool: 'settle' | 'upgrade', hint: string): void => {
+    if (!live()) return;
+    app.tool = app.tool === tool ? 'cmd' : tool;
+    app.ui.updateUI();
+    if (app.tool === tool) say(app, hint, 2.5);
+  };
+  on($('bSettle'), 'click', () => toolToggle('settle', 'Tap open ground in a region next to yours. 150 gold. Hold it 30s to claim.'));
+  on($('bFort'), 'click', () => toolToggle('upgrade', 'Tap one of your villages to upgrade it. 300 gold, 45s, weak while it builds.'));
+  on($('bSave'), 'click', () => { say(app, saveConquest(app) ? 'Saved' : 'Nothing to save', 1.2); });
+  on($('bLand'), 'click', () => { app.overlay = !app.overlay; app.ui.updateUI(); });
+  on($('bSpeed'), 'click', () => { app.speed = app.speed >= 4 ? 1 : app.speed * 2; app.ui.updateUI(); });
   // Mobile groups: tap recalls, tap with a selection and an empty slot saves, hold saves over.
   for (const n of [1, 2, 3]) {
     const b = $('bG' + n);

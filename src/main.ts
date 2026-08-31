@@ -8,6 +8,7 @@ import { step } from './sim/step.ts';
 import { DT } from './sim/world.ts';
 import { createApp, fit, loadMap } from './ui/app.ts';
 import { startBench } from './ui/bench.ts';
+import { autosaveTick, wireAutosave } from './ui/conquest.ts';
 import { $ } from './ui/dom.ts';
 import { wireCommands } from './ui/hud/commands.ts';
 import { buildHints, updateHints } from './ui/hud/hint.ts';
@@ -31,6 +32,7 @@ wireViewButtons(app);
 wireEditor(app);
 attachInput(app);
 wireHotkeys(app);
+wireAutosave(app);
 
 function relayout(): void {
   const mode = detectLayout();
@@ -50,16 +52,18 @@ function loop(ts: number): void {
   const w = app.world;
   if (w) {
     if (app.running && !app.paused) {
-      acc += frame;
+      acc += frame * app.speed;
       let n = 0;
-      while (acc >= DT && n < MAX_STEPS) { step(w); acc -= DT; n++; }
-      if (n === MAX_STEPS) acc = 0;
+      const maxSteps = MAX_STEPS * app.speed;
+      while (acc >= DT && n < maxSteps) { step(w); acc -= DT; n++; }
+      if (n === maxSteps) acc = 0;
+      autosaveTick(app);
     } else acc = 0;
     if (w.over && !overShown) { overShown = true; app.running = false; setTimeout(() => app.ui.endScreen(), 700); }
     if (!w.over) overShown = false;
     updateCam(app.cam, frame);
     edgePan(app, frame);
-    drawWorld(app.ctx, app.bg, w, { drag: app.drag, alpha: app.running && !app.paused ? acc / DT : 1, selection: app.selection, paused: app.paused, viewer: app.ctl, hover: app.hover, cam: app.cam, dpr: app.dpr });
+    drawWorld(app.ctx, app.bg, w, { drag: app.drag, alpha: app.running && !app.paused ? Math.min(1, acc / DT) : 1, selection: app.selection, paused: app.paused, viewer: app.ctl, hover: app.hover, cam: app.cam, dpr: app.dpr, overlay: app.overlay });
     drawMinimap($<HTMLCanvasElement>('mini'), app.minimap, w.map, w, app.cam, MINI(), app.dpr);
   } else if (app.editor) {
     if (app.msgT > 0) app.msgT -= frame;

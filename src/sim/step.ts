@@ -11,6 +11,7 @@ import { drainQueue } from './commands.ts';
 import { dominationTick, hasEconomy, incomeTick, mineTick, minesHeld, payRepair } from './economy.ts';
 import { clamp, tileAt } from './map.ts';
 import { computeFlow, computeHome, flowDir } from './pathing.ts';
+import { conquestTick, grossIncome } from './conquest.ts';
 import { rand, rnd } from './rng.ts';
 import { fillGrid, forNear, gridOf, nearestHostileWithin } from './spatial.ts';
 import type { Building, Target, Unit, World } from './types.ts';
@@ -56,6 +57,7 @@ function produce(w: World, dt: number): void {
   for (let i = 0; i < w.nP; i++) {
     const s = w.slots[i];
     if (!s.alive || !s.queue.length) continue;
+    if (w.mode === 'conquest' && !s.settlements.some((b) => b.hp > 0 && b.buildT <= 0)) continue;
     const q = s.queue[0];
     q.t -= dt * (s.ai ? PROFILES[s.diff].build : 1);
     if (q.t > 0) continue;
@@ -175,6 +177,7 @@ export function step(w: World): void {
   const mcount = minesHeld(w);
   if (eco) {
     incomeTick(w, dt, mcount);
+    if (w.mode === 'conquest') { conquestTick(w, dt, mcount); w.income = grossIncome(w, 0, mcount); }
     aiTick(w, dt);
     produce(w, dt);
     if (w.mode === 'dom') { dominationTick(w, dt, mcount); if (w.over) return; }
@@ -183,11 +186,12 @@ export function step(w: World): void {
   // Bases shoot the nearest hostile unit within 36.
   for (const s of w.slots)
     for (const b of s.settlements) {
-      if (b.hp <= 0) continue;
+      if (b.hp <= 0 || b.buildT > 0) continue;
       b.cd -= dt;
       if (b.cd > 0) continue;
-      const tg = nearestInRange(w, b.x, b.y, b.team, 36, tc);
-      if (tg) { b.cd = 0.45; w.fx.push({ k: 'shot', x1: b.x, y1: b.y - 8, x2: tg.x, y2: tg.y - 2, t: 0.1, c: '#ffffff' }); damage(w, tg, 8); }
+      const fort = b.tier === 'fortress';
+      const tg = nearestInRange(w, b.x, b.y, b.team, fort ? 44 : 36, tc);
+      if (tg) { b.cd = fort ? 0.35 : 0.45; w.fx.push({ k: 'shot', x1: b.x, y1: b.y - 8, x2: tg.x, y2: tg.y - 2, t: 0.1, c: '#ffffff' }); damage(w, tg, fort ? 12 : 8); }
     }
   // Towers.
   for (const b of w.blds) {

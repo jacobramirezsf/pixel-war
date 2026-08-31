@@ -8,7 +8,8 @@ import type { RaceKey } from '../data/races.ts';
 import type { MapDef } from './map.ts';
 import type { Rng } from './rng.ts';
 
-export type Mode = 'skirmish' | 'multi' | 'dom' | 'rich' | 'sand';
+export type Mode = 'skirmish' | 'multi' | 'dom' | 'rich' | 'sand' | 'conquest';
+export type Tier = 'village' | 'fortress';
 export type Phase = 'play' | 'edit';
 export type Outcome = 'win' | 'lose' | null;
 
@@ -21,6 +22,38 @@ export interface Settlement {
   hp: number;
   max: number;
   cd: number;
+  tier: Tier;
+  /** Region this settlement stands in. -1 outside Conquest. */
+  region: number;
+  /** Seconds of construction or upgrade left. Production and income pause while it runs. */
+  buildT: number;
+}
+
+/** A Conquest region: the unit of ownership, upkeep, and garrison. */
+export interface Region {
+  id: number;
+  name: string;
+  /** Center in world pixels. */
+  cx: number;
+  cy: number;
+  adj: number[];
+  owner: number;
+  /** Slot with the only settlements in the region, or -1. */
+  claimant: number;
+  /** Seconds the claimant has stood uncontested. */
+  claimT: number;
+  contested: boolean;
+  connected: boolean;
+  /** Own army value inside, and what holding it asks for. */
+  garrison: number;
+  need: number;
+}
+
+export interface Rules {
+  upkeep: boolean;
+  connection: boolean;
+  garrison: boolean;
+  unrest: boolean;
 }
 
 export interface Building {
@@ -189,6 +222,17 @@ export interface World {
   log: Command[];
   /** Cosmetic randomness. Never feeds gameplay, so effects cannot change outcomes. */
   fxRng: Rng;
+  /** Conquest regions. Empty outside Conquest. */
+  regions: Region[];
+  /** Region id per tile. Null outside Conquest. */
+  regionOf: Uint8Array | null;
+  rules: Rules;
+  /** Net income per slot, updated each tick. */
+  net: number[];
+  /** Seconds each slot has spent broke, for desertion. */
+  broke: number[];
+  /** Capital region per slot in Conquest. */
+  capitals: number[];
 }
 
 export interface TargetRef {
@@ -199,6 +243,8 @@ export interface TargetRef {
 export type Action =
   | { type: 'buy'; payload: { unit: UnitKey; held?: boolean } }
   | { type: 'cancel'; payload: { index: number } }
+  | { type: 'settle'; payload: { x: number; y: number } }
+  | { type: 'upgrade'; payload: { id: number } }
   | { type: 'rally'; payload: { x: number; y: number } | null }
   | { type: 'move'; payload: { ids: number[]; x: number; y: number } }
   | { type: 'attack'; payload: { ids: number[]; target: TargetRef | null } }

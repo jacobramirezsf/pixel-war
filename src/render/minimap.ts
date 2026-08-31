@@ -55,6 +55,18 @@ export function drawMinimap(cv: HTMLCanvasElement, mc: MinimapCache, m: MapDef, 
   const L = minimapLayout(m, size), img = terrainImage(mc, m);
   c.drawImage(img, L.ox, L.oy, m.cols * TILE * L.s, m.rows * TILE * L.s);
   const dot = Math.max(1.5, 2 * L.s * TILE / 8);
+  if (w && w.regionOf) {
+    const cols = m.cols;
+    for (let ty = 0; ty < m.rows; ty++)
+      for (let tx = 0; tx < cols; tx++) {
+        const r = w.regions[w.regionOf[ty * cols + tx]];
+        if (r.owner < 0) continue;
+        c.fillStyle = TEAM[r.owner];
+        c.globalAlpha = 0.35;
+        c.fillRect(L.ox + tx * TILE * L.s, L.oy + ty * TILE * L.s, TILE * L.s + 0.5, TILE * L.s + 0.5);
+      }
+    c.globalAlpha = 1;
+  }
   if (w) {
     for (const s of w.slots) for (const b of s.settlements) { c.fillStyle = b.hp > 0 ? TEAM[b.team] : '#444'; c.fillRect(L.ox + b.x * L.s - dot, L.oy + b.y * L.s - dot, dot * 2, dot * 2); }
     for (const q of w.mines) { c.fillStyle = q.owner >= 0 ? TEAM[q.owner] : '#f2d34a'; c.fillRect(L.ox + q.x * L.s - 1, L.oy + q.y * L.s - 1, 2, 2); }
