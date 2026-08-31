@@ -22,6 +22,8 @@ export interface GameConfig {
   rivals?: number;
   /** Conquest: which rules are on. The slice turns unrest and the later systems off. */
   rules?: Partial<import('./types.ts').Rules>;
+  /** Units finish the moment they are bought. */
+  instant?: boolean;
 }
 
 /** Copy of the chosen map, with extra bases placed for 3 to 5 players. */
@@ -46,7 +48,7 @@ export function conquestMap(seed: number, rivals = 1): { map: MapDef; grid: numb
 export function newGame(map: MapDef, mode: Mode, cfg?: GameConfig): World {
   if (mode === 'conquest') return newConquest(cfg);
   const allies = cfg?.allies ?? [0, 1];
-  const w = reset(prepareMap(map, allies.length), { allies, diff: cfg?.diff ?? 'std', seed: cfg?.seed, ai: cfg?.ai, races: cfg?.races, diffs: cfg?.diffs });
+  const w = reset(prepareMap(map, allies.length), { allies, diff: cfg?.diff ?? 'std', seed: cfg?.seed, ai: cfg?.ai, races: cfg?.races, diffs: cfg?.diffs, instant: cfg?.instant });
   w.mode = mode;
   if (mode === 'sand') {
     w.phase = 'edit';
@@ -77,7 +79,7 @@ export function newConquest(cfg?: GameConfig): World {
   const { map, grid } = conquestMap(seed, rivals);
   const allies = Array.from({ length: rivals + 1 }, (_, i) => i);
   const races = allies.map((i) => cfg?.races?.[i] ?? 'kingdom');
-  const w = reset(map, { allies, diff: cfg?.diff ?? 'std', seed, ai: allies.map((i) => i !== 0), races, diffs: cfg?.diffs });
+  const w = reset(map, { allies, diff: cfg?.diff ?? 'std', seed, ai: allies.map((i) => i !== 0), races, diffs: cfg?.diffs, instant: cfg?.instant });
   w.mode = 'conquest';
   w.cap = 80;
   w.rules = { upkeep: true, connection: true, garrison: true, unrest: true, materials: true, population: true, diplomacy: true, veterancy: true, ...(cfg?.rules ?? {}) };
@@ -99,6 +101,7 @@ export function newConquest(cfg?: GameConfig): World {
   }
   // The neutral faction: bandits, independents, ruins, and later rebels.
   const neutral = mkNeutralSlot(w);
+  neutral.powerCd = {};
   w.slots.push(neutral);
   w.nP = w.slots.length;
   w.neutral = w.nP - 1;

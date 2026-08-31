@@ -99,6 +99,10 @@ export function toolAt(app: App, x: number, y: number, ts: ToolState, first: boo
     }
     return true;
   }
+  if (app.tool === 'power') {
+    if (first && app.power) { if (issueAction(app, { type: 'power', payload: { power: app.power, x, y } })) { app.tool = 'cmd'; app.power = null; app.tab = 'units'; app.ui.updateUI(); } }
+    return true;
+  }
   if (app.tool === 'rally') {
     if (first) { issueAction(app, { type: 'rally', payload: { x, y } }); app.tool = 'cmd'; app.ui.updateUI(); }
     return true;
@@ -116,4 +120,11 @@ export function toolAt(app: App, x: number, y: number, ts: ToolState, first: boo
 
 export function usesTool(app: App): boolean {
   return !!app.editor || app.tool !== 'cmd' || app.world?.phase === 'edit';
+}
+
+/** Tools that paint while dragging. Everything else applies on a tap and lets a drag pan. */
+export function dragTool(app: App): boolean {
+  if (app.editor) return true;
+  if (app.tool === 'build') return true;
+  return app.world?.phase === 'edit' && (app.tool === 'place' || app.tool === 'erase');
 }

@@ -11,9 +11,11 @@ export interface Settings {
   colorblind: boolean;
   /** Conquest pauses when something needs attention. Always on for touch layouts. */
   autoPause: boolean;
+  /** Units finish the moment they are bought. */
+  instant: boolean;
 }
 
-export const DEFAULT_SETTINGS: Settings = { edgePan: false, hints: true, damageNumbers: false, volume: 0.7, muted: false, colorblind: false, autoPause: true };
+export const DEFAULT_SETTINGS: Settings = { edgePan: false, hints: true, damageNumbers: false, volume: 0.7, muted: false, colorblind: false, autoPause: true, instant: false };
 
 export function loadSettings(s: Storage): Settings {
   return { ...DEFAULT_SETTINGS, ...getJSON<Partial<Settings>>(s, 'settings', {}) };

@@ -12,6 +12,7 @@ import { dominationTick, hasEconomy, incomeTick, mineTick, minesHeld, payRepair 
 import { clamp, tileAt } from './map.ts';
 import { computeFlow, computeHome, flowDir } from './pathing.ts';
 import { conquestTick, grossIncome } from './conquest.ts';
+import { powersTick } from './powers.ts';
 import { rand, rnd } from './rng.ts';
 import { fillGrid, forNear, gridOf, nearestHostileWithin } from './spatial.ts';
 import type { Building, Target, Unit, World } from './types.ts';
@@ -65,7 +66,7 @@ function produce(w: World, dt: number): void {
       if (!producers.some((b) => b.buildT <= 0)) rate *= 0.5;
     }
     const q = s.queue[0];
-    q.t -= dt * rate;
+    q.t -= w.instant ? 1e9 : dt * rate;
     if (q.t > 0) continue;
     const u = spawn(w, i, q.unit);
     if (!u) { q.t = 0.5; continue; }
@@ -186,6 +187,9 @@ export function step(w: World): void {
     if (w.mode === 'conquest') { conquestTick(w, dt, mcount); w.income = grossIncome(w, 0, mcount); }
     aiTick(w, dt);
     produce(w, dt);
+  }
+  if (w.phase === 'play') {
+    powersTick(w, dt);
     if (w.mode === 'dom') { dominationTick(w, dt, mcount); if (w.over) return; }
     if (w.incFlash > 0) w.incFlash -= dt;
   }
@@ -225,6 +229,7 @@ export function step(w: World): void {
     u.blk = null;
     if (u.slowT > 0) u.slowT -= dt;
     if (u.rootT > 0) u.rootT -= dt;
+    if (u.hasteT > 0) { u.hasteT -= dt; u.cd -= dt * 0.5; }
     if (u.reveal > 0) u.reveal -= dt;
     if (u.blinkT > 0) u.blinkT -= dt;
     const onTree = tileAt(w.map, u.x, u.y) === 2;
@@ -248,6 +253,7 @@ export function step(w: World): void {
     let slow = u.slowT > 0 ? 0.5 : 1;
     if (u.rootT > 0) slow = 0;
     if (hasSpeedAura(w, u)) slow *= 1.3;
+    if (u.hasteT > 0) slow *= 1.5;
     if (!T.fly) {
       const bb = bldAtPx(w, u.x, u.y);
       if (bb && bb.kind === 'trap' && !allied(w, bb.team, u.team)) {

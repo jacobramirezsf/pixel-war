@@ -10,7 +10,8 @@ export interface GestureHandlers {
   dragEnd(x: number, y: number, button: Button): void;
   pan(dx: number, dy: number): void;
   pinch(scale: number, cx: number, cy: number): void;
-  wheel(dy: number, x: number, y: number): void;
+  pinchEnd(): void;
+  wheel(dy: number, x: number, y: number, dx: number, ctrl: boolean): void;
   hover(x: number | null, y: number | null): void;
 }
 
@@ -63,7 +64,7 @@ export function attachGestures(el: HTMLElement, h: GestureHandlers): () => void 
     const p = ps.get(e.pointerId);
     if (!p) return;
     ps.delete(e.pointerId);
-    if (gesture === 'multi') { if (ps.size === 0) gesture = 'none'; else pinchDist = 0; return; }
+    if (gesture === 'multi') { if (ps.size === 0) gesture = 'none'; else pinchDist = 0; h.pinchEnd(); return; }
     if (p.drag) h.dragEnd(p.x, p.y, p.button);
     else h.tap(p.x, p.y, p.button, p.type, p.shift);
     gesture = 'none';
@@ -75,7 +76,12 @@ export function attachGestures(el: HTMLElement, h: GestureHandlers): () => void 
     if (p.drag && gesture === 'drag') h.dragEnd(p.x, p.y, p.button);
     if (ps.size === 0) gesture = 'none';
   };
-  const wheel = (e: WheelEvent): void => { e.preventDefault(); const r = el.getBoundingClientRect(); h.wheel(e.deltaY, e.clientX - r.left, e.clientY - r.top); };
+  const wheel = (e: WheelEvent): void => {
+    e.preventDefault();
+    const r = el.getBoundingClientRect();
+    const k = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 100 : 1;
+    h.wheel(e.deltaY * k, e.clientX - r.left, e.clientY - r.top, e.deltaX * k, e.ctrlKey || e.metaKey);
+  };
   const ctx = (e: Event): void => e.preventDefault();
   const leave = (): void => h.hover(null, null);
   el.addEventListener('pointerdown', down);

@@ -6,18 +6,33 @@ import { centerOn } from '../../render/camera.ts';
 import { unitsOf } from '../../sim/queries.ts';
 import { primaryBase } from '../../sim/world.ts';
 import { ctlRace, issueAction, say, selectedUnits, type App } from '../app.ts';
-import { charge, hold, selectAll, togglePause } from '../hud/commands.ts';
+import { cancelTool, charge, cycleSpeed, hold, selectAll, togglePause } from '../hud/commands.ts';
+import { POWER_KEYS, POWERS } from '../../data/powers.ts';
+import { panBy, setZoom } from '../../render/camera.ts';
 
 export const HOTKEYS: [string, string][] = [
   ['1-9, 0', 'buy from the build strip (Shift for the second row)'],
   ['Ctrl+1-9', 'save the selection as a group'],
   ['1-9', 'recall a group when the strip is closed'],
   ['Tab', 'cycle unit types in the selection'],
-  ['A', 'select all'], ['C', 'charge'], ['H', 'hold'], ['R', 'retreat to base'],
+  ['Ctrl+A', 'select all'], ['C', 'charge'], ['H', 'hold'], ['Backspace', 'retreat to base'],
   ['F', 'focus your base'], ['Space', 'pause, or hold to drag the view'],
-  ['B', 'open or close the build strip'], ['Y', 'set the rally point'], ['L', 'territory overlay (Conquest)'], ['X', 'world speed (Conquest)'], ['Esc', 'clear selection'],
-  ['Right click', 'move or attack'], ['Wheel', 'zoom'], ['Middle drag', 'pan'],
+  ['Q W E R T G', 'powers, then click the target'],
+  ['B', 'build tab'], ['Y', 'set the rally point'], ['L', 'territory overlay (Conquest)'], ['[ and ]', 'slower, faster'], ['Esc', 'cancel tool, clear selection'],
+  ['Right click', 'move or attack'], ['Right drag', 'pan'], ['Scroll', 'pan (trackpad)'], ['Pinch, Ctrl+scroll, + -', 'zoom'], ['Arrows, WASD', 'pan'],
 ];
+
+/** Held keys pan every frame. */
+export function keyPan(app: App, dt: number): void {
+  if (!app.world && !app.editor) return;
+  const sp = 520 * dt;
+  let dx = 0, dy = 0;
+  if (app.keys.has('ArrowLeft') || app.keys.has('a') || app.keys.has('A')) dx += sp;
+  if (app.keys.has('ArrowRight') || app.keys.has('d') || app.keys.has('D')) dx -= sp;
+  if (app.keys.has('ArrowUp') || app.keys.has('w') || app.keys.has('W')) dy += sp;
+  if (app.keys.has('ArrowDown') || app.keys.has('s') || app.keys.has('S')) dy -= sp;
+  if (dx || dy) panBy(app.cam, dx, dy);
+}
 
 export function focusBase(app: App): void {
   const w = app.world;
@@ -77,11 +92,19 @@ export function wireHotkeys(app: App): void {
     const w = app.world;
     const k = e.key;
     if (k === ' ') { e.preventDefault(); if (!e.repeat) app.spaceT = performance.now(); return; }
-    if (k === 'Escape') { app.selection.clear(); app.drag = null; return; }
+    if (k === 'Escape') { if (app.tool !== 'cmd' && !(w.phase === 'edit' && app.tool === 'place')) cancelTool(app); else app.selection.clear(); app.drag = null; return; }
+    if (k === 'Backspace') { e.preventDefault(); retreat(app); return; }
+    if (k === '+' || k === '=') { setZoom(app.cam, app.cam.zoom + 1); return; }
+    if (k === '-' || k === '_') { setZoom(app.cam, app.cam.zoom - 1); return; }
+    if (k === '[') { cycleSpeed(app, -1); return; }
+    if (k === ']') { cycleSpeed(app, 1); return; }
+    if (k.startsWith('Arrow')) { e.preventDefault(); return; }
+    const pk = POWER_KEYS.find((p) => POWERS[p].hotkey.toLowerCase() === k.toLowerCase());
+    if (pk && !e.ctrlKey && !e.metaKey && w.phase === 'play') { app.tool = 'power'; app.power = pk; app.tab = 'powers'; app.ui.updateUI(); say(app, POWERS[pk].name + ': click the target', 1.5); return; }
     if (/^[0-9]$/.test(k)) {
       const n = k === '0' ? 10 : +k;
       if (e.ctrlKey || e.metaKey) { e.preventDefault(); setGroup(app, n); return; }
-      if (w.mode !== 'sand' && (app.groups.has(n) && !app.bstrip)) { recallGroup(app, n); return; }
+      if (w.mode !== 'sand' && app.groups.has(n) && app.tab !== 'units' && app.tab !== 'build') { recallGroup(app, n); return; }
       const list = roster(ctlRace(app));
       const idx = (e.shiftKey ? 10 : 0) + n - 1;
       const unit = list[idx];
@@ -92,15 +115,13 @@ export function wireHotkeys(app: App): void {
     }
     const lk = k.toLowerCase();
     if (lk === 'tab') { e.preventDefault(); cycleType(app); }
-    else if (lk === 'a') selectAll(app);
     else if (lk === 'c') charge(app);
     else if (lk === 'h') hold(app);
-    else if (lk === 'r') retreat(app);
     else if (lk === 'f') focusBase(app);
     else if (lk === 'y') { app.tool = app.tool === 'rally' ? 'cmd' : 'rally'; app.ui.updateUI(); }
     else if (lk === 'l' && w.mode === 'conquest') { app.overlay = !app.overlay; app.ui.updateUI(); }
-    else if (lk === 'x' && w.mode === 'conquest') { app.speed = app.speed >= 4 ? 1 : app.speed * 2; app.ui.updateUI(); }
-    else if (lk === 'b') { app.bstrip = !app.bstrip; app.tool = app.bstrip ? 'build' : w.phase === 'edit' ? 'place' : 'cmd'; app.ui.updateUI(); }
+    else if (lk === 'b') { app.tab = app.tab === 'build' ? 'units' : 'build'; app.tool = app.tab === 'build' ? 'build' : w.phase === 'edit' ? 'place' : 'cmd'; app.ui.updateUI(); }
+    else if (lk === 'a' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); selectAll(app); }
   });
   window.addEventListener('keyup', (e) => {
     app.keys.delete(e.key);

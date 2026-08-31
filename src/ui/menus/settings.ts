@@ -31,6 +31,7 @@ export function showSettings(app: App, back: () => void): void {
     + tog('sHints', 'KEY HINTS', s.hints, 'desktop key panel')
     + tog('sCb', 'COLORBLIND PALETTE', s.colorblind, 'blue, orange, teal, yellow, magenta')
     + tog('sPause', 'AUTO PAUSE', s.autoPause, 'Conquest pauses on events (always on for touch)')
+    + tog('sInst', 'INSTANT PRODUCTION', s.instant, 'units appear the moment you buy them (new games)')
     + '<button class="gold" id="sBack">BACK</button></div>';
   const re = (): void => { applySettings(app); showSettings(app, back); };
   on($('sVol'), 'input', () => { s.volume = +($('sVol') as HTMLInputElement).value / 100; synth.setVolume(s.volume, s.muted); saveSettings(app); });
@@ -41,7 +42,18 @@ export function showSettings(app: App, back: () => void): void {
   on($('sHints'), 'click', () => { s.hints = !s.hints; re(); });
   on($('sCb'), 'click', () => { s.colorblind = !s.colorblind; re(); });
   on($('sPause'), 'click', () => { s.autoPause = !s.autoPause; re(); });
+  on($('sInst'), 'click', () => { s.instant = !s.instant; re(); });
   on($('sBack'), 'click', back);
+  ov().classList.remove('hide');
+}
+
+export function showHelp(back: () => void): void {
+  ov().innerHTML = '<div><h2>HOW TO PLAY</h2>'
+    + '<h3>PHONE</h3><p class="left">Drag the map to look around. Pinch to zoom. Tap a unit to select it, tap the ground to move, tap an enemy to attack. Tap SELECT to make dragging draw a box instead. Buy from the UNITS tab. Powers are in the POWERS tab: pick one, then tap where it should land. PAUSE and speed are at the top.</p>'
+    + '<h3>LAPTOP AND DESKTOP</h3><p class="left">Scroll with two fingers to pan, pinch or Ctrl+scroll to zoom, or use the arrow keys. Left drag draws a selection box, right click moves or attacks, right drag pans. Number keys buy, Q W E R T G pick powers, Space pauses, [ and ] change speed, Esc cancels.</p>'
+    + '<h3>CONQUEST</h3><p class="left">Found villages next to your land and hold them 30 seconds. Every unit costs gold per second. Keep regions connected to your capital and garrisoned, or unrest rises. LAND shows the territory overlay, LIST the regions and events. Truces are in the LIST panel.</p>'
+    + '<button class="gold" id="hBack">BACK</button></div>';
+  on($('hBack'), 'click', back);
   ov().classList.remove('hide');
 }
 

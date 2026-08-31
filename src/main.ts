@@ -12,6 +12,7 @@ import { startBench } from './ui/bench.ts';
 import { autosaveTick, wireAutosave } from './ui/conquest.ts';
 import { watchEvents } from './ui/territory.ts';
 import { synth } from './audio/synth.ts';
+import { POWERS } from './data/powers.ts';
 import { applySettings } from './ui/menus/settings.ts';
 import { soundTick, shakeTick } from './ui/feedback.ts';
 import { $ } from './ui/dom.ts';
@@ -20,7 +21,7 @@ import { buildHints, updateHints } from './ui/hud/hint.ts';
 import { buildStrips, renderHud, updateUI, wireViewButtons } from './ui/hud/hud.ts';
 import { attachInput } from './ui/input/index.ts';
 import { edgePan } from './ui/input/mouse.ts';
-import { wireHotkeys } from './ui/input/hotkeys.ts';
+import { keyPan, wireHotkeys } from './ui/input/hotkeys.ts';
 import { applyLayout, detectLayout } from './ui/layout.ts';
 import { wireEditor } from './ui/menus/editor.ts';
 import { endScreen, showMenu } from './ui/menus/menu.ts';
@@ -61,7 +62,7 @@ function loop(ts: number): void {
     if (app.running && !app.paused) {
       acc += frame * app.speed;
       let n = 0;
-      const maxSteps = MAX_STEPS * app.speed;
+      const maxSteps = Math.ceil(MAX_STEPS * app.speed);
       while (acc >= DT && n < maxSteps) { step(w); acc -= DT; n++; }
       if (n === maxSteps) acc = 0;
       autosaveTick(app);
@@ -70,14 +71,16 @@ function loop(ts: number): void {
     if (w.over && !overShown) { overShown = true; app.running = false; setTimeout(() => app.ui.endScreen(), 700); }
     if (!w.over) overShown = false;
     if (w.mapDirty) { buildBg(w.map, app.bg); w.mapDirty = false; }
+    keyPan(app, frame);
     updateCam(app.cam, frame);
     edgePan(app, frame);
     soundTick(app, w);
     const shake = shakeTick(app, w, frame);
-    drawWorld(app.ctx, app.bg, w, { drag: app.drag, alpha: app.running && !app.paused ? Math.min(1, acc / DT) : 1, selection: app.selection, paused: app.paused, viewer: app.ctl, hover: app.hover, cam: app.cam, dpr: app.dpr, overlay: app.overlay, damageNumbers: app.settings.damageNumbers, shake });
+    drawWorld(app.ctx, app.bg, w, { drag: app.drag, alpha: app.running && !app.paused ? Math.min(1, acc / DT) : 1, selection: app.selection, paused: app.paused, viewer: app.ctl, hover: app.hover, cam: app.cam, dpr: app.dpr, overlay: app.overlay, damageNumbers: app.settings.damageNumbers, shake, ghost: app.tool === 'power' && app.power != null && app.mouse ? { x: app.cam.x + app.mouse.x / app.cam.zoom, y: app.cam.y + app.mouse.y / app.cam.zoom, r: POWERS[app.power].r } : null });
     drawMinimap($<HTMLCanvasElement>('mini'), app.minimap, w.map, w, app.cam, MINI(), app.dpr);
   } else if (app.editor) {
     if (app.msgT > 0) app.msgT -= frame;
+    keyPan(app, frame);
     updateCam(app.cam, frame);
     drawEditor(app.ctx, app.bg, app.editor.map, app.cam, app.dpr);
     drawMinimap($<HTMLCanvasElement>('mini'), app.minimap, app.editor.map, null, app.cam, MINI(), app.dpr);

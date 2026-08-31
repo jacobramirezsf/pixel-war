@@ -16,57 +16,74 @@
   <div id="top">
     <span id="tl"></span>
     <span class="wave" id="wave"></span>
-    <span id="sel"></span>
-    <span id="view"><button id="bSpeed" class="mini" title="speed">1×</button><button id="bLand" class="mini" title="territory overlay">LAND</button><button id="bZoomOut" class="mini" title="zoom out">−</button><button id="bZoomIn" class="mini" title="zoom in">+</button><button id="bHome" class="mini" title="jump to base">BASE</button></span>
-    <button id="bMenu" class="mini">MENU</button>
+    <span id="topbtns"><button id="bPause" class="mini" title="pause (Space)">PAUSE</button><button id="bSpeed" class="mini" title="speed ([ and ])">1×</button><button id="bMenu" class="mini">MENU</button></span>
   </div>
   <div id="main">
-    <div id="side">
-      <div id="hints" class="hide"></div>
-    </div>
+    <div id="side"></div>
     <div id="stage">
       <canvas id="c"></canvas>
       <canvas id="mini"></canvas>
+      <div id="viewctl"><button id="bZoomIn" class="vc" title="zoom in">+</button><button id="bZoomOut" class="vc" title="zoom out">−</button><button id="bFit" class="vc" title="fit the map">FIT</button><button id="bHome" class="vc" title="jump to base (F)">HOME</button></div>
+      <div id="msg"></div>
+      <div id="pauseov" class="hide"><div>PAUSED<small>tap or press Space to resume</small></div></div>
       <div id="terr" class="hide"></div>
+      <div id="hints" class="hide"></div>
     </div>
   </div>
   <div id="bottom">
-    <div id="msg"></div>
-    <div id="info"><span id="selcard"></span><span id="queue"></span></div>
-    <div id="strips">
-      <div id="strip" class="strip"></div>
-      <div id="bstrip" class="strip hide"></div>
-      <div id="tstrip" class="strip hide"></div>
-    </div>
-    <div id="cmd">
-      <button id="bTeam">BLUE</button>
-      <button id="bAll" class="cmd">ALL</button>
-      <button id="bCharge" class="cmd">CHARGE</button>
-      <button id="bHold" class="cmd">HOLD</button>
-      <button id="bRetreat" class="cmd">RETREAT</button>
-      <button id="bRally">RALLY</button>
-      <button id="bSettle">VILLAGE</button>
-      <button id="bOutpost">OUTPOST</button>
-      <button id="bFort">UPGRADE</button>
-      <button id="bAbsorb">ABSORB</button>
-      <button id="bTerr">LIST</button>
-      <button id="bSave">SAVE</button>
-      <button id="bG1" class="grp">G1</button>
-      <button id="bG2" class="grp">G2</button>
-      <button id="bG3" class="grp">G3</button>
-      <button id="bPause">PAUSE</button>
-      <button id="bEdit">EDIT</button>
-      <button id="bErase">ERASE</button>
-      <button id="bMirror">MIRROR</button>
-      <button id="bClear">CLEAR</button>
-      <button id="bMap">MAP</button>
-      <button id="bPlay">PLAY</button>
-      <button id="bSize">SIZE</button>
-      <button id="bRandom">RANDOM</button>
-      <button id="bMirrorMap">MIRROR</button>
-      <button id="bClearMap">CLEAR</button>
-      <button id="bCode">CODE</button>
-      <button id="bDone">DONE</button>
+    <div id="panel">
+      <div id="info"><span id="selcard"></span><span id="queue"></span></div>
+      <div id="cmdrow">
+        <button id="bSelect" class="cmd">SELECT</button>
+        <button id="bAll" class="cmd">ALL</button>
+        <button id="bCharge" class="cmd">CHARGE</button>
+        <button id="bHold" class="cmd">HOLD</button>
+        <button id="bRetreat" class="cmd">RETREAT</button>
+        <button id="bCancel" class="cancel">CANCEL</button>
+      </div>
+      <div id="tabs">
+        <button id="tUnits" class="tab">UNITS</button>
+        <button id="tBuild" class="tab">BUILD</button>
+        <button id="tPowers" class="tab">POWERS</button>
+        <button id="tMore" class="tab">MORE</button>
+        <button id="tTools" class="tab">TERRAIN</button>
+        <button id="tEdit" class="tab">MAP</button>
+      </div>
+      <div id="tabpanel">
+        <div id="strip" class="strip"></div>
+        <div id="bstrip" class="strip hide"></div>
+        <div id="pstrip" class="strip hide"></div>
+        <div id="tstrip" class="strip hide"></div>
+        <div id="more" class="grid hide">
+          <button id="bRally">RALLY</button>
+          <button id="bG1" class="grp">G1</button>
+          <button id="bG2" class="grp">G2</button>
+          <button id="bG3" class="grp">G3</button>
+          <button id="bSell">SELL</button>
+          <button id="bLand">LAND</button>
+          <button id="bTerr">LIST</button>
+          <button id="bSettle">VILLAGE</button>
+          <button id="bOutpost">OUTPOST</button>
+          <button id="bFort">UPGRADE</button>
+          <button id="bAbsorb">ABSORB</button>
+          <button id="bSave">SAVE</button>
+          <button id="bTeam">BLUE</button>
+          <button id="bEdit">EDIT</button>
+          <button id="bErase">ERASE</button>
+          <button id="bMirror">MIRROR</button>
+          <button id="bClear">CLEAR</button>
+          <button id="bMap">MAP</button>
+          <button id="bPlay">PLAY</button>
+        </div>
+        <div id="estrip" class="grid hide">
+          <button id="bSize">SIZE</button>
+          <button id="bRandom">RANDOM</button>
+          <button id="bMirrorMap">MIRROR</button>
+          <button id="bClearMap">CLEAR</button>
+          <button id="bCode">CODE</button>
+          <button id="bDone">DONE</button>
+        </div>
+      </div>
     </div>
   </div>
 </div>

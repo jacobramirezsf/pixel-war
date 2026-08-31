@@ -159,6 +159,8 @@ export interface ViewState {
   damageNumbers: boolean;
   /** Screen shake offset in world pixels. */
   shake: { x: number; y: number };
+  /** Power radius preview under the pointer. */
+  ghost: { x: number; y: number; r: number } | null;
 }
 
 let tintCanvas: HTMLCanvasElement | null = null, tintKey = '';
@@ -259,6 +261,7 @@ export function drawWorld(ctx: CanvasRenderingContext2D, bg: HTMLCanvasElement, 
     ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.strokeRect(rally.x - 3.5, rally.y - 2.5, 7, 4);
   }
   drawFx(ctx, w.fx, { damageNumbers: v.damageNumbers });
+  if (v.ghost) { ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.beginPath(); ctx.arc(v.ghost.x, v.ghost.y, v.ghost.r, 0, 7); ctx.stroke(); }
   if (drag) {
     ctx.fillStyle = 'rgba(125,255,125,.14)'; ctx.fillRect(drag.x, drag.y, drag.w, drag.h);
     ctx.strokeStyle = '#7dff7d'; ctx.strokeRect(drag.x + 0.5, drag.y + 0.5, drag.w, drag.h);

@@ -4,7 +4,7 @@ import { TNAME } from '../../data/teams.ts';
 import { TYPES } from '../../data/units.ts';
 import { unitsOf } from '../../sim/queries.ts';
 import { recallGroup, retreat, setGroup } from '../input/hotkeys.ts';
-import { hideOverlay, issueAction, leaveEditor, openEditor, say, selectedUnits, type App } from '../app.ts';
+import { hideOverlay, issueAction, leaveEditor, openEditor, say, selectedUnits, SPEEDS, type App } from '../app.ts';
 import { saveConquest } from '../conquest.ts';
 import { $, on } from '../dom.ts';
 
@@ -34,7 +34,21 @@ export function hold(app: App): void {
 
 export function togglePause(app: App): void {
   app.paused = !app.paused;
-  say(app, app.paused ? 'Paused. You can still give orders.' : 'Resumed', 1.5);
+  app.ui.updateUI();
+}
+
+export function cycleSpeed(app: App, dir = 1): void {
+  const i = SPEEDS.indexOf(app.speed);
+  app.speed = SPEEDS[(i + dir + SPEEDS.length) % SPEEDS.length];
+  say(app, 'Speed ' + app.speed + '×', 1);
+  app.ui.updateUI();
+}
+
+/** Drop whatever tool is active and go back to commanding. */
+export function cancelTool(app: App): void {
+  app.tool = app.world?.phase === 'edit' ? 'place' : 'cmd';
+  app.power = null;
+  if (app.tab === 'build' || app.tab === 'powers') app.tab = 'units';
   app.ui.updateUI();
 }
 
@@ -65,7 +79,6 @@ export function wireCommands(app: App): void {
   on($('bTerr'), 'click', () => { app.terrOpen = !app.terrOpen; app.ui.updateUI(); });
   on($('bSave'), 'click', () => { say(app, saveConquest(app) ? 'Saved' : 'Nothing to save', 1.2); });
   on($('bLand'), 'click', () => { app.overlay = !app.overlay; app.ui.updateUI(); });
-  on($('bSpeed'), 'click', () => { app.speed = app.speed >= 4 ? 1 : app.speed * 2; app.ui.updateUI(); });
   // Mobile groups: tap recalls, tap with a selection and an empty slot saves, hold saves over.
   for (const n of [1, 2, 3]) {
     const b = $('bG' + n);
@@ -81,6 +94,9 @@ export function wireCommands(app: App): void {
       app.ui.updateUI();
     });
   }
+  on($('bCancel'), 'click', () => cancelTool(app));
+  on($('bSelect'), 'click', () => { app.selectMode = !app.selectMode; app.ui.updateUI(); say(app, app.selectMode ? 'Drag draws a selection box. Two fingers pan.' : 'Drag pans the map. Tap units to select.', 2); });
+  on($('bSell'), 'click', () => { app.tool = app.tool === 'sell' ? 'cmd' : 'sell'; app.ui.updateUI(); say(app, app.tool === 'sell' ? 'Tap your buildings to sell them (half back)' : 'Sell off', 1.5); });
   on($('bTeam'), 'click', () => {
     const x = app.world;
     app.ctl = 1 - app.ctl;
@@ -90,13 +106,13 @@ export function wireCommands(app: App): void {
   });
   on($('bErase'), 'click', () => {
     app.tool = app.tool === 'erase' ? 'place' : 'erase';
-    app.bstrip = false;
     app.ui.updateUI();
     say(app, app.tool === 'erase' ? 'Tap units or buildings to remove them' : 'Placing ' + TYPES[app.brush].name, 1.5);
   });
   on($('bClear'), 'click', () => issueAction(app, { type: 'clear', payload: null }));
   on($('bMirror'), 'click', () => issueAction(app, { type: 'mirror', payload: null }));
   on($('bPause'), 'click', () => { if (app.world) togglePause(app); });
+  on($('bSpeed'), 'click', () => cycleSpeed(app));
   on($('bPlay'), 'click', () => startBattle(app));
   on($('bEdit'), 'click', () => toEdit(app));
   on($('bMap'), 'click', () => openEditor(app, 'sand'));
@@ -106,7 +122,7 @@ export function wireCommands(app: App): void {
 export function startBattle(app: App): void {
   if (!app.world || !issueAction(app, { type: 'startBattle', payload: null })) return;
   app.tool = 'cmd';
-  app.bstrip = false;
+  app.tab = 'units';
   app.running = true;
   app.paused = false;
   app.selection.clear();
@@ -120,7 +136,7 @@ export function toEdit(app: App): void {
   app.selection.clear();
   app.paused = false;
   app.tool = 'place';
-  app.bstrip = false;
+  app.tab = 'units';
   app.drag = null;
   app.running = true;
   hideOverlay();

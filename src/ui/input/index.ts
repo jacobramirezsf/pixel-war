@@ -17,7 +17,8 @@ export function attachInput(app: App): void {
     dragEnd: (x, y, b) => active.dragEnd(x, y, b),
     pan: (dx, dy) => active.pan(dx, dy),
     pinch: (s, cx, cy) => active.pinch(s, cx, cy),
-    wheel: (dy, x, y) => schemes.mouse.wheel(dy, x, y),
+    pinchEnd: () => active.pinchEnd(),
+    wheel: (dy, x, y, dx, ctrl) => schemes.mouse.wheel(dy, x, y, dx, ctrl),
     hover: (x, y) => schemes.mouse.hover(x, y),
   });
 }

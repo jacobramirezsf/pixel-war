@@ -4,6 +4,7 @@
 import type { UnitKey } from '../data/units.ts';
 import type { BldKey, BldKind } from '../data/buildings.ts';
 import type { DiffKey } from '../data/difficulty.ts';
+import type { PowerKey } from '../data/powers.ts';
 import type { RaceKey } from '../data/races.ts';
 import type { MapDef } from './map.ts';
 import type { Rng } from './rng.ts';
@@ -143,6 +144,8 @@ export interface Unit {
   ix: number;
   /** Kills, for veterancy. */
   kills: number;
+  /** Seconds of haste left: faster movement and attacks. */
+  hasteT: number;
 }
 
 export interface Mine {
@@ -182,6 +185,18 @@ export interface Slot {
   truce: boolean[];
   /** Sim time each truce began, for peace. */
   truceT: number[];
+  /** Cooldown left per power, in seconds. */
+  powerCd: Partial<Record<PowerKey, number>>;
+}
+
+/** A barrage in flight: lands at `t` seconds. */
+export interface Strike {
+  team: number;
+  x: number;
+  y: number;
+  r: number;
+  dmg: number;
+  t: number;
 }
 
 export interface QueueItem {
@@ -201,7 +216,9 @@ export type Fx =
   | { k: 'heal'; x: number; y: number; t: number }
   | { k: 'fix'; x: number; y: number; t: number }
   | { k: 'txt'; x: number; y: number; t: number; str: string; c: string }
-  | { k: 'dmg'; x: number; y: number; t: number; n: number };
+  | { k: 'dmg'; x: number; y: number; t: number; n: number }
+  | { k: 'mark'; x: number; y: number; r: number; t: number; c: string }
+  | { k: 'bolt'; x: number; y: number; t: number };
 
 /** Sandbox army layout, restored on replay and on return to edit. */
 export interface SandSnap {
@@ -273,6 +290,9 @@ export interface World {
   neutral: number;
   /** Terrain changed; the renderer rebuilds its background. Transient. */
   mapDirty: boolean;
+  strikes: Strike[];
+  /** Production finishes at once. A game option, set at start. */
+  instant: boolean;
 }
 
 export interface TargetRef {
@@ -286,6 +306,7 @@ export type Action =
   | { type: 'settle'; payload: { x: number; y: number; tier?: 'outpost' | 'village' } }
   | { type: 'absorb'; payload: { id: number } }
   | { type: 'truce'; payload: { slot: number; offer: boolean } }
+  | { type: 'power'; payload: { power: PowerKey; x: number; y: number } }
   | { type: 'upgrade'; payload: { id: number } }
   | { type: 'rally'; payload: { x: number; y: number } | null }
   | { type: 'move'; payload: { ids: number[]; x: number; y: number } }
@@ -314,4 +335,5 @@ export interface WorldConfig {
   races?: RaceKey[];
   /** Difficulty per slot. Default: the world's difficulty. */
   diffs?: DiffKey[];
+  instant?: boolean;
 }

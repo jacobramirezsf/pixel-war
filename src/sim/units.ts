@@ -11,7 +11,7 @@ export function mkUnit(w: World, team: number, type: UnitKey, x: number, y: numb
   return {
     ent: 'unit', id: w.nextId++, team, type, x, y, hp: T.hp, cd: rnd(w.rng, 0, 0.4), order: null,
     flash: 0, walk: 0, moving: false, held: false, blk: null, px: x, py: y, ox: x, oy: y,
-    slowT: 0, rootT: 0, reveal: 0, run: 0, blinkT: 0, dropT: T.dropTrap ? T.dropTrap / 2 : 0, ix: 0, kills: 0,
+    slowT: 0, rootT: 0, reveal: 0, run: 0, blinkT: 0, dropT: T.dropTrap ? T.dropTrap / 2 : 0, ix: 0, kills: 0, hasteT: 0,
   };
 }
 
@@ -32,7 +32,7 @@ export function popOf(type: UnitKey): number {
 
 /** Seconds to produce a unit. Cheap units are quick, a giant takes a while. */
 export function buildTime(type: UnitKey): number {
-  return Math.round((0.5 + TYPES[type].cost / 40) * 10) / 10;
+  return Math.round((0.3 + TYPES[type].cost / 60) * 10) / 10;
 }
 
 /** Spawn just in front of the team's base. Null when the army cap is reached. */

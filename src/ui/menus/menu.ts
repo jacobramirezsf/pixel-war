@@ -9,7 +9,7 @@ import type { Mode } from '../../sim/types.ts';
 import { allied, count } from '../../sim/world.ts';
 import { hideOverlay, openEditor, say, setEditorMap, startGame, type App } from '../app.ts';
 import { continueConquest, hasSave, saveConquest, startConquest } from '../conquest.ts';
-import { showSettings, showStats } from './settings.ts';
+import { showHelp, showSettings, showStats } from './settings.ts';
 import { recordGame } from '../stats.ts';
 import { synth } from '../../audio/synth.ts';
 import { $, on } from '../dom.ts';
@@ -49,9 +49,8 @@ export function showMenu(app: App): void {
     <button data-mode="dom">DOMINATION<small>Hold the mines to fill your meter. First to 150 points wins.</small></button>
     <button data-mode="rich">UNLIMITED GOLD<small>Bottomless treasury. Enemy income doubled, army cap 60.</small></button>
     <button data-mode="sand">SANDBOX<small>Place armies AND fortifications for both sides, then hit PLAY.</small></button>
-    <div class="row"><button class="sm" id="mSettings">SETTINGS</button><button class="sm" id="mStats">STATS</button></div>
-    <p><span class="k">BUILD ▸</span> opens walls, gates, and towers. Walls block both sides, so leave yourself a gate. Your units always pass your own gates. Tap a gate to lock or open it. WORKERS repair for a gold trickle.</p>
-    <p>Capturing a mine adds 1.5 gold/s and the counter flashes when your income changes. Mortars and snipers outrange every tower. Drones fly over everything.</p>
+    <div class="row"><button class="sm" id="mHelp">HOW TO PLAY</button><button class="sm" id="mSettings">SETTINGS</button><button class="sm" id="mStats">STATS</button></div>
+    <p class="blurb">Walls block both sides, so leave yourself a gate. Mines add 1.5 gold/s. Mortars outrange towers, drones fly over everything.</p>
   </div>`;
   for (const b of ov().querySelectorAll<HTMLButtonElement>('button[data-mode]'))
     on(b, 'click', () => {
@@ -63,6 +62,7 @@ export function showMenu(app: App): void {
     });
   on($('mMap'), 'click', () => showMaps(app));
   on($('mSettings'), 'click', () => showSettings(app, () => showMenu(app)));
+  on($('mHelp'), 'click', () => showHelp(() => showMenu(app)));
   on($('mStats'), 'click', () => showStats(app, () => showMenu(app)));
   on($('mRace'), 'click', () => { app.race = nextRace(app.race, false)!; showMenu(app); });
   on($('mFoe'), 'click', () => { app.foeRace = nextRace(app.foeRace, true); showMenu(app); });

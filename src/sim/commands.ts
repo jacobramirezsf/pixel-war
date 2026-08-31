@@ -10,6 +10,7 @@ import type { Action, Command, Target, TargetRef, Unit, World } from './types.ts
 import { buildTime, mkUnit } from './units.ts';
 import { absorb, ADVANCED_COST, canAbsorb, canSettle, hasCity, NEXT_TIER, placeSettlement, popCap, popUsed, setTruce, startUpgrade, TIERS, truceAccepted } from './conquest.ts';
 import { popOf } from './units.ts';
+import { castPower } from './powers.ts';
 import { allied, count, mapH, mapW, say as worldSay } from './world.ts';
 
 /** Queued and in-production units count toward the army cap. */
@@ -120,6 +121,12 @@ export function applyCommand(w: World, c: Command, quiet = false): boolean {
       for (const u of w.units) if (u.hp > 0) value[u.team] += TYPES[u.type].cost;
       if (!truceAccepted(w, slot, other, value)) { say('They refuse. Come back stronger or less hated.', 2.5); return false; }
       setTruce(w, slot, other, true);
+      return true;
+    }
+    case 'power': {
+      if (editing) return false;
+      const why = castPower(w, slot, c.payload.power, c.payload.x, c.payload.y);
+      if (why) { say(why, 1.5); return false; }
       return true;
     }
     case 'rally': {

@@ -33,6 +33,20 @@ export function drawFx(ctx: CanvasRenderingContext2D, fx: readonly Fx[], opt: Fx
       const n = Math.min(14, Math.round(f.r));
       for (let i = 0; i < n; i++) { const [dx, dy] = scatter(seed, i); ctx.fillRect(Math.round(f.x + dx * p * f.r * 1.3), Math.round(f.y + dy * p * f.r * 1.3), 1, 1); }
     }
+    else if (f.k === 'mark') {
+      const blink = Math.floor(f.t * 8) % 2 === 0;
+      ctx.strokeStyle = f.c; ctx.globalAlpha = blink ? 0.9 : 0.5;
+      ctx.beginPath(); ctx.arc(f.x, f.y, f.r, 0, 7); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(f.x - 3, f.y); ctx.lineTo(f.x + 3, f.y); ctx.moveTo(f.x, f.y - 3); ctx.lineTo(f.x, f.y + 3); ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+    else if (f.k === 'bolt') {
+      const p = f.t / 0.35;
+      ctx.strokeStyle = 'rgba(255,255,255,' + p.toFixed(2) + ')'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(f.x + 6, f.y - 40); ctx.lineTo(f.x - 2, f.y - 18); ctx.lineTo(f.x + 3, f.y - 14); ctx.lineTo(f.x, f.y - 2); ctx.stroke();
+      ctx.lineWidth = 1;
+      ctx.fillStyle = 'rgba(180,230,255,' + (p * 0.6).toFixed(2) + ')'; ctx.beginPath(); ctx.arc(f.x, f.y, 6 * (1 - p) + 2, 0, 7); ctx.fill();
+    }
     else if (f.k === 'dmg') {
       if (!opt.damageNumbers) continue;
       ctx.globalAlpha = Math.min(1, f.t * 2); ctx.fillStyle = '#ffe9a8'; ctx.font = '5px monospace'; ctx.textAlign = 'center';

@@ -28,7 +28,7 @@ function enter(app: App): void {
   app.groups.clear();
   app.ctl = 0;
   app.tool = 'cmd';
-  app.bstrip = false;
+  app.tab = 'units';
   app.drag = null;
   app.overlay = true;
   app.terrOpen = false;
@@ -42,7 +42,7 @@ function enter(app: App): void {
 export function startConquest(app: App): void {
   const rivals = app.rivals;
   const races = [app.race, ...Array.from({ length: rivals }, () => app.foeRace ?? randomRace())];
-  app.world = newGame({} as never, 'conquest', { seed: (Math.random() * 2 ** 31) | 0, diff: app.diff, races, rivals });
+  app.world = newGame({} as never, 'conquest', { seed: (Math.random() * 2 ** 31) | 0, diff: app.diff, races, rivals, instant: app.settings.instant });
   app.brush = app.world.slots[0].race === 'kingdom' ? 'inf' : app.brush;
   enter(app);
 }

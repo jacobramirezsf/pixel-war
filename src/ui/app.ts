@@ -6,6 +6,7 @@ import type { DiffKey } from '../data/difficulty.ts';
 import { RACE_KEYS, type RaceKey } from '../data/races.ts';
 import { BUILTIN, type EditorTool } from '../data/maps.ts';
 import { roster, type UnitKey } from '../data/units.ts';
+import type { PowerKey } from '../data/powers.ts';
 import type { Storage } from '../platform/storage.ts';
 import { fitZoom, makeCamera, setMap, setViewport, type Camera } from '../render/camera.ts';
 import { makeMinimapCache, type MinimapCache } from '../render/minimap.ts';
@@ -20,7 +21,9 @@ import { $ } from './dom.ts';
 import { detectLayout, type LayoutMode } from './layout.ts';
 import { loadSettings, saveSettings as persistSettings, type Settings } from './settings.ts';
 
-export type Tool = 'cmd' | 'build' | 'sell' | 'place' | 'erase' | 'rally' | 'settle' | 'outpost' | 'upgrade' | 'absorb';
+export type Tool = 'cmd' | 'build' | 'sell' | 'place' | 'erase' | 'rally' | 'settle' | 'outpost' | 'upgrade' | 'absorb' | 'power';
+export type Tab = 'units' | 'build' | 'powers' | 'more' | 'tools' | 'edit';
+export const SPEEDS = [0.25, 0.5, 1, 2, 4];
 
 export interface EditorState {
   map: MapDef;
@@ -59,7 +62,10 @@ export interface App {
   brush: UnitKey;
   bbrush: BldKey;
   tool: Tool;
-  bstrip: boolean;
+  tab: Tab;
+  power: PowerKey | null;
+  /** Touch: one-finger drag box-selects instead of panning. */
+  selectMode: boolean;
   running: boolean;
   paused: boolean;
   /** Sim speed multiplier: 1, 2, or 4. */
@@ -108,7 +114,7 @@ export function createApp(storage: Storage): App {
   return {
     world: null, setup: null, editor: null, curMap: BUILTIN[0], custom: null, diff: 'std', race: 'kingdom', foeRace: null,
     mset: [{ on: true, team: 0, race: null }, { on: true, team: 1, race: null }, { on: true, team: 2, race: null }, { on: false, team: 3, race: null }, { on: false, team: 4, race: null }],
-    ctl: 0, brush: 'inf', bbrush: 'stk', tool: 'cmd', bstrip: false, running: false, paused: false, speed: 1, overlay: false, terrOpen: false, seenEvents: 0, rivals: 1, lastSave: 0, selection: new Set(), drag: null, msg: '', msgT: 0,
+    ctl: 0, brush: 'inf', bbrush: 'stk', tool: 'cmd', tab: 'units', power: null, selectMode: false, running: false, paused: false, speed: 1, overlay: false, terrOpen: false, seenEvents: 0, rivals: 1, lastSave: 0, selection: new Set(), drag: null, msg: '', msgT: 0,
     cv, ctx, bg: document.createElement('canvas'), W: 160, H: 224,
     cam: makeCamera(), dpr: 1, layout: detectLayout(), minimap: makeMinimapCache(), hover: null, mouse: null,
     keys: new Set(), spaceT: 0, spaceDragged: false, groups: new Map(), settings: loadSettings(storage), storage,
@@ -139,9 +145,9 @@ export function fit(app: App): void {
   setViewport(app.cam, vw, vh);
 }
 
-/** Zoom to fit: the map width on mobile, the whole map on desktop. */
+/** Starting zoom: at least 2x so sprites read, more when the whole map still fits. */
 export function homeZoom(app: App): void {
-  app.cam.zoom = fitZoom(app.cam, app.layout === 'mobile' ? 'width' : 'both');
+  app.cam.zoom = Math.max(2, fitZoom(app.cam, 'both'));
   app.cam.x = 0;
   app.cam.y = 0;
   setViewport(app.cam, app.cam.vw, app.cam.vh);
@@ -188,7 +194,7 @@ export function startGame(app: App, mode: Mode, allies?: number[], races?: (Race
     const pick = races ? races[i] : i === 0 ? app.race : app.foeRace;
     return pick ?? randomRace();
   });
-  const setup: GameSetup = { seed: (Math.random() * 2 ** 31) | 0, mode, map: app.curMap, allies: al, diff: app.diff, ai: al.map((_, i) => i !== 0), races: rc };
+  const setup: GameSetup = { seed: (Math.random() * 2 ** 31) | 0, mode, map: app.curMap, allies: al, diff: app.diff, ai: al.map((_, i) => i !== 0), races: rc, instant: app.settings.instant };
   const w = setupWorld(setup);
   app.world = w;
   app.setup = setup;
@@ -203,7 +209,8 @@ export function startGame(app: App, mode: Mode, allies?: number[], races?: (Race
   app.brush = roster(rc[0])[1];
   app.bbrush = 'stk';
   app.tool = mode === 'sand' ? 'place' : 'cmd';
-  app.bstrip = false;
+  app.tab = 'units';
+  app.power = null;
   app.drag = null;
   loadMap(app, w.map);
   hideOverlay();
@@ -215,7 +222,7 @@ export function openEditor(app: App, ret: 'sand' | 'menu'): void {
   app.world = null;
   app.editor = { map: m, ret, tool: 2 };
   app.running = true;
-  app.bstrip = false;
+  app.tab = 'tools';
   loadMap(app, m);
   hideOverlay();
   app.ui.updateUI();

@@ -13,12 +13,17 @@ export interface Camera {
   /** Smooth-follow target in world pixels, or null. */
   tx: number | null;
   ty: number | null;
+  /** Zoom to settle on after a pinch, or null. */
+  tz: number | null;
+  /** Fling velocity in screen pixels per second. */
+  vx: number;
+  vy: number;
 }
 
-export const ZOOMS = [1, 2, 3, 4] as const;
+export const ZOOM_MAX = 6;
 
 export function makeCamera(): Camera {
-  return { x: 0, y: 0, zoom: 2, vw: 320, vh: 480, mapW: 160, mapH: 224, tx: null, ty: null };
+  return { x: 0, y: 0, zoom: 2, vw: 320, vh: 480, mapW: 160, mapH: 224, tx: null, ty: null, tz: null, vx: 0, vy: 0 };
 }
 
 export function setViewport(cam: Camera, vw: number, vh: number): void {
@@ -38,7 +43,7 @@ export function setMap(cam: Camera, mapW: number, mapH: number): void {
 export function fitZoom(cam: Camera, mode: 'width' | 'both'): number {
   const zw = Math.floor(cam.vw / cam.mapW), zh = Math.floor(cam.vh / cam.mapH);
   const z = mode === 'width' ? zw : Math.min(zw, zh);
-  return Math.max(1, Math.min(4, z));
+  return Math.max(1, Math.min(ZOOM_MAX, z));
 }
 
 /** Keep the view inside the map. Maps smaller than the view sit centered. */
@@ -48,10 +53,17 @@ export function clampCam(cam: Camera): void {
   cam.y = cam.mapH <= vh ? (cam.mapH - vh) / 2 : Math.max(0, Math.min(cam.mapH - vh, cam.y));
 }
 
-/** Change zoom keeping the world point under screen point (ax, ay) fixed. */
+/** Change zoom to a whole step keeping the world point under screen point (ax, ay) fixed. */
 export function setZoom(cam: Camera, z: number, ax = cam.vw / 2, ay = cam.vh / 2): void {
-  z = Math.max(1, Math.min(4, Math.round(z)));
+  z = Math.max(1, Math.min(ZOOM_MAX, Math.round(z)));
   if (z === cam.zoom) return;
+  zoomTo(cam, z, ax, ay);
+  cam.tz = null;
+}
+
+/** Any zoom, fractional allowed. Pinches use this, then settle on a whole step. */
+export function zoomTo(cam: Camera, z: number, ax = cam.vw / 2, ay = cam.vh / 2): void {
+  z = Math.max(1, Math.min(ZOOM_MAX, z));
   const wx = cam.x + ax / cam.zoom, wy = cam.y + ay / cam.zoom;
   cam.zoom = z;
   cam.x = wx - ax / z;
@@ -60,11 +72,24 @@ export function setZoom(cam: Camera, z: number, ax = cam.vw / 2, ay = cam.vh / 2
   clampCam(cam);
 }
 
-/** Pan by screen pixels. */
+/** After a pinch: glide to the nearest whole zoom so pixels are crisp at rest. */
+export function settleZoom(cam: Camera): void {
+  cam.tz = Math.max(1, Math.min(ZOOM_MAX, Math.round(cam.zoom)));
+}
+
+/** Give the camera a push, in screen pixels per second. It coasts and slows on its own. */
+export function fling(cam: Camera, vx: number, vy: number): void {
+  cam.vx = vx;
+  cam.vy = vy;
+  cam.tx = cam.ty = null;
+}
+
+/** Pan by screen pixels. Stops any coasting. */
 export function panBy(cam: Camera, dx: number, dy: number): void {
   cam.x -= dx / cam.zoom;
   cam.y -= dy / cam.zoom;
   cam.tx = cam.ty = null;
+  cam.vx = cam.vy = 0;
   clampCam(cam);
 }
 
@@ -76,8 +101,21 @@ export function centerOn(cam: Camera, wx: number, wy: number, smooth = true): vo
   cam.ty = y;
 }
 
-/** Per-frame smooth follow. */
+/** Per-frame smooth follow, zoom settling, and fling momentum. */
 export function updateCam(cam: Camera, dt: number): void {
+  if (cam.tz != null) {
+    const d = cam.tz - cam.zoom;
+    if (Math.abs(d) < 0.01) { zoomTo(cam, cam.tz); cam.tz = null; }
+    else zoomTo(cam, cam.zoom + d * (1 - Math.pow(0.0005, dt)));
+  }
+  if (cam.vx || cam.vy) {
+    cam.x -= (cam.vx * dt) / cam.zoom;
+    cam.y -= (cam.vy * dt) / cam.zoom;
+    const k = Math.pow(0.002, dt);
+    cam.vx *= k; cam.vy *= k;
+    if (Math.abs(cam.vx) < 4 && Math.abs(cam.vy) < 4) cam.vx = cam.vy = 0;
+    clampCam(cam);
+  }
   if (cam.tx == null || cam.ty == null) return;
   const k = 1 - Math.pow(0.001, dt);
   cam.x += (cam.tx - cam.x) * k;

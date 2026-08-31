@@ -585,6 +585,6 @@ export function populateWorld(w: World, rng: Rng): void {
 export function mkNeutralSlot(w: World): Slot {
   return {
     ally: 99, race: 'horde', diff: w.diff, alive: true, gold: 0, settlements: [], ai: false, aiT: 0, aiWant: null, aiLast: 0, queue: [], rally: null, mat: 0, neutral: true,
-    attitude: w.slots.map(() => -100), truce: w.slots.map(() => false), truceT: w.slots.map(() => 0),
+    attitude: w.slots.map(() => -100), truce: w.slots.map(() => false), truceT: w.slots.map(() => 0), powerCd: {},
   };
 }
