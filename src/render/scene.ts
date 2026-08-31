@@ -153,6 +153,13 @@ export function drawWorld(ctx: CanvasRenderingContext2D, bg: HTMLCanvasElement, 
     else if (u.slowT > 0) { ctx.fillStyle = '#dde2ec'; ctx.fillRect(x, y + sz - 1, sz, 1); }
     if (hidden) ctx.globalAlpha = 1;
   }
+  // Rally flag for the viewer's slot.
+  const rally = w.slots[v.viewer]?.rally;
+  if (rally) {
+    ctx.fillStyle = '#dde2ec'; ctx.fillRect(rally.x, rally.y - 8, 1, 9);
+    ctx.fillStyle = TEAM[v.viewer]; ctx.fillRect(rally.x + 1, rally.y - 8, 4, 3);
+    ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.strokeRect(rally.x - 3.5, rally.y - 2.5, 7, 4);
+  }
   drawFx(ctx, w.fx);
   if (drag) {
     ctx.fillStyle = 'rgba(125,255,125,.14)'; ctx.fillRect(drag.x, drag.y, drag.w, drag.h);

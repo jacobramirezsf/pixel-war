@@ -5,6 +5,7 @@ import { DIFF } from '../../data/difficulty.ts';
 import { TOOLS, type EditorTool } from '../../data/maps.ts';
 import { TNAME } from '../../data/teams.ts';
 import { ALL_UNITS, roster, TYPES, type UnitKey } from '../../data/units.ts';
+import { buildTime } from '../../sim/units.ts';
 import { RACES } from '../../data/races.ts';
 import { drawBldSpr, drawSprite } from '../../render/atlas.ts';
 import { drawTile } from '../../render/terrain.ts';
@@ -122,7 +123,8 @@ export function updateUI(app: App): void {
   const w = app.world, B = (id: string): HTMLElement => $(id);
   const sand = w?.mode === 'sand', map = !!app.editor, edit = w?.phase === 'edit';
   const vis: Record<string, boolean> = {
-    bAll: !map && !edit, bCharge: !map && !edit, bHold: !map && !edit, bRetreat: !map && !edit, bPause: !map && !edit, bEdit: sand && !edit,
+    bAll: !map && !edit, bCharge: !map && !edit, bHold: !map && !edit, bRetreat: !map && !edit, bRally: !map && !edit && !sand, bPause: !map && !edit, bEdit: sand && !edit,
+    bG1: !map && !edit && !sand, bG2: !map && !edit && !sand, bG3: !map && !edit && !sand,
     bErase: sand && edit, bMirror: sand && edit, bClear: sand && edit, bMap: sand && edit, bPlay: sand && edit,
     bSize: map, bRandom: map, bMirrorMap: map, bClearMap: map, bCode: map, bDone: map,
   };
@@ -136,6 +138,8 @@ export function updateUI(app: App): void {
   show($('bstrip'), pal && app.bstrip);
   show($('tstrip'), map);
   B('bErase').classList.toggle('on', app.tool === 'erase');
+  B('bRally').classList.toggle('on', app.tool === 'rally');
+  for (const n of [1, 2, 3]) B('bG' + n).classList.toggle('has', app.groups.has(n));
   B('bPause').classList.toggle('on', app.paused);
   B('bPause').textContent = app.paused ? 'RESUME' : 'PAUSE';
   sellBtn.classList.toggle('on', app.tool === 'sell');
@@ -151,9 +155,40 @@ export function updateUI(app: App): void {
   fit(app);
 }
 
+let lastQueueKey = '';
+
+/** The production queue as small buttons. Tapping one cancels it and refunds the gold. */
+function renderQueue(app: App): void {
+  const w = app.world, el = $('queue');
+  if (!w || w.mode === 'sand') { if (lastQueueKey) { el.innerHTML = ''; lastQueueKey = ''; } return; }
+  const q = w.slots[app.ctl].queue;
+  const key = q.map((x) => x.unit).join(',');
+  if (key !== lastQueueKey) {
+    lastQueueKey = key;
+    el.innerHTML = q.length ? '<span>QUEUE</span>' + q.map((x, i) => '<button data-q="' + i + '" class="' + (i === 0 ? 'head' : '') + '" title="cancel">' + TYPES[x.unit].name + '<i></i></button>').join('') : '';
+    for (const b of el.querySelectorAll<HTMLButtonElement>('button[data-q]')) on(b, 'click', () => { issueAction(app, { type: 'cancel', payload: { index: +b.dataset.q! } }); lastQueueKey = ''; });
+  }
+  const head = el.querySelector<HTMLElement>('button.head i');
+  if (head && q.length) { const total = buildTime(q[0].unit); head.style.width = Math.round(100 * (1 - q[0].t / total)) + '%'; }
+}
+
+/** Selection card: count, composition, and average health. */
+function renderSelCard(app: App): void {
+  const el = $('selcard');
+  const sel = selectedUnits(app);
+  if (!sel.length) { if (el.textContent) el.textContent = ''; return; }
+  const comp = new Map<string, number>();
+  let hp = 0, max = 0;
+  for (const u of sel) { comp.set(u.type, (comp.get(u.type) ?? 0) + 1); hp += u.hp; max += TYPES[u.type].hp; }
+  const parts = [...comp.entries()].sort((a, b) => b[1] - a[1]).map(([k, n]) => n + ' ' + TYPES[k].name);
+  el.innerHTML = '<b>' + sel.length + '</b> ' + parts.join(', ') + ' · ' + Math.round((100 * hp) / max) + '% hp';
+}
+
 export function renderHud(app: App): void {
   const tl = $('tl'), wave = $('wave'), sel = $('sel'), msg = $('msg');
   const w = app.world;
+  renderQueue(app);
+  renderSelCard(app);
   if (app.editor) {
     const m = app.editor.map;
     tl.textContent = 'Map editor';

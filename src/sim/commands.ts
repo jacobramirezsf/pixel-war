@@ -7,8 +7,13 @@ import { TYPES } from '../data/units.ts';
 import { addBld, bldAtPx, canBuild, gateDir, passableFor, removeBld } from './buildings.ts';
 import { clamp, TILE } from './map.ts';
 import type { Action, Command, Target, TargetRef, Unit, World } from './types.ts';
-import { mkUnit, spawn } from './units.ts';
+import { buildTime, mkUnit } from './units.ts';
 import { allied, count, mapH, mapW, say as worldSay } from './world.ts';
+
+/** Queued and in-production units count toward the army cap. */
+export function committed(w: World, slot: number): number {
+  return count(w, slot) + w.slots[slot].queue.length;
+}
 
 export function resolveRef(w: World, r: TargetRef | null): Target | null {
   if (!r) return null;
@@ -46,9 +51,25 @@ export function applyCommand(w: World, c: Command, quiet = false): boolean {
       if (editing) return false;
       const T = TYPES[c.payload.unit];
       if (s.gold < T.cost) { say('Need ' + T.cost + ' gold', 1.2); return false; }
-      if (!spawn(w, slot, c.payload.unit)) { say('Army cap reached (' + w.cap + ')', 1.5); return false; }
+      if (committed(w, slot) >= w.cap) { say('Army cap reached (' + w.cap + ')', 1.5); return false; }
+      if (s.queue.length >= 12) { say('Queue is full', 1.2); return false; }
       s.gold -= T.cost;
-      say(T.name + ' ready', 1);
+      s.queue.push({ unit: c.payload.unit, t: buildTime(c.payload.unit), held: !!c.payload.held });
+      say(T.name + ' queued', 0.8);
+      return true;
+    }
+    case 'cancel': {
+      const q = s.queue[c.payload.index];
+      if (!q) return false;
+      s.queue.splice(c.payload.index, 1);
+      s.gold += TYPES[q.unit].cost;
+      say(TYPES[q.unit].name + ' cancelled, gold refunded', 1);
+      return true;
+    }
+    case 'rally': {
+      if (!c.payload) { s.rally = null; say('Rally point cleared', 1); return true; }
+      s.rally = { x: clamp(c.payload.x, 4, mapW(w) - 4), y: clamp(c.payload.y, 4, mapH(w) - 4) };
+      say('Rally point set', 1);
       return true;
     }
     case 'move': {

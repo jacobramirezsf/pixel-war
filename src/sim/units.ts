@@ -15,6 +15,11 @@ export function mkUnit(w: World, team: number, type: UnitKey, x: number, y: numb
   };
 }
 
+/** Seconds to produce a unit. Cheap units are quick, a giant takes a while. */
+export function buildTime(type: UnitKey): number {
+  return Math.round((0.5 + TYPES[type].cost / 40) * 10) / 10;
+}
+
 /** Spawn just in front of the team's base. Null when the army cap is reached. */
 export function spawn(w: World, team: number, type: UnitKey): Unit | null {
   if (count(w, team) >= w.cap) return null;

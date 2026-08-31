@@ -56,7 +56,7 @@ test('every race can fight every race in a sandbox brawl', () => {
 test('the AI buys from its own race', () => {
   for (const r of RACE_KEYS) {
     const w = game('skirmish', BUILTIN[0], { races: ['kingdom', r] });
-    run(w, 40);
+    run(w, 60);
     const foreign = w.units.filter((u) => u.team === 1 && TYPES[u.type].race !== r);
     assert.equal(foreign.length, 0, r + ' AI bought ' + foreign.map((u) => u.type).join(' '));
     assert.ok(w.units.some((u) => u.team === 1), r + ' AI bought nothing');

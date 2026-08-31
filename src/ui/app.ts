@@ -20,7 +20,7 @@ import { $ } from './dom.ts';
 import { detectLayout, type LayoutMode } from './layout.ts';
 import { loadSettings, saveSettings as persistSettings, type Settings } from './settings.ts';
 
-export type Tool = 'cmd' | 'build' | 'sell' | 'place' | 'erase';
+export type Tool = 'cmd' | 'build' | 'sell' | 'place' | 'erase' | 'rally';
 
 export interface EditorState {
   map: MapDef;

@@ -3,7 +3,7 @@
 import { TNAME } from '../../data/teams.ts';
 import { TYPES } from '../../data/units.ts';
 import { unitsOf } from '../../sim/queries.ts';
-import { retreat } from '../input/hotkeys.ts';
+import { recallGroup, retreat, setGroup } from '../input/hotkeys.ts';
 import { hideOverlay, issueAction, leaveEditor, openEditor, say, selectedUnits, type App } from '../app.ts';
 import { $, on } from '../dom.ts';
 
@@ -43,6 +43,29 @@ export function wireCommands(app: App): void {
   on($('bCharge'), 'click', () => { if (live()) charge(app); });
   on($('bHold'), 'click', () => { if (live()) hold(app); });
   on($('bRetreat'), 'click', () => { if (live()) retreat(app); });
+  on($('bRally'), 'click', () => {
+    if (!live() || !app.world) return;
+    if (app.tool === 'rally') { app.tool = 'cmd'; app.ui.updateUI(); return; }
+    if (app.world.slots[app.ctl].rally && !selectedUnits(app).length) { issueAction(app, { type: 'rally', payload: null }); app.ui.updateUI(); return; }
+    app.tool = 'rally';
+    app.ui.updateUI();
+    say(app, 'Tap the map to set where new units gather', 2);
+  });
+  // Mobile groups: tap recalls, tap with a selection and an empty slot saves, hold saves over.
+  for (const n of [1, 2, 3]) {
+    const b = $('bG' + n);
+    let downAt = 0;
+    on(b, 'pointerdown', () => { downAt = performance.now(); });
+    on(b, 'click', () => {
+      if (!live()) return;
+      const long = performance.now() - downAt > 450;
+      const has = app.groups.has(n);
+      if (long || (!has && selectedUnits(app).length)) setGroup(app, n);
+      else if (has) recallGroup(app, n);
+      else say(app, 'Select units, then tap G' + n + ' to save them', 1.5);
+      app.ui.updateUI();
+    });
+  }
   on($('bTeam'), 'click', () => {
     const x = app.world;
     app.ctl = 1 - app.ctl;

@@ -66,7 +66,7 @@ function shop(w: World, slot: number, a: Assessment, P: AiProfile): void {
     }
   }
   // Opening: the first two units are the cheapest fast things on the roster, bound for the mines.
-  if (w.t < 25 && a.own.length < 2 && w.mines.length) {
+  if (w.t < 25 && a.own.length + s.queue.length < 2 && w.mines.length) {
     const cheap = roster(race).filter((k) => !TYPES[k].repair && TYPES[k].speed >= 28).sort((x, y) => TYPES[x].cost - TYPES[y].cost)[0] ?? roster(race)[0];
     if (s.gold >= TYPES[cheap].cost) buy(w, slot, cheap, true);
     return;
@@ -75,7 +75,8 @@ function shop(w: World, slot: number, a: Assessment, P: AiProfile): void {
   const home = s.settlements.find((b) => b.hp > 0);
   const tgt = home ? nearestHostileBase(w, slot, home.x, home.y) : null;
   const fortified = !!tgt && w.blds.filter((b) => b.kind === 'tower' && !allied(w, b.team, slot) && Math.hypot(b.x - tgt.x, b.y - tgt.y) < 60).length >= 2;
-  for (let n = 0; n < 4; n++) {
+  // Queue a few ahead, never more: gold in the queue cannot answer a raid.
+  for (let n = 0; n < 4 && s.queue.length < 3; n++) {
     const k = pickUnit(w.rng, race, w.t, s.gold, enemyMix, P.counter, () => false, fortified);
     if (!k || s.gold < TYPES[k].cost) break;
     if (!buy(w, slot, k, true)) break;
@@ -83,10 +84,7 @@ function shop(w: World, slot: number, a: Assessment, P: AiProfile): void {
 }
 
 function buy(w: World, slot: number, unit: UnitKey, held: boolean): boolean {
-  const before = w.units.length;
-  if (!applyCommand(w, cmd(w, slot, { type: 'buy', payload: { unit } }), true)) return false;
-  if (held && w.units.length > before) { const u = w.units[w.units.length - 1]; u.held = true; }
-  return true;
+  return applyCommand(w, cmd(w, slot, { type: 'buy', payload: { unit, held } }), true);
 }
 
 /** One decision for one faction. Runs every `react` seconds. */

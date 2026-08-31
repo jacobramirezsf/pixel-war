@@ -35,7 +35,7 @@ test('snapshot carries an unlimited treasury through JSON', () => {
 test('snapshot keeps target references', () => {
   const w = game('skirmish');
   buy(w, 0, 'inf');
-  ticks(w, 5);
+  ticks(w, 150);
   const enemyBase = w.slots[1].settlements[0];
   act(w, 0, { type: 'attack', payload: { ids: [w.units[0].id], target: { kind: 'base', id: enemyBase.id } } });
   const u = w.units[0];

@@ -77,6 +77,10 @@ export function toolAt(app: App, x: number, y: number, ts: ToolState, first: boo
     return true;
   }
   if (app.tool === 'sell') { if (first) issueAction(app, { type: 'sell', payload: { x, y } }); return true; }
+  if (app.tool === 'rally') {
+    if (first) { issueAction(app, { type: 'rally', payload: { x, y } }); app.tool = 'cmd'; app.ui.updateUI(); }
+    return true;
+  }
   if (w.phase === 'edit') {
     if (!first && Math.hypot(x - ts.lx, y - ts.ly) < 9) return true;
     ts.lx = x; ts.ly = y;
@@ -89,5 +93,5 @@ export function toolAt(app: App, x: number, y: number, ts: ToolState, first: boo
 }
 
 export function usesTool(app: App): boolean {
-  return !!app.editor || app.tool === 'build' || app.tool === 'sell' || app.world?.phase === 'edit';
+  return !!app.editor || app.tool === 'build' || app.tool === 'sell' || app.tool === 'rally' || app.world?.phase === 'edit';
 }

@@ -28,11 +28,13 @@ export interface AiProfile {
   /** New units join a push already under way instead of waiting for the next one. */
   reinforces: boolean;
   income: number;
+  /** Production speed multiplier. The second small lever next to income. */
+  build: number;
 }
 
 export const PROFILES: Record<DiffKey, AiProfile> = {
-  easy: { react: 6, counter: 0, retreats: false, defendsMines: false, multiProng: false, expands: 0.2, massRatio: 0.4, minWave: 3, pushEvery: 30, builds: false, harass: 0, reinforces: false, income: 0.8 },
-  std:  { react: 3, counter: 0.5, retreats: false, defendsMines: true, multiProng: false, expands: 0.5, massRatio: 1.3, minWave: 8, pushEvery: 90, builds: true, harass: 0.1, reinforces: false, income: 1.2 },
-  hard: { react: 1.5, counter: 1, retreats: true, defendsMines: true, multiProng: false, expands: 0.6, massRatio: 1.2, minWave: 9, pushEvery: 100, builds: true, harass: 0.2, reinforces: false, income: 1.4 },
-  ext:  { react: 0.5, counter: 1, retreats: true, defendsMines: true, multiProng: true, expands: 0.5, massRatio: 1.1, minWave: 10, pushEvery: 100, builds: true, harass: 0.25, reinforces: true, income: 1.7 },
+  easy: { react: 6, counter: 0, retreats: false, defendsMines: false, multiProng: false, expands: 0.2, massRatio: 0.4, minWave: 3, pushEvery: 30, builds: false, harass: 0, reinforces: false, income: 0.8, build: 0.7 },
+  std:  { react: 3, counter: 0.5, retreats: false, defendsMines: true, multiProng: false, expands: 0.5, massRatio: 1.3, minWave: 8, pushEvery: 90, builds: true, harass: 0.1, reinforces: false, income: 1.2, build: 1.0 },
+  hard: { react: 1.5, counter: 1, retreats: true, defendsMines: true, multiProng: false, expands: 0.6, massRatio: 1.2, minWave: 9, pushEvery: 100, builds: true, harass: 0.2, reinforces: false, income: 1.4, build: 1.25 },
+  ext:  { react: 0.5, counter: 1, retreats: true, defendsMines: true, multiProng: true, expands: 0.5, massRatio: 1.1, minWave: 10, pushEvery: 100, builds: true, harass: 0.25, reinforces: true, income: 1.7, build: 1.5 },
 };

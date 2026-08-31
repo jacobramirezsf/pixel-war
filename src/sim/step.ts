@@ -4,7 +4,7 @@
 import { BLD, BUILD_CAP } from '../data/buildings.ts';
 import { TEAM } from '../data/teams.ts';
 import { TYPES, unitVisible, type UnitDef } from '../data/units.ts';
-import { aiTick } from './ai/index.ts';
+import { aiTick, PROFILES } from './ai/index.ts';
 import { addBld, bldAtPx, canBuild, passableFor, removeBld } from './buildings.ts';
 import { attack, auraTeams, buildTargetCache, damage, dirTo, edist, hasSpeedAura, nearestHostile, type TargetCache } from './combat.ts';
 import { drainQueue } from './commands.ts';
@@ -15,7 +15,7 @@ import { rand, rnd } from './rng.ts';
 import { fillGrid, forNear, gridOf, nearestHostileWithin } from './spatial.ts';
 import type { Building, Target, Unit, World } from './types.ts';
 import { allied, count, DT, mapH, mapW, primaryBase } from './world.ts';
-import { mkUnit } from './units.ts';
+import { mkUnit, spawn } from './units.ts';
 
 type Vec = [number, number] | null;
 
@@ -47,6 +47,41 @@ function onDeaths(w: World, dead: Unit[]): void {
       sk.order = nec.order && nec.order.type === 'attack' ? { type: 'attack', tgt: null } : null;
       w.units.push(sk);
       w.fx.push({ k: 'heal', x: d.x, y: d.y - 7, t: 0.3 });
+    }
+  }
+}
+
+/** Production: the head of each slot's queue builds down, then spawns and walks to the rally point. */
+function produce(w: World, dt: number): void {
+  for (let i = 0; i < w.nP; i++) {
+    const s = w.slots[i];
+    if (!s.alive || !s.queue.length) continue;
+    const q = s.queue[0];
+    q.t -= dt * (s.ai ? PROFILES[s.diff].build : 1);
+    if (q.t > 0) continue;
+    const u = spawn(w, i, q.unit);
+    if (!u) { q.t = 0.5; continue; }
+    s.queue.shift();
+    u.held = q.held;
+    if (s.rally && !q.held) u.order = { type: 'move', x: s.rally.x, y: s.rally.y };
+    if (i === 0) w.fx.push({ k: 'txt', x: u.x, y: u.y - 8, t: 0.9, str: TYPES[q.unit].name, c: TEAM[i] });
+  }
+}
+
+/** Units near a living friendly settlement heal, faster with a worker or medic close by. */
+function healAtHome(w: World, dt: number): void {
+  const grid = gridOf(w);
+  for (let i = 0; i < w.nP; i++) {
+    for (const b of w.slots[i].settlements) {
+      if (b.hp <= 0) continue;
+      let helper = false;
+      forNear(grid, b.x, b.y, 40, (o) => { if (!helper && o.team === i && o.hp > 0 && (TYPES[o.type].repair || TYPES[o.type].heal) && Math.hypot(o.x - b.x, o.y - b.y) <= 40) helper = true; });
+      const rate = (helper ? 2.5 : 1) * dt;
+      forNear(grid, b.x, b.y, 40, (o) => {
+        if (o.team !== i || o.hp <= 0 || o.moving) return;
+        const M = TYPES[o.type].hp;
+        if (o.hp < M && Math.hypot(o.x - b.x, o.y - b.y) <= 40) o.hp = Math.min(M, o.hp + rate);
+      });
     }
   }
 }
@@ -141,6 +176,7 @@ export function step(w: World): void {
   if (eco) {
     incomeTick(w, dt, mcount);
     aiTick(w, dt);
+    produce(w, dt);
     if (w.mode === 'dom') { dominationTick(w, dt, mcount); if (w.over) return; }
     if (w.incFlash > 0) w.incFlash -= dt;
   }
@@ -328,6 +364,7 @@ export function step(w: World): void {
     u.y = clamp(u.y, 4, H - 4);
     if (!TYPES[u.type].fly && !passableFor(w, u.team, u.x, u.y)) { u.x = u.px; u.y = u.py; }
   }
+  healAtHome(w, dt);
   const dead = us.filter((u) => u.hp <= 0);
   for (const u of dead) w.fx.push({ k: 'die', x: u.x, y: u.y, t: 0.35 });
   if (dead.length) onDeaths(w, dead);

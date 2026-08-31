@@ -15,7 +15,7 @@ export const HOTKEYS: [string, string][] = [
   ['Tab', 'cycle unit types in the selection'],
   ['A', 'select all'], ['C', 'charge'], ['H', 'hold'], ['R', 'retreat to base'],
   ['F', 'focus your base'], ['Space', 'pause, or hold to drag the view'],
-  ['B', 'open or close the build strip'], ['Esc', 'clear selection'],
+  ['B', 'open or close the build strip'], ['Y', 'set the rally point'], ['Esc', 'clear selection'],
   ['Right click', 'move or attack'], ['Wheel', 'zoom'], ['Middle drag', 'pan'],
 ];
 
@@ -97,6 +97,7 @@ export function wireHotkeys(app: App): void {
     else if (lk === 'h') hold(app);
     else if (lk === 'r') retreat(app);
     else if (lk === 'f') focusBase(app);
+    else if (lk === 'y') { app.tool = app.tool === 'rally' ? 'cmd' : 'rally'; app.ui.updateUI(); }
     else if (lk === 'b') { app.bstrip = !app.bstrip; app.tool = app.bstrip ? 'build' : w.phase === 'edit' ? 'place' : 'cmd'; app.ui.updateUI(); }
   });
   window.addEventListener('keyup', (e) => {

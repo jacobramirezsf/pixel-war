@@ -112,6 +112,18 @@ export interface Slot {
   aiWant: UnitKey | null;
   /** Sim time of the last wave this slot sent. */
   aiLast: number;
+  /** Production queue at the primary settlement. The head is being built. */
+  queue: QueueItem[];
+  /** Where new units walk to after spawning. Null means they stay at the gate. */
+  rally: { x: number; y: number } | null;
+}
+
+export interface QueueItem {
+  unit: UnitKey;
+  /** Seconds of build time left. */
+  t: number;
+  /** AI purchases wait at the rally point until a wave goes. */
+  held: boolean;
 }
 
 export type Fx =
@@ -185,7 +197,9 @@ export interface TargetRef {
 }
 
 export type Action =
-  | { type: 'buy'; payload: { unit: UnitKey } }
+  | { type: 'buy'; payload: { unit: UnitKey; held?: boolean } }
+  | { type: 'cancel'; payload: { index: number } }
+  | { type: 'rally'; payload: { x: number; y: number } | null }
   | { type: 'move'; payload: { ids: number[]; x: number; y: number } }
   | { type: 'attack'; payload: { ids: number[]; target: TargetRef | null } }
   | { type: 'hold'; payload: { ids: number[] } }
