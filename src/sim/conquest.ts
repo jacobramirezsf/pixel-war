@@ -8,6 +8,7 @@ import { TILE, type MapDef } from './map.ts';
 import { rand, randInt, type Rng } from './rng.ts';
 import type { Region, Settlement, Slot, Tier, Unit, World } from './types.ts';
 import { mkUnit } from './units.ts';
+import { castleNear, townIncome, townPop } from './town.ts';
 import { allied, pushEvent, say } from './world.ts';
 
 export const REGION_NAMES = ['Ashford', 'Brine', 'Coldwater', 'Dunmere', 'Elsmoor', 'Fallow', 'Greyholm', 'Hollin', 'Ironmark', 'Kestrel', 'Larkspur', 'Marrow', 'Northam', 'Oakhurst', 'Pale Reach', 'Quarry Hill', 'Rook', 'Saltmere', 'Thornby', 'Umber', 'Vale', 'Wendle', 'Yarrow', 'Zell', 'Ambry'];
@@ -36,13 +37,16 @@ export interface TierDef {
 export const TIERS: Record<Tier, TierDef> = {
   outpost:  { gold: 50,  mat: 20,  hp: 120, buildT: 10, income: 0,   upkeep: 0.1, garrisonMul: 1,   pop: 2,  matRate: 0,   produces: false },
   village:  { gold: 150, mat: 50,  hp: 300, buildT: 20, income: 2,   upkeep: 0.3, garrisonMul: 1,   pop: 10, matRate: 0,   produces: true },
+  town:     { gold: 250, mat: 100, hp: 500, buildT: 40, income: 3,   upkeep: 0.5, garrisonMul: 1,   pop: 15, matRate: 0.2, produces: true },
   fortress: { gold: 250, mat: 150, hp: 600, buildT: 45, income: 3,   upkeep: 0.6, garrisonMul: 0.5, pop: 20, matRate: 0.3, produces: true },
   city:     { gold: 450, mat: 300, hp: 900, buildT: 75, income: 5,   upkeep: 1.0, garrisonMul: 0.5, pop: 40, matRate: 0.5, produces: true },
   camp:     { gold: 0,   mat: 0,   hp: 200, buildT: 0,  income: 0,   upkeep: 0,   garrisonMul: 1,   pop: 0,  matRate: 0,   produces: false },
   ruin:     { gold: 0,   mat: 0,   hp: 60,  buildT: 0,  income: 0,   upkeep: 0,   garrisonMul: 1,   pop: 0,  matRate: 0,   produces: false },
 };
 
-export const NEXT_TIER: Partial<Record<Tier, Tier>> = { outpost: 'village', village: 'fortress', fortress: 'city' };
+export const NEXT_TIER: Partial<Record<Tier, Tier>> = { outpost: 'village', village: 'town', town: 'city', fortress: 'city' };
+/** Age a settlement tier grants: village 0, town 1, city 2. */
+export const TIER_AGE: Record<Tier, number> = { outpost: 0, village: 0, town: 1, fortress: 1, city: 2, camp: 0, ruin: 0 };
 
 /** Advanced units need a city somewhere in the faction. */
 export const ADVANCED_COST = 60;
@@ -154,6 +158,7 @@ export function startUpgrade(b: Settlement, to: Tier): void {
 export function popCap(w: World, slot: number): number {
   let cap = 10;
   for (const b of w.slots[slot].settlements) if (b.hp > 0 && b.buildT <= 0) cap += TIERS[b.tier].pop;
+  if (w.rules.town) cap += townPop(w, slot);
   return cap;
 }
 
@@ -179,7 +184,7 @@ export function upkeepRate(w: World, slot: number): number {
 
 /** Gross gold: 2 base, plus each connected working settlement, plus mines. */
 export function grossIncome(w: World, slot: number, mcount: number[]): number {
-  let g = 2 + 1.5 * mcount[slot];
+  let g = 2 + 1.5 * mcount[slot] + (w.rules.town ? townIncome(w, slot) : 0);
   for (const b of w.slots[slot].settlements) {
     if (b.hp <= 0) continue;
     const r = w.regions[b.region];
@@ -445,7 +450,7 @@ export function conquestTick(w: World, dt: number, mcount: number[]): void {
     // Interior regions need little. Every hostile neighbor asks for a real garrison.
     let need = 20 + 60 * hostileAdj;
     const strong = (reg: number, tiers: Tier[]): boolean => settlementsIn(w, reg).some((b) => tiers.includes(b.tier) && b.buildT <= 0 && b.team === r.owner);
-    const fortNear = strong(r.id, ['fortress', 'city']) || r.adj.some((a) => strong(a, ['fortress', 'city']));
+    const fortNear = strong(r.id, ['fortress', 'city']) || r.adj.some((a) => strong(a, ['fortress', 'city'])) || castleNear(w, r.owner, r.cx, r.cy, 110);
     const cityTwo = r.adj.some((a) => w.regions[a].adj.some((b) => strong(b, ['city'])));
     if (fortNear || cityTwo) need *= 0.5;
     r.need = w.rules.garrison ? need : 0;
@@ -478,7 +483,7 @@ export function conquestTick(w: World, dt: number, mcount: number[]): void {
       // Shortfall grinds; a broken connection is the emergency. Full shortfall revolts in about 70 seconds.
       let d = short ? 0.4 + 1.0 * Math.min(1, (r.need - r.garrison) / Math.max(1, r.need)) : -1.5;
       if (!r.connected) d = Math.max(d, 0) + 1.2;
-      const calm = settlementsIn(w, r.id).some((b) => (b.tier === 'fortress' || b.tier === 'city') && b.buildT <= 0 && b.team === r.owner) || r.adj.some((a) => settlementsIn(w, a).some((b) => (b.tier === 'fortress' || b.tier === 'city') && b.buildT <= 0 && b.team === r.owner));
+      const calm = settlementsIn(w, r.id).some((b) => (b.tier === 'fortress' || b.tier === 'city') && b.buildT <= 0 && b.team === r.owner) || r.adj.some((a) => settlementsIn(w, a).some((b) => (b.tier === 'fortress' || b.tier === 'city') && b.buildT <= 0 && b.team === r.owner)) || castleNear(w, r.owner, r.cx, r.cy, 110);
       if (calm) d -= 1;
       const before = r.unrest;
       r.unrest = Math.max(0, Math.min(100, r.unrest + d * dt));
@@ -585,6 +590,6 @@ export function populateWorld(w: World, rng: Rng): void {
 export function mkNeutralSlot(w: World): Slot {
   return {
     ally: 99, race: 'horde', diff: w.diff, alive: true, gold: 0, settlements: [], ai: false, aiT: 0, aiWant: null, aiLast: 0, queue: [], rally: null, mat: 0, neutral: true,
-    attitude: w.slots.map(() => -100), truce: w.slots.map(() => false), truceT: w.slots.map(() => 0), powerCd: {},
+    attitude: w.slots.map(() => -100), truce: w.slots.map(() => false), truceT: w.slots.map(() => 0), powerCd: {}, age: 0, tech: { melee: 0, ranged: 0, armor: 0 },
   };
 }

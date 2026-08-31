@@ -22,12 +22,15 @@ import { buildStrips, renderHud, updateUI, wireViewButtons } from './ui/hud/hud.
 import { attachInput } from './ui/input/index.ts';
 import { edgePan } from './ui/input/mouse.ts';
 import { keyPan, wireHotkeys } from './ui/input/hotkeys.ts';
+import { placePreview } from './ui/input/actions.ts';
 import { applyLayout, detectLayout } from './ui/layout.ts';
 import { wireEditor } from './ui/menus/editor.ts';
 import { endScreen, showMenu } from './ui/menus/menu.ts';
 
 registerServiceWorker();
 const app = createApp(createStorage());
+// Handy in the console and for scripted checks.
+(window as unknown as { pw: unknown }).pw = app;
 app.ui = { updateUI: () => updateUI(app), showMenu: () => showMenu(app), endScreen: () => endScreen(app) };
 
 applyLayout(app.layout);
@@ -76,7 +79,7 @@ function loop(ts: number): void {
     edgePan(app, frame);
     soundTick(app, w);
     const shake = shakeTick(app, w, frame);
-    drawWorld(app.ctx, app.bg, w, { drag: app.drag, alpha: app.running && !app.paused ? Math.min(1, acc / DT) : 1, selection: app.selection, paused: app.paused, viewer: app.ctl, hover: app.hover, cam: app.cam, dpr: app.dpr, overlay: app.overlay, damageNumbers: app.settings.damageNumbers, shake, ghost: app.tool === 'power' && app.power != null && app.mouse ? { x: app.cam.x + app.mouse.x / app.cam.zoom, y: app.cam.y + app.mouse.y / app.cam.zoom, r: POWERS[app.power].r } : null });
+    drawWorld(app.ctx, app.bg, w, { drag: app.drag, alpha: app.running && !app.paused ? Math.min(1, acc / DT) : 1, selection: app.selection, paused: app.paused, viewer: app.ctl, hover: app.hover, cam: app.cam, dpr: app.dpr, overlay: app.overlay, damageNumbers: app.settings.damageNumbers, shake, ghost: app.tool === 'power' && app.power != null && app.mouse ? { x: app.cam.x + app.mouse.x / app.cam.zoom, y: app.cam.y + app.mouse.y / app.cam.zoom, r: POWERS[app.power].r } : null, place: placePreview(app) });
     drawMinimap($<HTMLCanvasElement>('mini'), app.minimap, w.map, w, app.cam, MINI(), app.dpr);
   } else if (app.editor) {
     if (app.msgT > 0) app.msgT -= frame;

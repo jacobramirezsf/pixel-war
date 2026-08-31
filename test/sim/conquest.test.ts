@@ -21,7 +21,7 @@ const conquest = (seed = 3) => {
 test('the slice world has nine regions, every tile assigned, capitals in opposite corners', () => {
   const w = conquest();
   assert.equal(w.regions.length, 9);
-  assert.equal(w.map.cols, 40);
+  assert.equal(w.map.cols, 48);
   const counts = new Array(9).fill(0);
   for (const r of w.regionOf!) counts[r]++;
   assert.ok(counts.every((c) => c > 60), 'every region has tiles ' + counts.join(','));
@@ -91,15 +91,15 @@ test('garrison shortfall halves a settlement and speeds enemy claims', () => {
   assert.ok(grossIncome(w, 0, mc) > short, 'income recovers when garrisoned');
 });
 
-test('fortress upgrade takes time, then the settlement is stronger', () => {
+test('growing a village takes time, then the settlement is stronger', () => {
   const w = conquest();
   const home = w.slots[0].settlements[0];
   w.slots[0].gold = 400;
   assert.ok(act(w, 0, { type: 'upgrade', payload: { id: home.id } }));
-  assert.equal(home.tier, 'fortress');
+  assert.equal(home.tier, 'town');
   assert.ok(home.buildT > 0);
-  assert.equal(home.max, TIERS.fortress.hp);
-  run(w, TIERS.fortress.buildT + 1);
+  assert.equal(home.max, TIERS.town.hp);
+  run(w, TIERS.town.buildT + 1);
   assert.equal(home.buildT, 0);
 });
 

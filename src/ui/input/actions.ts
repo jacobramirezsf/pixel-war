@@ -2,6 +2,8 @@
 // Touch and mouse both end up here. Everything that changes the sim goes out as a command.
 
 import { refOf } from '../../sim/commands.ts';
+import { BLD } from '../../data/buildings.ts';
+import { canBuild } from '../../sim/buildings.ts';
 import { clamp, TILE } from '../../sim/map.ts';
 import { hostileAt, ownGateAt, unitAt } from '../../sim/queries.ts';
 import { issueAction, say, selectedUnits, type App } from '../app.ts';
@@ -64,12 +66,34 @@ export function tapAt(app: App, x: number, y: number): void {
 
 export interface ToolState { lt: number; lx: number; ly: number }
 
+/** Finish a footprint placement at the last aimed point. */
+export function placeRelease(app: App): void {
+  if (!app.placing || app.tool !== 'build') return;
+  const { x, y } = app.placing;
+  app.placing = null;
+  issueAction(app, { type: 'build', payload: { x, y, bld: app.bbrush } });
+}
+
+/** The footprint preview for the HUD: where the building would go and whether it fits. */
+export function placePreview(app: App): { tx: number; ty: number; w: number; h: number; ok: boolean } | null {
+  const w = app.world;
+  if (!w || app.tool !== 'build') return null;
+  const p = app.placing ?? (app.mouse ? { x: app.cam.x + app.mouse.x / app.cam.zoom, y: app.cam.y + app.mouse.y / app.cam.zoom } : null);
+  if (!p) return null;
+  const D = BLD[app.bbrush];
+  const tx = clamp(Math.round(p.x / TILE - D.w / 2), 0, w.map.cols - 1), ty = clamp(Math.round(p.y / TILE - D.h / 2), 0, w.map.rows - 1);
+  return { tx, ty, w: D.w, h: D.h, ok: !canBuild(w, tx, ty, app.ctl, app.bbrush) };
+}
+
 /** Editor painting, building, selling, and sandbox placement. Returns true when a tool took the pointer. */
 export function toolAt(app: App, x: number, y: number, ts: ToolState, first: boolean): boolean {
   if (app.editor) { paint(app, x, y, ts); return true; }
   const w = app.world;
   if (!w) return false;
   if (app.tool === 'build') {
+    const D = BLD[app.bbrush];
+    // Footprint buildings: drag to aim, release to place. Walls paint as you drag.
+    if (D.w > 1 || D.h > 1 || D.kind === 'town') { app.placing = { x, y }; return true; }
     const tx = clamp((x / TILE) | 0, 0, w.map.cols - 1), ty = clamp((y / TILE) | 0, 0, w.map.rows - 1), i = ty * w.map.cols + tx;
     if (ts.lt === i) return true;
     ts.lt = i;

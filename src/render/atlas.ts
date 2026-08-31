@@ -3,7 +3,7 @@
 
 import { TEAM } from '../data/teams.ts';
 import { PAL, SPR, type UnitKey } from '../data/units.ts';
-import type { BldKey } from '../data/buildings.ts';
+import { BLD, type BldKey } from '../data/buildings.ts';
 
 const cache = new Map<string, HTMLCanvasElement>();
 
@@ -64,14 +64,44 @@ function paintBld(f: (col: string, px: number, py: number, w: number, h: number)
 
 const BLD_TOP = 1;
 
+/** Town buildings: drawn at their footprint size, roof in the team color. */
+function paintTown(f: (col: string, px: number, py: number, w: number, h: number) => void, type: BldKey, tc: string, W: number, H: number): void {
+  const wall = '#8a6d47', dark = '#5b3d1e', stone = '#7d8391', shade = '#5a5f6e', roof = '#a04a3a';
+  if (type === 'house') {
+    f(wall, 1, 5, W - 2, H - 6); f(roof, 0, 2, W, 4); f(tc, W >> 1, 1, 2, 1); f(dark, (W >> 1) - 1, H - 4, 2, 3); f('#f2d34a', 2, 7, 2, 2);
+  } else if (type === 'farm') {
+    for (let y = 1; y < H - 1; y++) f(y % 2 ? '#8a7a3a' : '#6f6a2c', 1, y, W - 2, 1);
+    f('#dde2ec', 1, 1, 1, H - 2); f('#dde2ec', W - 2, 1, 1, H - 2); f(tc, 0, 0, 2, 1);
+  } else if (type === 'market') {
+    f(wall, 1, 6, W - 2, H - 7); f('#c9a46a', 0, 3, W, 3); f(tc, 2, 2, W - 4, 1); f(dark, 4, 9, 3, 6); f('#f2d34a', 9, 8, 3, 3); f('#2b5f9e', 15, 8, 3, 3);
+  } else if (type === 'smith') {
+    f(shade, 1, 5, W - 2, H - 6); f(stone, 1, 4, W - 2, 1); f('#ff8c2a', 4, 9, 4, 4); f(dark, 10, 8, 4, 7); f('#4a4d5a', 3, 1, 3, 5); f(tc, 3, 0, 3, 1);
+  } else if (type === 'barracks') {
+    f(wall, 1, 6, W - 2, H - 7); f(dark, 1, 5, W - 2, 1); for (let x = 2; x < W - 2; x += 6) f(dark, x, 9, 2, 5); f(tc, 0, 2, 3, 4); f('#dde2ec', 3, 1, 1, 6); f(stone, W - 5, 8, 3, 3);
+  } else if (type === 'range') {
+    f(wall, 1, 6, W - 2, H - 7); f(roof, 0, 3, W, 3); f(tc, W - 4, 1, 3, 2); f('#dde2ec', W - 4, 0, 1, 5); f('#8a5a2b', 3, 8, 1, 6); f('#dde2ec', 4, 8, 4, 1); f('#dde2ec', 4, 13, 4, 1); f('#f2d34a', 12, 10, 3, 3);
+  } else if (type === 'stable') {
+    f(wall, 1, 6, W - 2, H - 7); f('#a06a35', 0, 3, W, 3); f(tc, 1, 1, 3, 2); f(dark, 4, 9, 6, 6); f(dark, 13, 9, 6, 6); f('#e8b88a', 6, 10, 2, 2);
+  } else if (type === 'siege') {
+    f(shade, 1, 6, W - 2, H - 7); f(stone, 1, 5, W - 2, 1); f(dark, 3, 9, 8, 3); f('#8a8f9c', 4, 7, 2, 2); f('#f2d34a', 14, 8, 5, 5); f(tc, W - 4, 1, 3, 3);
+  } else if (type === 'castle') {
+    f(stone, 1, 3, W - 2, H - 4); f(shade, 1, 3, W - 2, 1); f('#4a4f5e', 0, 0, 5, 6); f('#4a4f5e', W - 5, 0, 5, 6); f('#4a4f5e', 0, H - 6, 5, 6); f('#4a4f5e', W - 5, H - 6, 5, 6);
+    f('#141520', (W >> 1) - 2, H - 8, 4, 8); f('#dde2ec', W >> 1, 0, 1, 6); f(tc, (W >> 1) + 1, 0, 4, 3); f('#9aa0ae', 6, 8, 2, 2); f('#9aa0ae', W - 8, 8, 2, 2);
+  }
+}
+
 function bldImage(type: BldKey, team: number): HTMLCanvasElement {
   const k = 'b/' + type + '/' + team;
   let c = cache.get(k);
   if (c) return c;
+  const D = BLD[type];
   c = document.createElement('canvas');
-  c.width = 8; c.height = 8 + BLD_TOP + 5;
+  const W = D.w * 8, H = D.h * 8;
+  c.width = W; c.height = H + BLD_TOP + 5;
   const g = c.getContext('2d')!;
-  paintBld((col, px, py, w, h) => { g.fillStyle = col; g.fillRect(px, py + BLD_TOP, w, h); }, type, TEAM[team]);
+  const f = (col: string, px: number, py: number, w: number, h: number): void => { g.fillStyle = col; g.fillRect(px, py + BLD_TOP, w, h); };
+  if (D.kind === 'town' || type === 'castle') paintTown(f, type, TEAM[team], W, H);
+  else paintBld(f, type, TEAM[team]);
   cache.set(k, c);
   return c;
 }

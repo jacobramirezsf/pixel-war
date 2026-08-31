@@ -68,7 +68,7 @@ export function castPower(w: World, slot: number, key: PowerKey, x: number, y: n
     }
   }
   if (!free) s.gold -= P.cost;
-  s.powerCd[key] = P.cd;
+  s.powerCd[key] = w.cheats.powers && slot === 0 ? 0 : P.cd;
   return null;
 }
 

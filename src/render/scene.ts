@@ -3,6 +3,7 @@
 import { TEAM } from '../data/teams.ts';
 import { TYPES, unitVisible } from '../data/units.ts';
 import { TILE, type MapDef } from '../sim/map.ts';
+import { BLD } from '../data/buildings.ts';
 import type { Building, Mine, Settlement, World } from '../sim/types.ts';
 import { BASE_HP, mapH } from '../sim/world.ts';
 import { maxHp, rank } from '../sim/units.ts';
@@ -107,13 +108,21 @@ function drawBld(ctx: CanvasRenderingContext2D, b: Building): void {
     }
     return;
   }
-  const x = b.tx * TILE, y = b.ty * TILE;
+  const x = b.tx * TILE, y = b.ty * TILE, D = BLD[b.type], W = D.w * TILE;
   drawBldSpr(ctx, b.type, b.team, x, y, 1);
-  if (b.hp < b.max) {
-    const by = b.kind === 'tower' ? y - 8 : y - 3;
-    ctx.fillStyle = '#111'; ctx.fillRect(x, by, 8, 2);
-    ctx.fillStyle = TEAM[b.team]; ctx.fillRect(x, by, Math.max(1, Math.round((8 * b.hp) / b.max)), 2);
+  if (b.buildT > 0) {
+    // Scaffold and a progress line while under construction.
+    const total = D.buildT ?? 1;
+    ctx.fillStyle = 'rgba(242,211,74,.6)';
+    for (let i = 0; i < W; i += 4) ctx.fillRect(x + i, y, 1, D.h * TILE);
+    ctx.fillStyle = '#111'; ctx.fillRect(x, y - 5, W, 2);
+    ctx.fillStyle = '#f2d34a'; ctx.fillRect(x, y - 5, Math.round(W * (1 - b.buildT / total)), 2);
+  } else if (b.hp < b.max) {
+    const by = b.kind === 'tower' && D.w === 1 ? y - 8 : y - 3;
+    ctx.fillStyle = '#111'; ctx.fillRect(x, by, W, 2);
+    ctx.fillStyle = TEAM[b.team]; ctx.fillRect(x, by, Math.max(1, Math.round((W * b.hp) / b.max)), 2);
   }
+  if (b.queue.length) { ctx.fillStyle = '#7dff7d'; ctx.fillRect(x + W - 3, y - 3, 3, 2); }
 }
 
 /** Set the world transform and clear the viewport. Returns the visible world rect. */
@@ -161,6 +170,8 @@ export interface ViewState {
   shake: { x: number; y: number };
   /** Power radius preview under the pointer. */
   ghost: { x: number; y: number; r: number } | null;
+  /** Building footprint preview: top-left tile, size, and whether it fits. */
+  place: { tx: number; ty: number; w: number; h: number; ok: boolean } | null;
 }
 
 let tintCanvas: HTMLCanvasElement | null = null, tintKey = '';
@@ -262,6 +273,13 @@ export function drawWorld(ctx: CanvasRenderingContext2D, bg: HTMLCanvasElement, 
   }
   drawFx(ctx, w.fx, { damageNumbers: v.damageNumbers });
   if (v.ghost) { ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.beginPath(); ctx.arc(v.ghost.x, v.ghost.y, v.ghost.r, 0, 7); ctx.stroke(); }
+  if (v.place) {
+    const p = v.place;
+    ctx.fillStyle = p.ok ? 'rgba(125,255,125,.25)' : 'rgba(255,90,90,.3)';
+    ctx.fillRect(p.tx * TILE, p.ty * TILE, p.w * TILE, p.h * TILE);
+    ctx.strokeStyle = p.ok ? '#7dff7d' : '#ff6b6b';
+    ctx.strokeRect(p.tx * TILE + 0.5, p.ty * TILE + 0.5, p.w * TILE - 1, p.h * TILE - 1);
+  }
   if (drag) {
     ctx.fillStyle = 'rgba(125,255,125,.14)'; ctx.fillRect(drag.x, drag.y, drag.w, drag.h);
     ctx.strokeStyle = '#7dff7d'; ctx.strokeRect(drag.x + 0.5, drag.y + 0.5, drag.w, drag.h);

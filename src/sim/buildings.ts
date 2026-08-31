@@ -23,20 +23,33 @@ export function passableFor(w: World, team: number, x: number, y: number): boole
   return false;
 }
 
-export function addBld(w: World, team: number, type: BldKey, tx: number, ty: number, dir?: 'h' | 'v' | null): Building {
+/** Footprint cells for a building placed with its top-left tile at (tx, ty). */
+export function footprint(type: BldKey, tx: number, ty: number, dir?: 'h' | 'v' | null): [number, number][] {
   const D = BLD[type];
+  if (D.kind === 'gate') return dir === 'v' ? [[tx, ty], [tx, ty + 1]] : [[tx, ty], [tx + 1, ty]];
+  const out: [number, number][] = [];
+  for (let y = 0; y < D.h; y++) for (let x = 0; x < D.w; x++) out.push([tx + x, ty + y]);
+  return out;
+}
+
+export function addBld(w: World, team: number, type: BldKey, tx: number, ty: number, dir?: 'h' | 'v' | null, construct = false): Building {
+  const D = BLD[type];
+  const tiles = footprint(type, tx, ty, dir);
   const b: Building = {
-    ent: 'bld', id: w.nextId++, team, type, kind: D.kind, tx, ty, x: tx * TILE + 4, y: ty * TILE + 4,
-    hp: D.hp, max: D.hp, cd: rnd(w.rng, 0, 0.4), dir: null, locked: null, tiles: [[tx, ty]],
+    ent: 'bld', id: w.nextId++, team, type, kind: D.kind, tx, ty, x: tx * TILE + (D.w * TILE) / 2, y: ty * TILE + (D.h * TILE) / 2,
+    hp: D.hp, max: D.hp, cd: rnd(w.rng, 0, 0.4), dir: null, locked: null, tiles,
+    buildT: construct && !w.cheats.build ? (D.buildT ?? 0) : 0, queue: [], rally: null,
   };
+  if (b.buildT > 0) b.hp = Math.max(1, Math.round(D.hp * 0.1));
   if (D.kind === 'gate') {
     b.dir = dir || 'h';
     b.locked = true;
-    const t2: [number, number] = b.dir === 'h' ? [tx + 1, ty] : [tx, ty + 1];
-    b.tiles = [[tx, ty], t2];
+    const t2 = tiles[1];
     b.x = (tx * TILE + 4 + t2[0] * TILE + 4) / 2;
     b.y = (ty * TILE + 4 + t2[1] * TILE + 4) / 2;
   }
+  // Founding clears trees under the footprint.
+  for (const q of tiles) { const i = q[1] * w.map.cols + q[0]; if (w.map.tiles[i] === 2) { w.map.tiles[i] = 0; w.mapDirty = true; } }
   w.blds.push(b);
   for (const q of b.tiles) w.bmap.set(q[1] * w.map.cols + q[0], b);
   w.flowDirty = true;
@@ -63,7 +76,8 @@ function cellBlock(w: World, tx: number, ty: number, team: number, type: BldKey)
   const m = w.map;
   if (tx < 1 || ty < 1 || tx >= m.cols - 1 || ty >= m.rows - 1) return 'map edge';
   const t = m.tiles[ty * m.cols + tx];
-  if (t !== 0 && t !== 1) return 'bad ground';
+  // Town buildings clear trees; walls and towers need open ground.
+  if (t === 3 || t === 4 || (t === 2 && BLD[type].kind !== 'town' && type !== 'castle')) return 'bad ground';
   if (bldAt(w, tx, ty)) return 'occupied';
   if (nearBase(m, tx, ty)) return 'base ground';
   for (const s of w.slots) for (const b of s.settlements) if (b.hp > 0 && Math.abs(b.x - (tx * TILE + 4)) <= 20 && Math.abs(b.y - (ty * TILE + 4)) <= 12) return 'base ground';
@@ -97,10 +111,25 @@ export function canPlaceSettlement(w: World, tx: number, ty: number): string | n
 
 /** Null when the building fits, otherwise the reason it does not. */
 export function canBuild(w: World, tx: number, ty: number, team: number, type: BldKey, dir?: 'h' | 'v' | null): string | null {
-  const cells: [number, number][] = BLD[type].kind === 'gate' ? (dir === 'v' ? [[tx, ty], [tx, ty + 1]] : [[tx, ty], [tx + 1, ty]]) : [[tx, ty]];
-  for (const c of cells) {
+  const D = BLD[type];
+  if (D.town && !w.rules.town) return 'not in this mode';
+  for (const c of footprint(type, tx, ty, dir)) {
     const why = cellBlock(w, c[0], c[1], team, type);
     if (why) return why;
+  }
+  if (w.rules.town) {
+    if ((D.age ?? 0) > w.slots[team].age) return 'needs the ' + ['village', 'town', 'city'][D.age ?? 0] + ' age';
+    if (D.max && w.blds.filter((b) => b.team === team && b.type === type).length >= D.max) return 'you have enough of those';
+    if (D.trains && type !== 'barracks' && D.kind === 'town' && !w.blds.some((b) => b.team === team && b.type === 'barracks' && b.buildT <= 0)) return 'build a barracks first';
+    // Inside your own territory, or next to your Town Hall's region.
+    if (w.regionOf) {
+      const cx = tx * TILE + (D.w * TILE) / 2, cy = ty * TILE + (D.h * TILE) / 2;
+      const r = w.regionOf[Math.min(w.map.rows - 1, (cy / TILE) | 0) * w.map.cols + Math.min(w.map.cols - 1, (cx / TILE) | 0)];
+      const reg = w.regions[r];
+      const own = reg.owner === team || w.slots[team].settlements.some((s) => s.hp > 0 && s.region === r);
+      if (!own) return 'outside your territory';
+      if (type === 'farm' && !w.slots[team].settlements.some((s) => s.hp > 0 && Math.hypot(s.x - cx, s.y - cy) < 72)) return 'farms go near a Town Hall';
+    }
   }
   return null;
 }

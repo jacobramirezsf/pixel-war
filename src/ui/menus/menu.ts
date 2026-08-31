@@ -77,7 +77,7 @@ export function showConquest(app: App): void {
     + (saved ? '<button class="gold" id="cqCont">CONTINUE<small>Pick up the saved game.</small></button>' : '')
     + '<div class="row">' + [1, 2, 3, 4].map((n) => '<button class="sm' + (app.rivals === n ? ' on' : '') + '" data-rivals="' + n + '">' + n + ' RIVAL' + (n > 1 ? 'S' : '') + '</button>').join('') + '</div>'
     + diffRowHtml(app)
-    + '<button ' + (saved ? '' : 'class="gold"') + ' id="cqNew">NEW WORLD<small>' + (saved ? 'Replaces the saved game.' : 'A fresh world.') + ' ' + (app.rivals === 1 ? '40x40, nine regions.' : app.rivals === 2 ? '54x54, sixteen regions.' : '68x68, twenty-five regions.') + '</small></button>'
+    + '<button ' + (saved ? '' : 'class="gold"') + ' id="cqNew">NEW WORLD<small>' + (saved ? 'Replaces the saved game.' : 'A fresh world.') + ' ' + (app.rivals === 1 ? '48x48, nine regions.' : app.rivals === 2 ? '64x64, sixteen regions.' : '80x80, twenty-five regions.') + '</small></button>'
     + '<button id="cqBack">BACK</button></div>';
   const c = document.getElementById('cqCont');
   if (c) on(c, 'click', () => { if (!continueConquest(app)) { say(app, 'Save could not be read', 2); showMenu(app); } });

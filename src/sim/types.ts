@@ -10,7 +10,16 @@ import type { MapDef } from './map.ts';
 import type { Rng } from './rng.ts';
 
 export type Mode = 'skirmish' | 'multi' | 'dom' | 'rich' | 'sand' | 'conquest';
-export type Tier = 'outpost' | 'village' | 'fortress' | 'city' | 'camp' | 'ruin';
+export type Tier = 'outpost' | 'village' | 'town' | 'fortress' | 'city' | 'camp' | 'ruin';
+export type Tech = 'melee' | 'ranged' | 'armor';
+
+export interface Cheats {
+  gold: boolean;
+  resources: boolean;
+  instant: boolean;
+  build: boolean;
+  powers: boolean;
+}
 export type Phase = 'play' | 'edit';
 export type Outcome = 'win' | 'lose' | null;
 
@@ -68,6 +77,8 @@ export interface Region {
 }
 
 export interface Rules {
+  /** Town build-out: placed buildings, villagers, ages. */
+  town: boolean;
   upkeep: boolean;
   connection: boolean;
   garrison: boolean;
@@ -96,6 +107,11 @@ export interface Building {
   /** Gates only. */
   locked: boolean | null;
   tiles: [number, number][];
+  /** Seconds of construction left. Not functional until zero. */
+  buildT: number;
+  /** Production queue for buildings that train. */
+  queue: QueueItem[];
+  rally: { x: number; y: number } | null;
 }
 
 export type Target = Unit | Building | Settlement;
@@ -187,6 +203,10 @@ export interface Slot {
   truceT: number[];
   /** Cooldown left per power, in seconds. */
   powerCd: Partial<Record<PowerKey, number>>;
+  /** Age of the faction: 0 village, 1 town, 2 city. Follows the best settlement tier. */
+  age: number;
+  /** Blacksmith research levels, 0 to 2. */
+  tech: Record<Tech, number>;
 }
 
 /** A barrage in flight: lands at `t` seconds. */
@@ -293,6 +313,7 @@ export interface World {
   strikes: Strike[];
   /** Production finishes at once. A game option, set at start. */
   instant: boolean;
+  cheats: Cheats;
 }
 
 export interface TargetRef {
@@ -302,11 +323,15 @@ export interface TargetRef {
 
 export type Action =
   | { type: 'buy'; payload: { unit: UnitKey; held?: boolean } }
-  | { type: 'cancel'; payload: { index: number } }
+  | { type: 'cancel'; payload: { index: number; building?: number } }
   | { type: 'settle'; payload: { x: number; y: number; tier?: 'outpost' | 'village' } }
   | { type: 'absorb'; payload: { id: number } }
   | { type: 'truce'; payload: { slot: number; offer: boolean } }
   | { type: 'power'; payload: { power: PowerKey; x: number; y: number } }
+  | { type: 'research'; payload: { tech: Tech } }
+  | { type: 'ageUp'; payload: null }
+  | { type: 'bldRally'; payload: { id: number; x: number; y: number } }
+  | { type: 'cheats'; payload: Cheats }
   | { type: 'upgrade'; payload: { id: number } }
   | { type: 'rally'; payload: { x: number; y: number } | null }
   | { type: 'move'; payload: { ids: number[]; x: number; y: number } }
@@ -336,4 +361,5 @@ export interface WorldConfig {
   /** Difficulty per slot. Default: the world's difficulty. */
   diffs?: DiffKey[];
   instant?: boolean;
+  cheats?: Partial<Cheats>;
 }

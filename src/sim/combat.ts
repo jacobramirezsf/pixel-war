@@ -152,6 +152,7 @@ export function unitArmor(w: World, u: Unit): number {
   const T = TYPES[u.type];
   let a = T.armor || 0;
   if (T.treeArmor && w.map.tiles[((u.y / 8) | 0) * w.map.cols + ((u.x / 8) | 0)] === 2) a += T.treeArmor;
+  if (w.rules.town) a += w.slots[u.team].tech.armor;
   return a;
 }
 
@@ -208,6 +209,7 @@ function afflict(t: Target, T: UnitDef): void {
 
 export function attack(w: World, u: Unit, t: Target, T: UnitDef): void {
   let dmg = T.dmg;
+  if (w.rules.town) { const tech = w.slots[u.team].tech; dmg += T.range > 12 ? tech.ranged : tech.melee; }
   if (w.rules.veterancy && u.kills) dmg = Math.round(dmg * (1 + 0.1 * rank(u)));
   if (hasBanner(w, u)) dmg = Math.round(dmg * 1.3);
   if (T.vsBld && t.ent !== 'unit') dmg = Math.round(dmg * T.vsBld);

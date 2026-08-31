@@ -1,6 +1,8 @@
 // Top bar, toast, tabbed panel (units, build, powers, more), context command row, view controls.
 
-import { BLD, BORDER } from '../../data/buildings.ts';
+import { AGE_NAMES, BLD, BORDER } from '../../data/buildings.ts';
+import { canTrain, RESEARCH_COST, TECH_NAMES } from '../../sim/town.ts';
+import { NEXT_TIER, TIERS } from '../../sim/conquest.ts';
 import { DIFF } from '../../data/difficulty.ts';
 import { TOOLS, type EditorTool } from '../../data/maps.ts';
 import { POWER_KEYS, POWERS, type PowerKey } from '../../data/powers.ts';
@@ -56,7 +58,20 @@ function unitTap(app: App, k: UnitKey): void {
 export function buildStrips(app: App): void {
   const strip = $('strip'), bstrip = $('bstrip'), pstrip = $('pstrip'), tstrip = $('tstrip');
   for (const k of ALL_UNITS) { unitBtns[k] = mkStripBtn(strip, TYPES[k].name, TYPES[k].cost, () => unitTap(app, k)); unitBtns[k].title = TYPES[k].name; }
-  for (const k of BORDER) bldBtns[k] = mkStripBtn(bstrip, BLD[k].name, BLD[k].cost, () => { app.tool = 'build'; app.bbrush = k; updateUI(app); say(app, BLD[k].name + ': tap or drag on the map. CANCEL to stop.', 1.5); });
+  const groups: [string, string][] = [['defense', 'DEFENSE'], ['economy', 'TOWN'], ['military', 'MILITARY']];
+  for (const [g, label] of groups) {
+    const head = document.createElement('div');
+    head.className = 'ghead';
+    head.textContent = label;
+    head.id = 'gh-' + g;
+    bstrip.appendChild(head);
+    for (const k of BORDER.filter((x) => BLD[x].group === g)) {
+      const D = BLD[k];
+      bldBtns[k] = mkStripBtn(bstrip, D.name, D.cost, () => { app.tool = 'build'; app.bbrush = k; updateUI(app); say(app, D.name + (D.hint ? ': ' + D.hint : '') + ' Drag to place, release to build.', 3); });
+      bldBtns[k].title = (D.hint ?? '') + (D.age ? ' Needs the ' + AGE_NAMES[D.age].toLowerCase() + ' age.' : '');
+      if (D.w > 1 || D.h > 1) { const sz = document.createElement('small'); sz.className = 'fp'; sz.textContent = D.w + '×' + D.h; bldBtns[k].appendChild(sz); }
+    }
+  }
   for (const k of POWER_KEYS) {
     const P = POWERS[k];
     const b = mkStripBtn(pstrip, P.name, P.cost, () => {
@@ -111,9 +126,10 @@ function paintStrip(app: App): void {
     drawSprite(cc, k, app.ctl, Math.floor((30 - sz * sc) / 2), Math.floor((30 - sz * sc) / 2), sc, false);
   }
   for (const k of BORDER) {
-    const c = bldBtns[k].firstChild as HTMLCanvasElement, cc = c.getContext('2d')!;
+    const c = bldBtns[k].firstChild as HTMLCanvasElement, cc = c.getContext('2d')!, D = BLD[k];
     cc.clearRect(0, 0, 30, 30);
-    drawBldSpr(cc, k, app.ctl, 3, BLD[k].kind === 'tower' ? 12 : 3, 3);
+    const sc = Math.max(1, Math.floor(28 / Math.max(D.w, D.h) / 8));
+    drawBldSpr(cc, k, app.ctl, Math.floor((30 - D.w * 8 * sc) / 2), D.kind === 'tower' && D.w === 1 ? 12 : Math.floor((30 - D.h * 8 * sc) / 2) + 2, sc);
   }
   paintedRace = race + app.ctl;
 }
@@ -197,7 +213,23 @@ export function updateUI(app: App): void {
     unitBtns[k].classList.toggle('on', sand && edit && app.tool === 'place' && app.brush === k);
     if (sand) unitBtns[k].classList.remove('dis');
   }
-  for (const k of BORDER) { bldBtns[k].classList.toggle('on', app.tool === 'build' && app.bbrush === k); if (sand) bldBtns[k].classList.remove('dis'); }
+  const town = !!w?.rules.town;
+  for (const k of BORDER) {
+    const D = BLD[k];
+    show(bldBtns[k], !D.town || town);
+    bldBtns[k].classList.toggle('on', app.tool === 'build' && app.bbrush === k);
+    if (sand) bldBtns[k].classList.remove('dis');
+  }
+  show(B('gh-economy'), town); show(B('gh-military'), town); show(B('gh-defense'), town);
+  show(B('bGrow'), conq); show(B('bTech1'), town); show(B('bTech2'), town); show(B('bTech3'), town);
+  if (w && conq) {
+    const cap = w.slots[app.ctl].settlements.find((b) => b.hp > 0 && b.buildT <= 0 && NEXT_TIER[b.tier]);
+    const to = cap ? NEXT_TIER[cap.tier] : undefined;
+    B('bGrow').textContent = to ? 'GROW: ' + to.toUpperCase() + ' ' + TIERS[to].gold + 'g' : cap ? 'GROWING' : 'CITY';
+    B('bGrow').classList.toggle('dis', !to);
+    const techs = ['melee', 'ranged', 'armor'] as const;
+    techs.forEach((t, i) => { const lvl = w.slots[app.ctl].tech[t]; const b = B('bTech' + (i + 1)); b.textContent = TECH_NAMES[t] + ' ' + (lvl >= RESEARCH_COST.length ? 'MAX' : (lvl + 1) + ' · ' + RESEARCH_COST[lvl] + 'g'); b.classList.toggle('dis', lvl >= RESEARCH_COST.length); });
+  }
   for (const k of POWER_KEYS) powerBtns[k].classList.toggle('on', app.tool === 'power' && app.power === k);
   for (const t of TOOLS) toolBtns.get(t.k)!.classList.toggle('on', map && app.editor?.tool === t.k);
   if (paintedRace !== race + app.ctl) paintStrip(app);
@@ -209,15 +241,16 @@ let lastQueueKey = '';
 function renderQueue(app: App): void {
   const w = app.world, el = $('queue');
   if (!w || w.mode === 'sand') { if (lastQueueKey) { el.innerHTML = ''; lastQueueKey = ''; } return; }
-  const q = w.slots[app.ctl].queue;
-  const key = q.map((x) => x.unit).join(',');
+  const items: { unit: string; t: number; bld: number | null; index: number; head: boolean }[] = [];
+  w.slots[app.ctl].queue.forEach((x, i) => items.push({ unit: x.unit, t: x.t, bld: null, index: i, head: i === 0 }));
+  for (const b of w.blds) if (b.team === app.ctl) b.queue.forEach((x, i) => items.push({ unit: x.unit, t: x.t, bld: b.id, index: i, head: i === 0 }));
+  const key = items.map((x) => x.unit + (x.bld ?? '')).join(',');
   if (key !== lastQueueKey) {
     lastQueueKey = key;
-    el.innerHTML = q.length ? '<span>QUEUE</span>' + q.map((x, i) => '<button data-q="' + i + '" class="' + (i === 0 ? 'head' : '') + '" title="cancel">' + TYPES[x.unit].name + '<i></i></button>').join('') : '';
-    for (const b of el.querySelectorAll<HTMLButtonElement>('button[data-q]')) on(b, 'click', () => { issueAction(app, { type: 'cancel', payload: { index: +b.dataset.q! } }); lastQueueKey = ''; });
+    el.innerHTML = items.length ? '<span>QUEUE</span>' + items.map((x, i) => '<button data-i="' + i + '" class="' + (x.head ? 'head' : '') + '" title="cancel">' + TYPES[x.unit].name + '<i></i></button>').join('') : '';
+    for (const b of el.querySelectorAll<HTMLButtonElement>('button[data-i]')) on(b, 'click', () => { const it = items[+b.dataset.i!]; issueAction(app, { type: 'cancel', payload: { index: it.index, building: it.bld ?? undefined } }); lastQueueKey = ''; });
   }
-  const head = el.querySelector<HTMLElement>('button.head i');
-  if (head && q.length) { const total = buildTime(q[0].unit); head.style.width = Math.round(100 * (1 - q[0].t / total)) + '%'; }
+  el.querySelectorAll<HTMLButtonElement>('button.head').forEach((btn, n) => { const it = items.filter((x) => x.head)[n]; const bar = btn.querySelector<HTMLElement>('i'); if (it && bar) bar.style.width = Math.round(100 * (1 - it.t / buildTime(it.unit))) + '%'; });
 }
 
 function renderSelCard(app: App): void {
@@ -269,9 +302,9 @@ export function renderHud(app: App): void {
       const narrow = app.layout === 'mobile' && window.innerWidth <= 430;
       const mat = w.rules.materials ? ' <span class="mat">' + (narrow ? 'M' : 'Mat ') + Math.floor(w.slots[0].mat) + (narrow ? '' : ' +' + matRate(w, 0).toFixed(1)) + '</span>' : '';
       const pop = w.rules.population ? ' <span class="pop">' + (narrow ? 'P' : 'Pop ') + popUsed(w, 0) + '/' + popCap(w, 0) + '</span>' : '';
-      tl.innerHTML = (narrow ? '<b>' : 'Gold <b>') + Math.floor(gold) + '</b> <span class="net' + (net < 0 ? ' neg' : '') + '">' + (net >= 0 ? '+' : '') + net.toFixed(1) + (narrow ? '' : '/s') + '</span>' + (secs < 60 ? ' <span class="warn">' + Math.ceil(secs) + 's</span>' : '') + mat + pop;
+      tl.innerHTML = (narrow ? '<b>' : 'Gold <b>') + (Number.isFinite(gold) ? Math.floor(gold) : '∞') + '</b> <span class="net' + (net < 0 ? ' neg' : '') + '">' + (net >= 0 ? '+' : '') + net.toFixed(1) + (narrow ? '' : '/s') + '</span>' + (secs < 60 ? ' <span class="warn">' + Math.ceil(secs) + 's</span>' : '') + mat + pop;
       const held = w.regions.filter((r) => r.owner === 0), broken = held.filter((r) => !r.connected).length, weak = held.filter((r) => r.garrison < r.need).length, angry = held.filter((r) => r.unrest >= 50).length;
-      wave.textContent = 'Regions ' + held.length + '/' + w.regions.length + (broken ? ' · ' + broken + ' cut off' : '') + (weak ? ' · ' + weak + ' undermanned' : '') + (angry ? ' · ' + angry + ' restless' : '');
+      wave.textContent = AGE_NAMES[w.slots[0].age] + ' · ' + held.length + '/' + w.regions.length + ' regions' + (broken ? ' · ' + broken + ' cut off' : '') + (weak ? ' · ' + weak + ' undermanned' : '') + (angry ? ' · ' + angry + ' restless' : '');
       renderTerritory(app);
     } else {
       tl.innerHTML = 'Gold <b>' + (Number.isFinite(gold) ? Math.floor(gold) : '∞') + '</b> <span class="inc' + (w.incFlash > 0 ? ' flash' : '') + '">+' + w.income.toFixed(1) + '/s</span> <span class="race">' + RACES[w.slots[0].race].name + '</span>';
@@ -286,8 +319,18 @@ export function renderHud(app: App): void {
         wave.textContent = moving > held ? 'Enemy attacking: ' + moving : held ? 'Enemy massing: ' + held : 'Enemy quiet';
       }
     }
-    for (const k of roster(ctlRace(app))) unitBtns[k].classList.toggle('dis', gold < TYPES[k].cost);
-    for (const k of BORDER) bldBtns[k].classList.toggle('dis', gold < BLD[k].cost);
+    for (const k of roster(ctlRace(app))) {
+      const why = w.rules.town ? canTrain(w, app.ctl, k) : null;
+      unitBtns[k].classList.toggle('dis', gold < TYPES[k].cost || !!why);
+      const tag = unitBtns[k].querySelector<HTMLElement>('small.need');
+      if (why) { if (tag) tag.textContent = why; else { const n = document.createElement('small'); n.className = 'need'; n.textContent = why; unitBtns[k].appendChild(n); } }
+      else if (tag) tag.remove();
+    }
+    for (const k of BORDER) {
+      const D = BLD[k], s0 = w.slots[app.ctl];
+      const ageOk = !w.rules.town || (D.age ?? 0) <= s0.age;
+      bldBtns[k].classList.toggle('dis', gold < D.cost || !ageOk);
+    }
   }
   msg.textContent = w.msgT > 0 ? w.msg : '';
 }

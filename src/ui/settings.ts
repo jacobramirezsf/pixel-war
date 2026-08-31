@@ -13,12 +13,14 @@ export interface Settings {
   autoPause: boolean;
   /** Units finish the moment they are bought. */
   instant: boolean;
+  cheats: { gold: boolean; resources: boolean; instant: boolean; build: boolean; powers: boolean };
 }
 
-export const DEFAULT_SETTINGS: Settings = { edgePan: false, hints: true, damageNumbers: false, volume: 0.7, muted: false, colorblind: false, autoPause: true, instant: false };
+export const DEFAULT_SETTINGS: Settings = { edgePan: false, hints: true, damageNumbers: false, volume: 0.7, muted: false, colorblind: false, autoPause: true, instant: false, cheats: { gold: false, resources: false, instant: false, build: false, powers: false } };
 
 export function loadSettings(s: Storage): Settings {
-  return { ...DEFAULT_SETTINGS, ...getJSON<Partial<Settings>>(s, 'settings', {}) };
+  const saved = getJSON<Partial<Settings>>(s, 'settings', {});
+  return { ...DEFAULT_SETTINGS, ...saved, cheats: { ...DEFAULT_SETTINGS.cheats, ...(saved.cheats ?? {}) } };
 }
 
 export function saveSettings(s: Storage, v: Settings): void {

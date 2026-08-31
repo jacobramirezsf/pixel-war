@@ -2,7 +2,7 @@
 
 import { fling, panBy, settleZoom, toWorld, zoomTo } from '../../render/camera.ts';
 import type { App } from '../app.ts';
-import { boxSelect, dragTool, tapAt, toolAt, usesTool, type ToolState } from './actions.ts';
+import { boxSelect, dragTool, placeRelease, tapAt, toolAt, usesTool, type ToolState } from './actions.ts';
 import type { Button } from './gestures.ts';
 
 export interface Scheme {
@@ -27,7 +27,7 @@ export function touchScheme(app: App): Scheme {
       if (!app.running) return;
       const p = W(x, y);
       ts = { lt: -1, lx: p.x, ly: p.y };
-      if (usesTool(app)) { toolAt(app, p.x, p.y, ts, true); return; }
+      if (usesTool(app)) { toolAt(app, p.x, p.y, ts, true); placeRelease(app); return; }
       tapAt(app, p.x, p.y);
     },
     dragStart(x, y) {
@@ -57,7 +57,7 @@ export function touchScheme(app: App): Scheme {
         if (a && b && b.t > a.t && performance.now() - b.t < 80) { const dt = (b.t - a.t) / 1000; fling(app.cam, ((b.x - a.x) / dt) * 0.9, ((b.y - a.y) / dt) * 0.9); }
         return;
       }
-      if (tool) { tool = false; return; }
+      if (tool) { tool = false; placeRelease(app); return; }
       if (app.drag && app.world && app.world.phase === 'play' && app.tool === 'cmd') boxSelect(app, app.drag);
       app.drag = null;
     },

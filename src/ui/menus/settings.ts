@@ -4,7 +4,7 @@ import { setPalette } from '../../data/teams.ts';
 import { DIFF } from '../../data/difficulty.ts';
 import { clearAtlas } from '../../render/atlas.ts';
 import { synth } from '../../audio/synth.ts';
-import { saveSettings, type App } from '../app.ts';
+import { issueAction, saveSettings, type App } from '../app.ts';
 import { $, on } from '../dom.ts';
 import { updateHints } from '../hud/hint.ts';
 import { loadStats } from '../stats.ts';
@@ -20,6 +20,11 @@ export function applySettings(app: App): void {
   saveSettings(app);
 }
 
+/** Push the cheat toggles into the running game as a command, so replays and saves carry them. */
+export function applyCheats(app: App): void {
+  if (app.world) issueAction(app, { type: 'cheats', payload: { ...app.settings.cheats } });
+}
+
 export function showSettings(app: App, back: () => void): void {
   const s = app.settings;
   const tog = (id: string, label: string, on: boolean, note: string): string => '<button class="pick" id="' + id + '">' + label + '<span>' + (on ? 'ON' : 'OFF') + ' · ' + note + '</span></button>';
@@ -32,6 +37,12 @@ export function showSettings(app: App, back: () => void): void {
     + tog('sCb', 'COLORBLIND PALETTE', s.colorblind, 'blue, orange, teal, yellow, magenta')
     + tog('sPause', 'AUTO PAUSE', s.autoPause, 'Conquest pauses on events (always on for touch)')
     + tog('sInst', 'INSTANT PRODUCTION', s.instant, 'units appear the moment you buy them (new games)')
+    + '<h3>CHEATS</h3><p class="blurb">Apply to you in any mode, including the game you are in. The AI plays fair.</p>'
+    + tog('cGold', 'UNLIMITED GOLD', s.cheats.gold, 'bottomless treasury')
+    + tog('cRes', 'UNLIMITED MATERIALS', s.cheats.resources, 'walls and towers are free of materials')
+    + tog('cInst', 'INSTANT UNITS', s.cheats.instant, 'no queue time')
+    + tog('cBuild', 'INSTANT BUILDINGS', s.cheats.build, 'construction finishes at once')
+    + tog('cPow', 'NO COOLDOWNS', s.cheats.powers, 'powers recharge instantly')
     + '<button class="gold" id="sBack">BACK</button></div>';
   const re = (): void => { applySettings(app); showSettings(app, back); };
   on($('sVol'), 'input', () => { s.volume = +($('sVol') as HTMLInputElement).value / 100; synth.setVolume(s.volume, s.muted); saveSettings(app); });
@@ -43,6 +54,12 @@ export function showSettings(app: App, back: () => void): void {
   on($('sCb'), 'click', () => { s.colorblind = !s.colorblind; re(); });
   on($('sPause'), 'click', () => { s.autoPause = !s.autoPause; re(); });
   on($('sInst'), 'click', () => { s.instant = !s.instant; re(); });
+  const cheat = (k: keyof typeof s.cheats): void => { s.cheats[k] = !s.cheats[k]; applyCheats(app); re(); };
+  on($('cGold'), 'click', () => cheat('gold'));
+  on($('cRes'), 'click', () => cheat('resources'));
+  on($('cInst'), 'click', () => cheat('instant'));
+  on($('cBuild'), 'click', () => cheat('build'));
+  on($('cPow'), 'click', () => cheat('powers'));
   on($('sBack'), 'click', back);
   ov().classList.remove('hide');
 }

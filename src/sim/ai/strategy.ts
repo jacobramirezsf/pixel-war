@@ -9,7 +9,10 @@ import { applyCommand, cmd } from '../commands.ts';
 import { rand } from '../rng.ts';
 import type { Settlement, Unit, World } from '../types.ts';
 import { allied, slotDiff } from '../world.ts';
-import { canAbsorb, canSettle, NEXT_TIER, TIERS } from '../conquest.ts';
+import { canAbsorb, canSettle, NEXT_TIER, popCap, popUsed, TIERS } from '../conquest.ts';
+import { canResearch, ownBlds } from '../town.ts';
+import type { BldKey } from '../../data/buildings.ts';
+import { TILE } from '../map.ts';
 import { pickUnit, roleMix } from './composition.ts';
 import { PROFILES, type AiProfile } from './profiles.ts';
 import { hostileValueNear, mineTargets, moveTo, nearestHostileBase, order, ownValueNear, pullBack, rallyPoint } from './tactics.ts';
@@ -125,10 +128,62 @@ function expandTerritory(w: World, slot: number, a: Assessment): boolean {
       if (v) { applyCommand(w, cmd(w, slot, { type: 'upgrade', payload: { id: v.id } }), true); return true; }
     }
   }
-  // A city at the capital once the frontier is settled.
-  if (canAfford('city') && s.gold >= TIERS.city.gold + 150 && !s.settlements.some((b) => b.tier === 'city')) {
+  // Grow the capital through the ages once there is a barracks to use them.
+  if (w.rules.town && w.blds.some((b) => b.team === slot && b.type === 'barracks')) {
+    const cap = s.settlements.find((b) => b.hp > 0 && b.buildT <= 0 && NEXT_TIER[b.tier]);
+    const to = cap ? NEXT_TIER[cap.tier] : undefined;
+    if (cap && to && s.gold >= TIERS[to].gold + 120 && (!w.rules.materials || s.mat >= TIERS[to].mat)) { applyCommand(w, cmd(w, slot, { type: 'upgrade', payload: { id: cap.id } }), true); return true; }
+  } else if (canAfford('city') && s.gold >= TIERS.city.gold + 150 && !s.settlements.some((b) => b.tier === 'city')) {
     const cap = s.settlements.find((b) => b.hp > 0 && b.buildT <= 0 && NEXT_TIER[b.tier] === 'city');
     if (cap) { applyCommand(w, cmd(w, slot, { type: 'upgrade', payload: { id: cap.id } }), true); return true; }
+  }
+  return false;
+}
+
+/** Try to place a building somewhere around a point. Returns true when it went down. */
+function placeNear(w: World, slot: number, type: BldKey, x: number, y: number): boolean {
+  const D = BLD[type];
+  for (let ring = 2; ring <= 9; ring++)
+    for (let k = 0; k < 12; k++) {
+      const ang = (k / 12) * Math.PI * 2 + ring * 0.4;
+      const px = x + Math.cos(ang) * ring * TILE, py = y + Math.sin(ang) * ring * TILE;
+      const tx = Math.round(px / TILE - D.w / 2), ty = Math.round(py / TILE - D.h / 2);
+      if (!canBuild(w, tx, ty, slot, type)) { applyCommand(w, cmd(w, slot, { type: 'build', payload: { x: tx * TILE + (D.w * TILE) / 2, y: ty * TILE + (D.h * TILE) / 2, bld: type } }), true); return true; }
+    }
+  return false;
+}
+
+/**
+ * Town build order, one step per decision: houses when crowded, barracks, farms, the next
+ * age, range and stable, blacksmith research, and a castle at the border when rich.
+ */
+function buildTown(w: World, slot: number, a: Assessment): boolean {
+  if (!w.rules.town || a.threat > 0) return false;
+  const s = w.slots[slot];
+  const home = s.settlements.find((b) => b.hp > 0);
+  if (!home) return false;
+  const have = (t: BldKey): number => w.blds.filter((b) => b.team === slot && b.type === t).length;
+  const afford = (t: BldKey): boolean => s.gold >= BLD[t].cost + 40 && (!w.rules.materials || s.mat >= (BLD[t].mat ?? 0));
+  const spare = popCap(w, slot) - popUsed(w, slot);
+  if (spare <= 3 && afford('house') && have('house') < 8) return placeNear(w, slot, 'house', home.x, home.y);
+  if (!have('barracks') && afford('barracks')) return placeNear(w, slot, 'barracks', home.x, home.y);
+  if (have('farm') < 3 && afford('farm') && w.t > 60) return placeNear(w, slot, 'farm', home.x, home.y);
+  if (s.age >= 1) {
+    if (!have('range') && afford('range')) return placeNear(w, slot, 'range', home.x, home.y);
+    if (!have('stable') && afford('stable') && have('range')) return placeNear(w, slot, 'stable', home.x, home.y);
+    if (!have('smith') && afford('smith') && have('range')) return placeNear(w, slot, 'smith', home.x, home.y);
+    if (have('farm') < 6 && afford('farm')) return placeNear(w, slot, 'farm', home.x, home.y);
+    if (!have('market') && afford('market')) return placeNear(w, slot, 'market', home.x, home.y);
+    if (ownBlds(w, slot, 'smith').length && s.gold > 400) {
+      for (const t of ['melee', 'ranged', 'armor'] as const) if (!canResearch(w, slot, t)) { applyCommand(w, cmd(w, slot, { type: 'research', payload: { tech: t } }), true); return true; }
+    }
+  }
+  if (s.age >= 2) {
+    if (!have('siege') && afford('siege')) return placeNear(w, slot, 'siege', home.x, home.y);
+    if (!have('castle') && afford('castle') && s.gold > 500) {
+      const border = s.settlements.find((b) => b.hp > 0 && w.regions[b.region]?.adj.some((x) => { const o = w.regions[x].owner; return o >= 0 && !allied(w, o, slot); })) ?? home;
+      return placeNear(w, slot, 'castle', border.x, border.y);
+    }
   }
   return false;
 }
@@ -138,6 +193,7 @@ export function decide(w: World, slot: number): void {
   const s = w.slots[slot], P = PROFILES[s.diff];
   const a = assess(w, slot);
   if (expandTerritory(w, slot, a)) return;
+  if (buildTown(w, slot, a)) return;
   // In Conquest the army has to be paid, and land costs gold. Hold back when either says so.
   const holdGold = w.mode === 'conquest' && ((w.net[slot] < 0.3 && a.own.length > 4) || savingForLand(w, slot, a));
   if (!holdGold) shop(w, slot, a, P);

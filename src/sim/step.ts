@@ -13,6 +13,7 @@ import { clamp, tileAt } from './map.ts';
 import { computeFlow, computeHome, flowDir } from './pathing.ts';
 import { conquestTick, grossIncome } from './conquest.ts';
 import { powersTick } from './powers.ts';
+import { townTick } from './town.ts';
 import { rand, rnd } from './rng.ts';
 import { fillGrid, forNear, gridOf, nearestHostileWithin } from './spatial.ts';
 import type { Building, Target, Unit, World } from './types.ts';
@@ -66,7 +67,7 @@ function produce(w: World, dt: number): void {
       if (!producers.some((b) => b.buildT <= 0)) rate *= 0.5;
     }
     const q = s.queue[0];
-    q.t -= w.instant ? 1e9 : dt * rate;
+    q.t -= w.instant || w.cheats.instant ? 1e9 : dt * rate;
     if (q.t > 0) continue;
     const u = spawn(w, i, q.unit);
     if (!u) { q.t = 0.5; continue; }
@@ -190,6 +191,10 @@ export function step(w: World): void {
   }
   if (w.phase === 'play') {
     powersTick(w, dt);
+    townTick(w, dt);
+    if (w.cheats.gold) w.slots[0].gold = Infinity;
+    if (w.cheats.resources) w.slots[0].mat = 99999;
+    if (w.cheats.powers) w.slots[0].powerCd = {};
     if (w.mode === 'dom') { dominationTick(w, dt, mcount); if (w.over) return; }
     if (w.incFlash > 0) w.incFlash -= dt;
   }
@@ -205,7 +210,7 @@ export function step(w: World): void {
     }
   // Towers.
   for (const b of w.blds) {
-    if (b.kind !== 'tower' || b.hp <= 0) continue;
+    if (b.kind !== 'tower' || b.hp <= 0 || b.buildT > 0) continue;
     b.cd -= dt;
     if (b.cd > 0) continue;
     const D = BLD[b.type];

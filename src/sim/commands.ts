@@ -11,11 +11,12 @@ import { buildTime, mkUnit } from './units.ts';
 import { absorb, ADVANCED_COST, canAbsorb, canSettle, hasCity, NEXT_TIER, placeSettlement, popCap, popUsed, setTruce, startUpgrade, TIERS, truceAccepted } from './conquest.ts';
 import { popOf } from './units.ts';
 import { castPower } from './powers.ts';
+import { canResearch, canTrain, pickTrainer, queuedCount, RESEARCH_COST, TECH_NAMES } from './town.ts';
 import { allied, count, mapH, mapW, say as worldSay } from './world.ts';
 
 /** Queued and in-production units count toward the army cap. */
 export function committed(w: World, slot: number): number {
-  return count(w, slot) + w.slots[slot].queue.length;
+  return count(w, slot) + queuedCount(w, slot);
 }
 
 export function resolveRef(w: World, r: TargetRef | null): Target | null {
@@ -55,20 +56,54 @@ export function applyCommand(w: World, c: Command, quiet = false): boolean {
       const T = TYPES[c.payload.unit];
       if (s.gold < T.cost) { say('Need ' + T.cost + ' gold', 1.2); return false; }
       if (committed(w, slot) >= w.cap) { say('Army cap reached (' + w.cap + ')', 1.5); return false; }
-      if (s.queue.length >= 12) { say('Queue is full', 1.2); return false; }
-      if (w.mode === 'conquest' && w.rules.population && popUsed(w, slot) + popOf(c.payload.unit) > popCap(w, slot)) { say('No room. Settlements add population.', 1.5); return false; }
-      if (w.mode === 'conquest' && T.cost >= ADVANCED_COST && !hasCity(w, slot)) { say('Needs a city', 1.5); return false; }
+      const why = canTrain(w, slot, c.payload.unit);
+      if (why) { say(T.name + ' ' + why, 1.5); return false; }
+      const trainer = pickTrainer(w, slot, c.payload.unit);
+      const queue = trainer ? trainer.queue : s.queue;
+      if (queue.length >= 12) { say('Queue is full', 1.2); return false; }
+      if (w.mode === 'conquest' && w.rules.population && popUsed(w, slot) + popOf(c.payload.unit) > popCap(w, slot)) { say('No room. Houses and settlements add population.', 1.5); return false; }
+      if (w.mode === 'conquest' && !w.rules.town && T.cost >= ADVANCED_COST && !hasCity(w, slot)) { say('Needs a city', 1.5); return false; }
       s.gold -= T.cost;
-      s.queue.push({ unit: c.payload.unit, t: buildTime(c.payload.unit), held: !!c.payload.held });
-      say(T.name + ' queued', 0.8);
+      queue.push({ unit: c.payload.unit, t: buildTime(c.payload.unit), held: !!c.payload.held });
+      say(T.name + ' queued' + (trainer ? ' at the ' + BLD[trainer.type].name.toLowerCase() : ''), 0.8);
       return true;
     }
     case 'cancel': {
-      const q = s.queue[c.payload.index];
+      const bld = c.payload.building != null ? w.blds.find((b) => b.id === c.payload.building && b.team === slot) : null;
+      const queue = bld ? bld.queue : s.queue;
+      const q = queue[c.payload.index];
       if (!q) return false;
-      s.queue.splice(c.payload.index, 1);
+      queue.splice(c.payload.index, 1);
       s.gold += TYPES[q.unit].cost;
       say(TYPES[q.unit].name + ' cancelled, gold refunded', 1);
+      return true;
+    }
+    case 'research': {
+      const why = canResearch(w, slot, c.payload.tech);
+      if (why) { say('Cannot research: ' + why, 1.5); return false; }
+      const lvl = s.tech[c.payload.tech];
+      s.gold -= RESEARCH_COST[lvl];
+      s.tech[c.payload.tech] = lvl + 1;
+      say(TECH_NAMES[c.payload.tech] + ' ' + (lvl + 1) + ' researched', 2);
+      return true;
+    }
+    case 'ageUp': {
+      // Grow the best settlement one tier. Same as upgrade, without picking a building.
+      const best = s.settlements.filter((b) => b.hp > 0 && b.buildT <= 0 && NEXT_TIER[b.tier]).sort((a, b) => (b.tier === 'town' ? 1 : 0) - (a.tier === 'town' ? 1 : 0))[0];
+      if (!best) { say('No settlement can grow right now', 1.5); return false; }
+      return applyCommand(w, { ...c, type: 'upgrade', payload: { id: best.id } } as Command, quiet);
+    }
+    case 'bldRally': {
+      const b = w.blds.find((x) => x.id === c.payload.id && x.team === slot);
+      if (!b) return false;
+      b.rally = { x: clamp(c.payload.x, 4, mapW(w) - 4), y: clamp(c.payload.y, 4, mapH(w) - 4) };
+      say('Rally point set for the ' + BLD[b.type].name.toLowerCase(), 1);
+      return true;
+    }
+    case 'cheats': {
+      w.cheats = { ...c.payload };
+      if (w.cheats.gold) s.gold = Infinity; else if (!Number.isFinite(s.gold)) s.gold = 500;
+      say('Cheats ' + (Object.values(w.cheats).some(Boolean) ? 'on' : 'off'), 1.5);
       return true;
     }
     case 'settle': {
@@ -177,23 +212,27 @@ export function applyCommand(w: World, c: Command, quiet = false): boolean {
     }
     case 'build': {
       const { x, y, bld } = c.payload, m = w.map;
-      const matCost = w.mode === 'conquest' && w.rules.materials ? BLD[bld].cost : 0;
+      const D0 = BLD[bld];
+      // Conquest: walls and towers cost materials, town buildings cost gold, the castle both.
+      const matCost = w.mode === 'conquest' && w.rules.materials && !w.cheats.resources ? (D0.town ? D0.mat ?? 0 : D0.cost) : 0;
+      const goldCost = !w.mode.startsWith('conq') ? D0.cost : D0.town ? D0.cost : 0;
       if (matCost && s.mat < matCost) { say('Need ' + matCost + ' materials', 1); return false; }
-      const tx = clamp((x / TILE) | 0, 0, m.cols - 1), ty = clamp((y / TILE) | 0, 0, m.rows - 1);
-      const D = BLD[bld], gdir = D.kind === 'gate' ? gateDir(w, tx, ty) : null;
+      const D = BLD[bld];
+      // The tap is the footprint's center.
+      const tx = clamp(Math.round(x / TILE - D.w / 2), 0, m.cols - 1), ty = clamp(Math.round(y / TILE - D.h / 2), 0, m.rows - 1);
+      const gdir = D.kind === 'gate' ? gateDir(w, tx, ty) : null;
       const why = canBuild(w, tx, ty, slot, bld, gdir);
       if (why) { say('Cannot build: ' + why, 1); return false; }
       let n = 0;
       for (const b of w.blds) if (b.team === slot) n++;
       if (n >= BUILD_CAP) { say('Build cap is ' + BUILD_CAP + ' per team', 1.2); return false; }
       if (!editing) {
+        if (goldCost && s.gold < goldCost) { say('Need ' + goldCost + ' gold', 1); return false; }
         if (matCost) s.mat -= matCost;
-        else {
-          if (s.gold < D.cost) { say('Need ' + D.cost + ' gold', 1); return false; }
-          s.gold -= D.cost;
-        }
+        if (goldCost) s.gold -= goldCost;
       }
-      addBld(w, slot, bld, tx, ty, gdir);
+      const nb = addBld(w, slot, bld, tx, ty, gdir, w.rules.town && !editing);
+      if (nb.buildT > 0) say(D.name + ' under construction. Workers nearby speed it up.', 1.5);
       return true;
     }
     case 'sell': {

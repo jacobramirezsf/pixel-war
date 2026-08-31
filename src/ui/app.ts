@@ -97,6 +97,8 @@ export interface App {
   hover: number | null;
   /** Mouse position in viewport CSS pixels, for edge pan. */
   mouse: { x: number; y: number } | null;
+  /** Finger position while dragging a building into place, in world pixels. */
+  placing: { x: number; y: number } | null;
   /** Keys currently held. */
   keys: Set<string>;
   spaceT: number;
@@ -116,7 +118,7 @@ export function createApp(storage: Storage): App {
     mset: [{ on: true, team: 0, race: null }, { on: true, team: 1, race: null }, { on: true, team: 2, race: null }, { on: false, team: 3, race: null }, { on: false, team: 4, race: null }],
     ctl: 0, brush: 'inf', bbrush: 'stk', tool: 'cmd', tab: 'units', power: null, selectMode: false, running: false, paused: false, speed: 1, overlay: false, terrOpen: false, seenEvents: 0, rivals: 1, lastSave: 0, selection: new Set(), drag: null, msg: '', msgT: 0,
     cv, ctx, bg: document.createElement('canvas'), W: 160, H: 224,
-    cam: makeCamera(), dpr: 1, layout: detectLayout(), minimap: makeMinimapCache(), hover: null, mouse: null,
+    cam: makeCamera(), dpr: 1, layout: detectLayout(), minimap: makeMinimapCache(), hover: null, mouse: null, placing: null,
     keys: new Set(), spaceT: 0, spaceDragged: false, groups: new Map(), settings: loadSettings(storage), storage,
     ui: { updateUI: () => {}, showMenu: () => {}, endScreen: () => {} },
   };
@@ -194,7 +196,7 @@ export function startGame(app: App, mode: Mode, allies?: number[], races?: (Race
     const pick = races ? races[i] : i === 0 ? app.race : app.foeRace;
     return pick ?? randomRace();
   });
-  const setup: GameSetup = { seed: (Math.random() * 2 ** 31) | 0, mode, map: app.curMap, allies: al, diff: app.diff, ai: al.map((_, i) => i !== 0), races: rc, instant: app.settings.instant };
+  const setup: GameSetup = { seed: (Math.random() * 2 ** 31) | 0, mode, map: app.curMap, allies: al, diff: app.diff, ai: al.map((_, i) => i !== 0), races: rc, instant: app.settings.instant, cheats: { ...app.settings.cheats } };
   const w = setupWorld(setup);
   app.world = w;
   app.setup = setup;

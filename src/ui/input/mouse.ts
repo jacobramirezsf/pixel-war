@@ -4,7 +4,7 @@
 import { panBy, setZoom, toWorld } from '../../render/camera.ts';
 import { unitAt } from '../../sim/queries.ts';
 import type { App } from '../app.ts';
-import { boxSelect, dragTool, orderAt, selectAt, toolAt, usesTool, type ToolState } from './actions.ts';
+import { boxSelect, dragTool, orderAt, placeRelease, selectAt, toolAt, usesTool, type ToolState } from './actions.ts';
 import type { Scheme } from './touch.ts';
 
 export function mouseScheme(app: App): Scheme {
@@ -18,7 +18,7 @@ export function mouseScheme(app: App): Scheme {
       ts = { lt: -1, lx: p.x, ly: p.y };
       if (button === 2) { if (usesTool(app)) { app.tool = app.world?.phase === 'edit' ? 'place' : 'cmd'; app.power = null; app.ui.updateUI(); } else orderAt(app, p.x, p.y); return; }
       if (button === 1) return;
-      if (usesTool(app)) { toolAt(app, p.x, p.y, ts, true); return; }
+      if (usesTool(app)) { toolAt(app, p.x, p.y, ts, true); placeRelease(app); return; }
       selectAt(app, p.x, p.y, shift);
     },
     dragStart(x, y, button) {
@@ -43,7 +43,7 @@ export function mouseScheme(app: App): Scheme {
     },
     dragEnd(_x, _y, button) {
       if (panning(button) || panLeft) { panLeft = false; app.drag = null; return; }
-      if (tool) { tool = false; return; }
+      if (tool) { tool = false; placeRelease(app); return; }
       if (app.drag && app.world && app.world.phase === 'play' && app.tool === 'cmd') boxSelect(app, app.drag, additive);
       app.drag = null;
     },

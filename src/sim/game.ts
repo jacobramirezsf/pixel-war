@@ -24,6 +24,7 @@ export interface GameConfig {
   rules?: Partial<import('./types.ts').Rules>;
   /** Units finish the moment they are bought. */
   instant?: boolean;
+  cheats?: Partial<import('./types.ts').Cheats>;
 }
 
 /** Copy of the chosen map, with extra bases placed for 3 to 5 players. */
@@ -35,11 +36,12 @@ export function prepareMap(map: MapDef, nP: number): MapDef {
 /** Conquest worlds: 40x40 with nine regions for one rival, larger grids for more. */
 export function conquestMap(seed: number, rivals = 1): { map: MapDef; grid: number } {
   const grid = rivals <= 1 ? 3 : rivals === 2 ? 4 : 5;
-  const size = grid * 14 - 2;
+  // Sixteen tiles a region leaves room for a town.
+  const size = grid * 16;
   const mines: [number, number][] = [];
   for (let g = 0; g < grid; g++) { const c = Math.round((g + 0.5) * (size / grid)); mines.push([c, 5], [c, size - 6], [5, c], [size - 6, c]); }
   const uniq = mines.filter((m, i) => mines.findIndex((q) => q[0] === m[0] && q[1] === m[1]) === i).slice(0, 6);
-  const m = gen({ name: 'Conquest', cols: size, rows: size, seed, road: false, tree: 0.6, rock: 0.5, water: 0.35, mines: uniq });
+  const m = gen({ name: 'Conquest', cols: size, rows: size, seed, road: false, tree: 0.45, rock: 0.35, water: 0.3, mines: uniq });
   const corners: { tx: number; ty: number }[] = [{ tx: 5, ty: size - 6 }, { tx: size - 6, ty: 5 }, { tx: 5, ty: 5 }, { tx: size - 6, ty: size - 6 }, { tx: size >> 1, ty: 4 }];
   m.bases = corners.slice(0, rivals + 1);
   return { map: finishMap(m), grid };
@@ -48,7 +50,7 @@ export function conquestMap(seed: number, rivals = 1): { map: MapDef; grid: numb
 export function newGame(map: MapDef, mode: Mode, cfg?: GameConfig): World {
   if (mode === 'conquest') return newConquest(cfg);
   const allies = cfg?.allies ?? [0, 1];
-  const w = reset(prepareMap(map, allies.length), { allies, diff: cfg?.diff ?? 'std', seed: cfg?.seed, ai: cfg?.ai, races: cfg?.races, diffs: cfg?.diffs, instant: cfg?.instant });
+  const w = reset(prepareMap(map, allies.length), { allies, diff: cfg?.diff ?? 'std', seed: cfg?.seed, ai: cfg?.ai, races: cfg?.races, diffs: cfg?.diffs, instant: cfg?.instant, cheats: cfg?.cheats });
   w.mode = mode;
   if (mode === 'sand') {
     w.phase = 'edit';
@@ -79,10 +81,10 @@ export function newConquest(cfg?: GameConfig): World {
   const { map, grid } = conquestMap(seed, rivals);
   const allies = Array.from({ length: rivals + 1 }, (_, i) => i);
   const races = allies.map((i) => cfg?.races?.[i] ?? 'kingdom');
-  const w = reset(map, { allies, diff: cfg?.diff ?? 'std', seed, ai: allies.map((i) => i !== 0), races, diffs: cfg?.diffs, instant: cfg?.instant });
+  const w = reset(map, { allies, diff: cfg?.diff ?? 'std', seed, ai: allies.map((i) => i !== 0), races, diffs: cfg?.diffs, instant: cfg?.instant, cheats: cfg?.cheats });
   w.mode = 'conquest';
   w.cap = 80;
-  w.rules = { upkeep: true, connection: true, garrison: true, unrest: true, materials: true, population: true, diplomacy: true, veterancy: true, ...(cfg?.rules ?? {}) };
+  w.rules = { town: true, upkeep: true, connection: true, garrison: true, unrest: true, materials: true, population: true, diplomacy: true, veterancy: true, ...(cfg?.rules ?? {}) };
   const rng = makeRng(seed ^ 0x9e3779b9);
   const { regions, regionOf } = makeRegions(map, rng, grid);
   w.regions = regions;
