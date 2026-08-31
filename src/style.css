@@ -28,7 +28,25 @@ canvas{image-rendering:pixelated;image-rendering:crisp-edges;display:block}
 #queue button{min-height:0;padding:1px 5px;font-size:10px;letter-spacing:0;border-width:1px;position:relative;overflow:hidden}
 #queue button i{position:absolute;left:0;bottom:0;height:2px;background:#f2d34a}
 #queue button.head{border-color:#f2d34a}
-#bRally.on,#bSettle.on,#bFort.on{background:#ffb02a;border-color:#ffb02a;color:#141520}
+#bRally.on,#bSettle.on,#bOutpost.on,#bFort.on,#bAbsorb.on{background:#ffb02a;border-color:#ffb02a;color:#141520}
+#bTerr.on{background:#7dff7d;color:#141520;border-color:#7dff7d}
+#terr{position:absolute;top:6px;left:6px;bottom:6px;width:min(320px,calc(100% - 12px));overflow-y:auto;background:rgba(10,11,16,.94);border:1px solid #3a3d4a;padding:8px;font-size:11px;color:#b9bccb;z-index:3;touch-action:pan-y}
+#terr .thead,#terr h3{display:flex;justify-content:space-between;align-items:center;color:#f2d34a;letter-spacing:2px;font-size:11px;margin:4px 0 6px}
+#terr h3{margin-top:12px}
+#terr .card{width:100%;min-height:0;text-align:left;display:flex;flex-direction:column;gap:2px;padding:6px 8px;margin-bottom:6px;font-weight:400;letter-spacing:0;font-size:11px}
+#terr .card .name{font-weight:700;color:#e6e6ee;letter-spacing:1px}
+#terr .card .tier{color:#8fd08f}
+#terr .card .flags{color:#b9bccb}
+#terr b.bad{color:#ff6b6b}#terr b.warn{color:#ffb02a}
+#terr .ev{width:100%;min-height:0;text-align:left;display:flex;justify-content:space-between;padding:5px 8px;margin-bottom:4px;font-weight:400;letter-spacing:0;font-size:11px;border-width:1px}
+#terr .ev span{color:#8a8d9e}
+#terr .ev-attack,#terr .ev-war,#terr .ev-revolt,#terr .ev-lost{border-color:#ff6b6b}
+#terr .ev-unrest,#terr .ev-broke,#terr .ev-raid{border-color:#ffb02a}
+#terr .ev-claim,#terr .ev-built,#terr .ev-loot,#terr .ev-truce{border-color:#7dff7d}
+#terr .dip{display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:6px}
+#terr .dip .mini{min-height:0;padding:4px 8px;font-size:10px;border-width:1px}
+#top .mat{color:#c9a46a}
+#top .pop{color:#b9bccb}
 #bLand.on{background:#7dff7d;color:#141520;border-color:#7dff7d}
 #top .net.neg{color:#ff6b6b}
 #top .warn{color:#ffb02a}
@@ -97,6 +115,7 @@ body.coarse .strip button{width:64px;min-height:56px}
 #ov .slotrow{display:flex;gap:8px}
 #ov .slotrow button{flex:1;font-size:11px;padding:8px 2px}
 #ov .slotrow button.name{flex:1.2;text-align:left}
+#ov input[type=range]{width:100%;margin:4px 0 10px;accent-color:#f2d34a}
 #ov textarea{width:100%;height:110px;background:#111;color:#ddd;border:1px solid #3a3d4a;font:11px 'Plex Mono',monospace;padding:6px;margin-top:8px;-webkit-user-select:text;user-select:text}
 .row{display:flex;gap:8px}.row button{flex:1}
 .hide{display:none!important}

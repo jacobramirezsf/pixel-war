@@ -9,6 +9,9 @@ import type { Mode } from '../../sim/types.ts';
 import { allied, count } from '../../sim/world.ts';
 import { hideOverlay, openEditor, say, setEditorMap, startGame, type App } from '../app.ts';
 import { continueConquest, hasSave, saveConquest, startConquest } from '../conquest.ts';
+import { showSettings, showStats } from './settings.ts';
+import { recordGame } from '../stats.ts';
+import { synth } from '../../audio/synth.ts';
 import { $, on } from '../dom.ts';
 import { startBattle, toEdit } from '../hud/commands.ts';
 
@@ -46,6 +49,7 @@ export function showMenu(app: App): void {
     <button data-mode="dom">DOMINATION<small>Hold the mines to fill your meter. First to 150 points wins.</small></button>
     <button data-mode="rich">UNLIMITED GOLD<small>Bottomless treasury. Enemy income doubled, army cap 60.</small></button>
     <button data-mode="sand">SANDBOX<small>Place armies AND fortifications for both sides, then hit PLAY.</small></button>
+    <div class="row"><button class="sm" id="mSettings">SETTINGS</button><button class="sm" id="mStats">STATS</button></div>
     <p><span class="k">BUILD ▸</span> opens walls, gates, and towers. Walls block both sides, so leave yourself a gate. Your units always pass your own gates. Tap a gate to lock or open it. WORKERS repair for a gold trickle.</p>
     <p>Capturing a mine adds 1.5 gold/s and the counter flashes when your income changes. Mortars and snipers outrange every tower. Drones fly over everything.</p>
   </div>`;
@@ -58,6 +62,8 @@ export function showMenu(app: App): void {
       startGame(app, mode);
     });
   on($('mMap'), 'click', () => showMaps(app));
+  on($('mSettings'), 'click', () => showSettings(app, () => showMenu(app)));
+  on($('mStats'), 'click', () => showStats(app, () => showMenu(app)));
   on($('mRace'), 'click', () => { app.race = nextRace(app.race, false)!; showMenu(app); });
   on($('mFoe'), 'click', () => { app.foeRace = nextRace(app.foeRace, true); showMenu(app); });
   wireDiff(app, () => showMenu(app));
@@ -69,12 +75,16 @@ export function showConquest(app: App): void {
   ov().innerHTML = '<div><h2>CONQUEST</h2>'
     + '<p>You start with one village in a corner. Found villages in the regions next to yours and hold them for 30 seconds to claim them. Every unit and building costs gold per second. Regions cut off from your capital pay nothing. Take the rival capital to win.</p>'
     + (saved ? '<button class="gold" id="cqCont">CONTINUE<small>Pick up the saved game.</small></button>' : '')
-    + '<button ' + (saved ? '' : 'class="gold"') + ' id="cqNew">NEW WORLD<small>' + (saved ? 'Replaces the saved game.' : 'A fresh world with a new rival.') + '</small></button>'
+    + '<div class="row">' + [1, 2, 3, 4].map((n) => '<button class="sm' + (app.rivals === n ? ' on' : '') + '" data-rivals="' + n + '">' + n + ' RIVAL' + (n > 1 ? 'S' : '') + '</button>').join('') + '</div>'
+    + diffRowHtml(app)
+    + '<button ' + (saved ? '' : 'class="gold"') + ' id="cqNew">NEW WORLD<small>' + (saved ? 'Replaces the saved game.' : 'A fresh world.') + ' ' + (app.rivals === 1 ? '40x40, nine regions.' : app.rivals === 2 ? '54x54, sixteen regions.' : '68x68, twenty-five regions.') + '</small></button>'
     + '<button id="cqBack">BACK</button></div>';
   const c = document.getElementById('cqCont');
   if (c) on(c, 'click', () => { if (!continueConquest(app)) { say(app, 'Save could not be read', 2); showMenu(app); } });
   on($('cqNew'), 'click', () => startConquest(app));
   on($('cqBack'), 'click', () => showMenu(app));
+  for (const b of ov().querySelectorAll<HTMLButtonElement>('button[data-rivals]')) on(b, 'click', () => { app.rivals = +b.dataset.rivals!; showConquest(app); });
+  wireDiff(app, () => showConquest(app));
   ov().classList.remove('hide');
 }
 
@@ -148,6 +158,8 @@ export function endScreen(app: App): void {
   const w = app.world;
   if (!w) return;
   const win = w.over === 'win';
+  if (w.mode !== 'sand') recordGame(app.storage, w.mode, w.diff, win, w.t);
+  synth.play(win ? 'victory' : 'defeat');
   let h1: string, body: string, tip: string, btns: string;
   if (w.mode === 'sand') {
     h1 = win ? '<span style="color:#3fa7ff">BLUE</span> WINS' : '<span style="color:#ff4d4d">RED</span> WINS';

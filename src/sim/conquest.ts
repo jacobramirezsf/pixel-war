@@ -1,25 +1,53 @@
 // Conquest: one continuous world split into regions you claim by settling and keep by holding.
-// The slice: 9 regions, one rival, villages and fortresses, upkeep, connection, garrison.
+// Regions, claims, connection, garrison, unrest, neutrals, materials, population, diplomacy.
 
 import { BLD } from '../data/buildings.ts';
-import { TYPES } from '../data/units.ts';
+import { roster, TYPES } from '../data/units.ts';
 import { canPlaceSettlement } from './buildings.ts';
 import { TILE, type MapDef } from './map.ts';
-import { rand, type Rng } from './rng.ts';
-import type { Region, Settlement, Tier, World } from './types.ts';
-import { allied, say } from './world.ts';
+import { rand, randInt, type Rng } from './rng.ts';
+import type { Region, Settlement, Slot, Tier, Unit, World } from './types.ts';
+import { mkUnit } from './units.ts';
+import { allied, pushEvent, say } from './world.ts';
 
-export const REGION_NAMES = ['Ashford', 'Brine', 'Coldwater', 'Dunmere', 'Elsmoor', 'Fallow', 'Greyholm', 'Hollin', 'Ironmark', 'Kestrel', 'Larkspur', 'Marrow', 'Northam', 'Oakhurst', 'Pale Reach', 'Quarry Hill'];
+export const REGION_NAMES = ['Ashford', 'Brine', 'Coldwater', 'Dunmere', 'Elsmoor', 'Fallow', 'Greyholm', 'Hollin', 'Ironmark', 'Kestrel', 'Larkspur', 'Marrow', 'Northam', 'Oakhurst', 'Pale Reach', 'Quarry Hill', 'Rook', 'Saltmere', 'Thornby', 'Umber', 'Vale', 'Wendle', 'Yarrow', 'Zell', 'Ambry'];
 
 export const CLAIM_SECONDS = 30;
 export const WEAK_CLAIM_SECONDS = 10;
+export const PEACE_AFTER = 300;
 
-export const TIERS: Record<Tier, { cost: number; hp: number; buildT: number; income: number; upkeep: number; garrisonMul: number }> = {
-  village: { cost: 150, hp: 300, buildT: 20, income: 2, upkeep: 0.3, garrisonMul: 1 },
-  fortress: { cost: 300, hp: 600, buildT: 45, income: 3, upkeep: 0.6, garrisonMul: 0.5 },
+export interface TierDef {
+  gold: number;
+  mat: number;
+  hp: number;
+  buildT: number;
+  income: number;
+  upkeep: number;
+  /** Multiplier on the garrison requirement of this and adjacent regions. */
+  garrisonMul: number;
+  /** Population capacity. */
+  pop: number;
+  /** Materials per second. */
+  matRate: number;
+  /** Can queue units. */
+  produces: boolean;
+}
+
+export const TIERS: Record<Tier, TierDef> = {
+  outpost:  { gold: 50,  mat: 20,  hp: 120, buildT: 10, income: 0,   upkeep: 0.1, garrisonMul: 1,   pop: 2,  matRate: 0,   produces: false },
+  village:  { gold: 150, mat: 50,  hp: 300, buildT: 20, income: 2,   upkeep: 0.3, garrisonMul: 1,   pop: 10, matRate: 0,   produces: true },
+  fortress: { gold: 250, mat: 150, hp: 600, buildT: 45, income: 3,   upkeep: 0.6, garrisonMul: 0.5, pop: 20, matRate: 0.3, produces: true },
+  city:     { gold: 450, mat: 300, hp: 900, buildT: 75, income: 5,   upkeep: 1.0, garrisonMul: 0.5, pop: 40, matRate: 0.5, produces: true },
+  camp:     { gold: 0,   mat: 0,   hp: 200, buildT: 0,  income: 0,   upkeep: 0,   garrisonMul: 1,   pop: 0,  matRate: 0,   produces: false },
+  ruin:     { gold: 0,   mat: 0,   hp: 60,  buildT: 0,  income: 0,   upkeep: 0,   garrisonMul: 1,   pop: 0,  matRate: 0,   produces: false },
 };
 
-/** Split the map into a 3x3 of irregular regions: jittered seeds, tiles go to the nearest seed. */
+export const NEXT_TIER: Partial<Record<Tier, Tier>> = { outpost: 'village', village: 'fortress', fortress: 'city' };
+
+/** Advanced units need a city somewhere in the faction. */
+export const ADVANCED_COST = 60;
+
+/** Split the map into an irregular grid of regions: jittered seeds, tiles go to the nearest seed. */
 export function makeRegions(m: MapDef, rng: Rng, grid = 3): { regions: Region[]; regionOf: Uint8Array } {
   const seeds: { x: number; y: number }[] = [];
   const cw = m.cols / grid, ch = m.rows / grid;
@@ -27,6 +55,7 @@ export function makeRegions(m: MapDef, rng: Rng, grid = 3): { regions: Region[];
     for (let gx = 0; gx < grid; gx++)
       seeds.push({ x: (gx + 0.5) * cw + (rand(rng) - 0.5) * cw * 0.4, y: (gy + 0.5) * ch + (rand(rng) - 0.5) * ch * 0.4 });
   const regionOf = new Uint8Array(m.cols * m.rows);
+  const trees = new Array(seeds.length).fill(0), rocks = new Array(seeds.length).fill(0), sizes = new Array(seeds.length).fill(0);
   for (let ty = 0; ty < m.rows; ty++)
     for (let tx = 0; tx < m.cols; tx++) {
       let best = 0, bd = Infinity;
@@ -35,12 +64,16 @@ export function makeRegions(m: MapDef, rng: Rng, grid = 3): { regions: Region[];
         if (d < bd) { bd = d; best = i; }
       }
       regionOf[ty * m.cols + tx] = best;
+      sizes[best]++;
+      const t = m.tiles[ty * m.cols + tx];
+      if (t === 2) trees[best]++;
+      if (t === 4) rocks[best]++;
     }
   const regions: Region[] = seeds.map((sd, i) => ({
     id: i, name: REGION_NAMES[i % REGION_NAMES.length], cx: Math.round(sd.x * TILE), cy: Math.round(sd.y * TILE), adj: [],
-    owner: -1, claimant: -1, claimT: 0, contested: false, connected: true, garrison: 0, need: 0,
+    owner: -1, claimant: -1, claimT: 0, contested: false, connected: true, garrison: 0, need: 0, unrest: 0,
+    mat: Math.round(((trees[i] + rocks[i]) / Math.max(1, sizes[i])) * 2 * 100) / 100,
   }));
-  // Adjacency from shared tile edges.
   const adj = regions.map(() => new Set<number>());
   for (let ty = 0; ty < m.rows; ty++)
     for (let tx = 0; tx < m.cols; tx++) {
@@ -64,7 +97,9 @@ export function settlementsIn(w: World, region: number): Settlement[] {
   return out;
 }
 
-/** Why a village cannot go here, or null. */
+const isNeutral = (w: World, team: number): boolean => w.slots[team].neutral;
+
+/** Why a settlement cannot go here, or null. */
 export function canSettle(w: World, slot: number, x: number, y: number): string | null {
   const r = regionAt(w, x, y);
   if (r < 0) return 'not a conquest world';
@@ -73,29 +108,64 @@ export function canSettle(w: World, slot: number, x: number, y: number): string 
   if (why) return why;
   const here = settlementsIn(w, r);
   if (here.some((b) => b.team === slot)) return 'you already hold a settlement here';
-  if (here.some((b) => !allied(w, b.team, slot))) return 'the enemy holds this region';
+  if (here.some((b) => !allied(w, b.team, slot) && !isNeutral(w, b.team))) return 'the enemy holds this region';
+  if (here.some((b) => isNeutral(w, b.team) && b.tier !== 'ruin')) return 'independents live here. Absorb or clear them';
   const reg = w.regions[r];
   if (reg.owner >= 0 && !allied(w, reg.owner, slot)) return 'enemy territory, take it first';
-  // Must touch your land: adjacent to a region you own, or your capital region.
   const ownAdj = reg.owner === slot || reg.adj.some((a) => w.regions[a].owner === slot);
   if (!ownAdj) return 'not next to your territory';
   return null;
 }
 
-export function placeSettlement(w: World, slot: number, x: number, y: number, tier: Tier, instant = false): Settlement {
+export function mkSettlement(w: World, slot: number, x: number, y: number, tier: Tier, instant: boolean): Settlement {
   const T = TIERS[tier];
-  const b: Settlement = { ent: 'base', id: w.nextId++, team: slot, x: ((x / TILE) | 0) * TILE + 4, y: ((y / TILE) | 0) * TILE + 4, hp: instant ? T.hp : Math.round(T.hp * 0.3), max: T.hp, cd: 0, tier, region: regionAt(w, x, y), buildT: instant ? 0 : T.buildT };
+  return { ent: 'base', id: w.nextId++, team: slot, x: ((x / TILE) | 0) * TILE + 4, y: ((y / TILE) | 0) * TILE + 4, hp: instant ? T.hp : Math.round(T.hp * 0.3), max: T.hp, cd: 0, tier, region: regionAt(w, x, y), buildT: instant ? 0 : T.buildT, hitBy: -1, nT: tier === 'camp' ? 75 : 0 };
+}
+
+/** Founding clears the trees in the footprint. Water and rock are refused earlier. */
+function clearFootprint(w: World, tx: number, ty: number, rx = 2, ry = 1): void {
+  const m = w.map;
+  let changed = false;
+  for (let y = ty - ry; y <= ty + ry; y++)
+    for (let x = tx - rx; x <= tx + rx; x++) {
+      if (x < 0 || y < 0 || x >= m.cols || y >= m.rows) continue;
+      const i = y * m.cols + x;
+      if (m.tiles[i] === 2) { m.tiles[i] = 0; changed = true; }
+    }
+  if (changed) { w.flowDirty = true; w.mapDirty = true; }
+}
+
+export function placeSettlement(w: World, slot: number, x: number, y: number, tier: Tier, instant = false): Settlement {
+  clearFootprint(w, (x / TILE) | 0, (y / TILE) | 0);
+  const b = mkSettlement(w, slot, x, y, tier, instant);
   w.slots[slot].settlements.push(b);
   return b;
 }
 
 /** Start an in-place upgrade. The settlement keeps its hp fraction, loses production until done. */
-export function startUpgrade(b: Settlement): void {
+export function startUpgrade(b: Settlement, to: Tier): void {
   const frac = b.hp / b.max;
-  b.tier = 'fortress';
-  b.max = TIERS.fortress.hp;
+  b.tier = to;
+  b.max = TIERS[to].hp;
   b.hp = Math.max(1, Math.round(b.max * frac * 0.6));
-  b.buildT = TIERS.fortress.buildT;
+  b.buildT = TIERS[to].buildT;
+}
+
+export function popCap(w: World, slot: number): number {
+  let cap = 10;
+  for (const b of w.slots[slot].settlements) if (b.hp > 0 && b.buildT <= 0) cap += TIERS[b.tier].pop;
+  return cap;
+}
+
+export function popUsed(w: World, slot: number): number {
+  let n = 0;
+  for (const u of w.units) if (u.team === slot && u.hp > 0) n += Math.max(1, Math.ceil(TYPES[u.type].cost / 60));
+  for (const q of w.slots[slot].queue) n += Math.max(1, Math.ceil(TYPES[q.unit].cost / 60));
+  return n;
+}
+
+export function hasCity(w: World, slot: number): boolean {
+  return w.slots[slot].settlements.some((b) => b.hp > 0 && b.tier === 'city' && b.buildT <= 0);
 }
 
 /** Gold per second a slot pays for what it fields. */
@@ -107,18 +177,29 @@ export function upkeepRate(w: World, slot: number): number {
   return u;
 }
 
-/** Gross income: 2 base, plus each connected working settlement, plus mines. */
+/** Gross gold: 2 base, plus each connected working settlement, plus mines. */
 export function grossIncome(w: World, slot: number, mcount: number[]): number {
   let g = 2 + 1.5 * mcount[slot];
   for (const b of w.slots[slot].settlements) {
-    if (b.hp <= 0 || b.buildT > 0) continue;
+    if (b.hp <= 0) continue;
     const r = w.regions[b.region];
     if (r && w.rules.connection && !r.connected) continue;
     let inc = TIERS[b.tier].income;
+    if (b.buildT > 0) inc *= 0.5;
     if (r && w.rules.garrison && r.garrison < r.need) inc *= 0.5;
+    if (r && w.rules.unrest && r.unrest >= 50) inc *= 0.5;
     g += inc;
   }
   return g;
+}
+
+/** Materials per second: the land's yield in connected regions plus fortress and city works. */
+export function matRate(w: World, slot: number): number {
+  if (!w.rules.materials) return 0;
+  let m = 0;
+  for (const r of w.regions) if (r.owner === slot && r.connected) m += r.mat;
+  for (const b of w.slots[slot].settlements) if (b.hp > 0 && b.buildT <= 0) m += TIERS[b.tier].matRate;
+  return m;
 }
 
 function ownValueByRegion(w: World): Map<string, number> {
@@ -132,60 +213,246 @@ function ownValueByRegion(w: World): Map<string, number> {
   return m;
 }
 
-/** Claims, contests, connection, garrison, upkeep, desertion, and the win check. Once per tick. */
+function hostileValueIn(w: World, byRegion: Map<string, number>, team: number, region: number): number {
+  let v = 0;
+  const seen = new Set<number>();
+  for (const s of w.slots) {
+    if (seen.has(s.ally)) continue;
+    seen.add(s.ally);
+    if (s.ally === w.slots[team].ally) continue;
+    v += byRegion.get(s.ally + ':' + region) ?? 0;
+  }
+  return v;
+}
+
+/** A region revolts: its settlements go independent and rebels appear sized to the garrison shortfall. */
+function revolt(w: World, r: Region): void {
+  const owner = r.owner;
+  const shortfall = Math.max(40, r.need - r.garrison);
+  r.owner = -1;
+  r.unrest = 0;
+  r.claimT = 0;
+  const n = w.neutral;
+  if (n >= 0) {
+    const s = w.slots[owner];
+    for (const b of s.settlements.slice()) if (b.hp > 0 && b.region === r.id) {
+      s.settlements.splice(s.settlements.indexOf(b), 1);
+      b.team = n;
+      w.slots[n].settlements.push(b);
+    }
+    const count = Math.min(8, Math.ceil(shortfall / 20));
+    const list = roster(w.slots[n].race).filter((k) => TYPES[k].cost <= 30 && !TYPES[k].repair);
+    for (let i = 0; i < count; i++) {
+      const k = list[randInt(w.rng, list.length)];
+      const a = (i / count) * Math.PI * 2;
+      const u = mkUnit(w, n, k, r.cx + Math.cos(a) * 10, r.cy + Math.sin(a) * 10);
+      u.order = { type: 'attack', tgt: null };
+      w.units.push(u);
+    }
+  }
+  if (owner === 0) { say(w, r.name + ' has revolted', 3); pushEvent(w, 'revolt', r.name + ' revolted', r.cx, r.cy, r.id); }
+}
+
+/** Neutral camps raid, ruins reward the units that hold them, loot drops from cleared camps. */
+function neutralsTick(w: World, dt: number, byRegion: Map<string, number>): void {
+  const n = w.neutral;
+  if (n < 0) return;
+  const ns = w.slots[n];
+  const raiders = w.units.filter((u) => u.team === n && u.hp > 0).length;
+  for (const b of ns.settlements.slice()) {
+    if (b.hp <= 0) continue;
+    if (b.tier === 'camp') {
+      b.nT -= dt;
+      if (b.nT <= 0 && raiders < 10) {
+        b.nT = 60;
+        const r = w.regions[b.region];
+        // Raid a neighboring region that someone owns, else prowl a random neighbor.
+        const owned = r.adj.filter((a) => w.regions[a].owner >= 0 && !w.slots[w.regions[a].owner].neutral);
+        const pick = owned.length ? owned[randInt(w.rng, owned.length)] : r.adj[randInt(w.rng, r.adj.length)];
+        const target = w.regions[pick];
+        const list = roster(ns.race).filter((k) => TYPES[k].cost <= 40 && !TYPES[k].repair);
+        for (let i = 0; i < 2; i++) {
+          const u = mkUnit(w, n, list[randInt(w.rng, list.length)], b.x + (i ? 8 : -8), b.y + 12);
+          u.order = { type: 'move', x: target.cx + (rand(w.rng) - 0.5) * 40, y: target.cy + (rand(w.rng) - 0.5) * 40 };
+          w.units.push(u);
+        }
+        if (target.owner === 0) pushEvent(w, 'raid', 'Bandits from ' + r.name + ' are raiding ' + target.name, b.x, b.y, r.id);
+      }
+    } else if (b.tier === 'ruin') {
+      // Whoever stands on a ruin alone for five seconds claims what it holds.
+      let claimant = -1;
+      for (const s of w.slots) {
+        if (s.neutral) continue;
+        const v = byRegion.get(s.ally + ':' + b.region) ?? 0;
+        if (v > 0) {
+          let near = false;
+          for (const u of w.units) if (u.hp > 0 && allied(w, u.team, w.slots.indexOf(s)) && Math.hypot(u.x - b.x, u.y - b.y) < 20) { near = true; break; }
+          if (near) { claimant = claimant < 0 ? w.slots.indexOf(s) : -2; }
+        }
+      }
+      if (claimant >= 0) {
+        b.nT += dt;
+        if (b.nT >= 5) {
+          ns.settlements.splice(ns.settlements.indexOf(b), 1);
+          const s = w.slots[claimant];
+          if (rand(w.rng) < 0.5) { s.mat += 80; if (claimant === 0) say(w, 'The ruin held 80 materials', 2.5); }
+          else {
+            const list = roster(s.race).filter((k) => TYPES[k].cost >= 40 && TYPES[k].cost <= 60);
+            const u = mkUnit(w, claimant, list[randInt(w.rng, list.length)], b.x, b.y + 10);
+            w.units.push(u);
+            if (claimant === 0) say(w, 'A ' + TYPES[u.type].name + ' joins you from the ruin', 2.5);
+          }
+          if (claimant === 0) pushEvent(w, 'loot', 'Ruin claimed', b.x, b.y, b.region);
+        }
+      } else b.nT = 0;
+    }
+  }
+}
+
+/** Called when a settlement dies. Camps drop loot to whoever finished them. */
+export function onSettlementDeath(w: World, b: Settlement): void {
+  if (!w.slots[b.team].neutral || b.tier !== 'camp' || b.hitBy < 0) return;
+  const s = w.slots[b.hitBy];
+  s.gold += 120;
+  s.mat += 60;
+  if (b.hitBy === 0) { say(w, 'Bandit camp cleared: 120 gold, 60 materials', 3); pushEvent(w, 'loot', 'Bandit camp cleared', b.x, b.y, b.region); }
+}
+
+/** Absorb an independent village: it joins with its buildings intact. */
+export function canAbsorb(w: World, slot: number, b: Settlement): string | null {
+  if (!w.slots[b.team].neutral || b.tier === 'camp' || b.tier === 'ruin') return 'not an independent settlement';
+  let near = false;
+  for (const u of w.units) if (u.hp > 0 && u.team === slot && Math.hypot(u.x - b.x, u.y - b.y) < 40) near = true;
+  if (!near) return 'bring units to it first';
+  for (const u of w.units) if (u.hp > 0 && !allied(w, u.team, slot) && !isNeutral(w, u.team) && Math.hypot(u.x - b.x, u.y - b.y) < 48) return 'enemies nearby';
+  const r = w.regions[b.region];
+  if (!(r.owner === slot || r.adj.some((a) => w.regions[a].owner === slot))) return 'not next to your territory';
+  return null;
+}
+
+export function absorb(w: World, slot: number, b: Settlement): void {
+  const ns = w.slots[b.team];
+  ns.settlements.splice(ns.settlements.indexOf(b), 1);
+  b.team = slot;
+  w.slots[slot].settlements.push(b);
+  for (const bl of w.blds) if (bl.team === w.neutral && Math.hypot(bl.x - b.x, bl.y - b.y) < 60) bl.team = slot;
+  w.flowDirty = true;
+}
+
+/** Attitudes drift with borders, strength, shared enemies, and aggression. AI rivals act on them. */
+function diplomacyTick(w: World, dt: number, value: number[]): void {
+  if (!w.rules.diplomacy) return;
+  for (let i = 0; i < w.nP; i++) {
+    const A = w.slots[i];
+    if (A.neutral) continue;
+    for (let j = 0; j < w.nP; j++) {
+      if (i === j || w.slots[j].neutral || A.ally === w.slots[j].ally) continue;
+      let d = 0.05;
+      const border = w.regions.some((r) => r.owner === i && r.adj.some((a) => w.regions[a].owner === j));
+      if (border) d -= 0.25;
+      if (value[j] > value[i] * 1.5) d -= 0.15;
+      for (let k = 0; k < w.nP; k++) if (k !== i && k !== j && !w.slots[k].neutral && !w.slots[i].truce[k] && !w.slots[j].truce[k] && w.slots[k].ally !== A.ally && w.slots[k].ally !== w.slots[j].ally) d += 0.1;
+      A.attitude[j] = Math.max(-100, Math.min(100, A.attitude[j] + d * dt + (A.attitude[j] > 0 ? -0.02 : 0.02) * dt));
+    }
+  }
+  // AI rivals decide once a second.
+  if (w.tick % 60 !== 0) return;
+  for (let i = 0; i < w.nP; i++) {
+    const A = w.slots[i];
+    if (!A.ai || A.neutral) continue;
+    for (let j = 0; j < w.nP; j++) {
+      if (i === j || w.slots[j].neutral || A.ally === w.slots[j].ally) continue;
+      const truce = A.truce[j];
+      const peace = truce && w.t - A.truceT[j] > PEACE_AFTER;
+      if (!truce && A.attitude[j] > 20 && value[i] < value[j] * 0.8) setTruce(w, i, j, true);
+      else if (truce && !peace && A.attitude[j] < -40 && value[i] > value[j] * 1.5) setTruce(w, i, j, false);
+      else if (peace && A.attitude[j] < -70) setTruce(w, i, j, false);
+    }
+  }
+}
+
+export function setTruce(w: World, a: number, b: number, on: boolean): void {
+  const A = w.slots[a], B = w.slots[b];
+  if (A.truce[b] === on) return;
+  A.truce[b] = on; B.truce[a] = on;
+  A.truceT[b] = w.t; B.truceT[a] = w.t;
+  if (!on) { A.attitude[b] = Math.min(A.attitude[b], -30); B.attitude[a] = Math.min(B.attitude[a], -30); }
+  w.flowDirty = true;
+  const other = a === 0 ? b : b === 0 ? a : -1;
+  if (other >= 0) {
+    const name = ['BLUE', 'RED', 'GREEN', 'ORANGE', 'VIOLET'][other];
+    const cap = w.regions[w.capitals[other]];
+    say(w, on ? 'Truce with ' + name : name + ' is at war with you', 3);
+    pushEvent(w, on ? 'truce' : 'war', on ? 'Truce with ' + name : name + ' declared war', cap?.cx ?? 0, cap?.cy ?? 0, cap?.id ?? -1);
+  }
+}
+
+/** Can this pair sign a truce now? Rivals accept when not hostile or when they are weaker. */
+export function truceAccepted(w: World, from: number, to: number, value: number[]): boolean {
+  const T = w.slots[to];
+  if (!T.ai) return true;
+  return T.attitude[from] > -20 || value[to] < value[from] * 0.7;
+}
+
+/** Claims, contests, connection, garrison, unrest, neutrals, economy, diplomacy, and the win check. */
 export function conquestTick(w: World, dt: number, mcount: number[]): void {
   const byRegion = ownValueByRegion(w);
   const allyOf = w.slots.map((s) => s.ally);
+  const value = w.slots.map(() => 0);
+  for (const u of w.units) if (u.hp > 0) value[u.team] += TYPES[u.type].cost;
   // Claims and contests.
   for (const r of w.regions) {
-    const here = settlementsIn(w, r.id);
+    const here = settlementsIn(w, r.id).filter((b) => !isNeutral(w, b.team));
     const teams = new Set(here.map((b) => allyOf[b.team]));
-    let hostilePresent = false;
+    r.contested = false;
     r.claimant = -1;
     if (teams.size === 1) {
       const owner = here[0].team;
       r.claimant = owner;
-      for (const s of w.slots) if (s.ally !== allyOf[owner] && (byRegion.get(s.ally + ':' + r.id) ?? 0) > 0) hostilePresent = true;
+      const hostilePresent = hostileValueIn(w, byRegion, owner, r.id) > 0;
       r.contested = hostilePresent;
       if (r.owner === owner) r.claimT = 0;
       else if (!hostilePresent) {
         r.claimT += dt;
         if (r.claimT >= CLAIM_SECONDS) {
+          const prev = r.owner;
           r.owner = owner;
           r.claimT = 0;
-          if (owner === 0) say(w, r.name + ' is yours', 2.5);
-          else if (w.regions.some((q) => q.owner === 0)) say(w, r.name + ' has fallen to the enemy', 2.5);
+          r.unrest = w.rules.unrest && prev >= 0 ? 60 : 0;
+          if (owner === 0) { say(w, r.name + ' is yours', 2.5); pushEvent(w, 'claim', r.name + ' claimed', r.cx, r.cy, r.id); }
+          else if (prev === 0) { say(w, r.name + ' has fallen to the enemy', 2.5); pushEvent(w, 'lost', r.name + ' lost', r.cx, r.cy, r.id); }
         }
       } else r.claimT = 0;
     } else {
       r.contested = teams.size > 1;
-      if (r.owner >= 0) {
-        // No settlement of the owner's side: hostiles holding the ground push it to neutral.
-        let hostile = 0;
-        for (const s of w.slots) if (s.ally !== allyOf[r.owner] && (byRegion.get(s.ally + ':' + r.id) ?? 0) > 0) hostile++;
+      if (r.owner >= 0 && teams.size === 0) {
+        const hostile = hostileValueIn(w, byRegion, r.owner, r.id);
         const ownHere = byRegion.get(allyOf[r.owner] + ':' + r.id) ?? 0;
-        if (hostile && ownHere === 0 && !here.some((b) => allyOf[b.team] === allyOf[r.owner])) {
+        if (hostile > 0 && ownHere === 0) {
           r.claimT += dt;
           const limit = w.rules.garrison && r.garrison < r.need ? WEAK_CLAIM_SECONDS : CLAIM_SECONDS;
-          if (r.claimT >= limit) { if (r.owner === 0) say(w, r.name + ' lost', 2.5); r.owner = -1; r.claimT = 0; }
+          if (r.claimT >= limit) { if (r.owner === 0) { say(w, r.name + ' lost', 2.5); pushEvent(w, 'lost', r.name + ' lost', r.cx, r.cy, r.id); } r.owner = -1; r.claimT = 0; r.unrest = 0; }
         } else r.claimT = 0;
       } else r.claimT = 0;
     }
   }
-  // Garrison requirement.
+  // Garrison requirement. Fortresses halve it here and next door; cities two regions out.
   for (const r of w.regions) {
     if (r.owner < 0) { r.garrison = 0; r.need = 0; continue; }
     r.garrison = byRegion.get(allyOf[r.owner] + ':' + r.id) ?? 0;
     let hostileAdj = 0;
-    for (const a of r.adj) { const o = w.regions[a].owner; if (o >= 0 && allyOf[o] !== allyOf[r.owner]) hostileAdj++; }
-    let need = 40 + 60 * hostileAdj;
-    const fortNear = settlementsIn(w, r.id).some((b) => b.tier === 'fortress' && b.buildT <= 0 && b.team === r.owner)
-      || r.adj.some((a) => settlementsIn(w, a).some((b) => b.tier === 'fortress' && b.buildT <= 0 && b.team === r.owner));
-    if (fortNear) need *= 0.5;
+    for (const a of r.adj) { const o = w.regions[a].owner; if (o >= 0 && allyOf[o] !== allyOf[r.owner] && !w.slots[o].truce[r.owner]) hostileAdj++; }
+    // Interior regions need little. Every hostile neighbor asks for a real garrison.
+    let need = 20 + 60 * hostileAdj;
+    const strong = (reg: number, tiers: Tier[]): boolean => settlementsIn(w, reg).some((b) => tiers.includes(b.tier) && b.buildT <= 0 && b.team === r.owner);
+    const fortNear = strong(r.id, ['fortress', 'city']) || r.adj.some((a) => strong(a, ['fortress', 'city']));
+    const cityTwo = r.adj.some((a) => w.regions[a].adj.some((b) => strong(b, ['city'])));
+    if (fortNear || cityTwo) need *= 0.5;
     r.need = w.rules.garrison ? need : 0;
   }
   // Connection: every region must trace own-owned regions back to the capital.
   for (let i = 0; i < w.nP; i++) {
+    if (w.slots[i].neutral) continue;
     const cap = w.capitals[i];
     const seen = new Set<number>();
     if (cap >= 0 && w.regions[cap].owner === i) {
@@ -197,38 +464,83 @@ export function conquestTick(w: World, dt: number, mcount: number[]): void {
         for (const a of w.regions[r].adj) if (w.regions[a].owner === i && !seen.has(a)) stack.push(a);
       }
     }
-    for (const r of w.regions) if (r.owner === i) r.connected = !w.rules.connection || seen.has(r.id);
+    for (const r of w.regions) if (r.owner === i) {
+      const was = r.connected;
+      r.connected = !w.rules.connection || seen.has(r.id);
+      if (was && !r.connected && i === 0) pushEvent(w, 'attack', r.name + ' is cut off from the capital', r.cx, r.cy, r.id);
+    }
   }
+  // Unrest.
+  if (w.rules.unrest)
+    for (const r of w.regions) {
+      if (r.owner < 0 || isNeutral(w, r.owner)) continue;
+      const short = r.garrison < r.need;
+      // Shortfall grinds; a broken connection is the emergency. Full shortfall revolts in about 70 seconds.
+      let d = short ? 0.4 + 1.0 * Math.min(1, (r.need - r.garrison) / Math.max(1, r.need)) : -1.5;
+      if (!r.connected) d = Math.max(d, 0) + 1.2;
+      const calm = settlementsIn(w, r.id).some((b) => (b.tier === 'fortress' || b.tier === 'city') && b.buildT <= 0 && b.team === r.owner) || r.adj.some((a) => settlementsIn(w, a).some((b) => (b.tier === 'fortress' || b.tier === 'city') && b.buildT <= 0 && b.team === r.owner));
+      if (calm) d -= 1;
+      const before = r.unrest;
+      r.unrest = Math.max(0, Math.min(100, r.unrest + d * dt));
+      if (r.owner === 0) {
+        if (before < 50 && r.unrest >= 50) pushEvent(w, 'unrest', 'Unrest rising in ' + r.name, r.cx, r.cy, r.id);
+        if (before < 80 && r.unrest >= 80) pushEvent(w, 'unrest', r.name + ' is close to revolt', r.cx, r.cy, r.id);
+      }
+      if (r.unrest >= 100) revolt(w, r);
+    }
   // Construction and upgrades.
-  for (const s of w.slots) for (const b of s.settlements) if (b.hp > 0 && b.buildT > 0) { b.buildT -= dt; if (b.buildT <= 0) { b.buildT = 0; if (b.team === 0) say(w, (b.tier === 'fortress' ? 'Fortress' : 'Village') + ' finished in ' + w.regions[b.region].name, 2); } }
-  // Income minus upkeep, then desertion when broke.
+  for (const s of w.slots) for (const b of s.settlements) if (b.hp > 0 && b.buildT > 0) {
+    b.buildT -= dt;
+    if (b.buildT <= 0) {
+      b.buildT = 0;
+      if (b.team === 0) { const r = w.regions[b.region]; say(w, b.tier[0].toUpperCase() + b.tier.slice(1) + ' finished in ' + r.name, 2); pushEvent(w, 'built', b.tier + ' finished in ' + r.name, b.x, b.y, b.region); }
+    }
+  }
+  neutralsTick(w, dt, byRegion);
+  // Income minus upkeep, materials, then desertion when broke.
   for (let i = 0; i < w.nP; i++) {
     const s = w.slots[i];
-    if (!s.alive) continue;
+    if (!s.alive || s.neutral) continue;
     const net = grossIncome(w, i, mcount) - (w.rules.upkeep ? upkeepRate(w, i) : 0);
+    const was = w.net[i];
     w.net[i] = net;
+    if (i === 0 && was >= 0 && net < 0 && w.tick > 60) pushEvent(w, 'broke', 'Net income is negative', w.slots[0].settlements[0]?.x ?? 0, w.slots[0].settlements[0]?.y ?? 0, w.capitals[0]);
     s.gold += net * dt;
+    s.mat += matRate(w, i) * dt;
     if (s.gold < 0) {
       s.gold = 0;
       w.broke[i] += dt;
       if (w.broke[i] >= 8) {
         w.broke[i] = 0;
-        let worst = null as import('./types.ts').Unit | null;
+        let worst: Unit | null = null;
         for (const u of w.units) if (u.team === i && u.hp > 0 && (!worst || TYPES[u.type].cost > TYPES[worst.type].cost)) worst = u;
         if (worst) { worst.hp = 0; if (i === 0) say(w, TYPES[worst.type].name + ' deserted. You cannot pay the army.', 3); }
       }
     } else w.broke[i] = 0;
   }
-  // Win: hold every rival capital. Loss: no settlements, handled by elim.
+  // Threat events for the player's regions.
+  for (const r of w.regions) {
+    if (r.owner !== 0) continue;
+    const hostile = hostileValueIn(w, byRegion, 0, r.id);
+    const key = 'thr' + r.id;
+    const had = (w as unknown as Record<string, number>)[key] ?? 0;
+    if (hostile > 0 && had === 0) pushEvent(w, 'attack', r.name + ' is under attack', r.cx, r.cy, r.id);
+    (w as unknown as Record<string, number>)[key] = hostile;
+  }
+  diplomacyTick(w, dt, value);
+  // Win: hold every rival capital, or 60% of the world for five minutes. Loss: no settlements, via elim.
   if (!w.over) {
     let rivals = 0, taken = 0;
     for (let i = 1; i < w.nP; i++) {
-      if (allied(w, 0, i)) continue;
+      if (w.slots[i].neutral || allied(w, 0, i)) continue;
       rivals++;
       const cap = w.capitals[i];
-      if (cap >= 0 && w.regions[cap].owner >= 0 && allied(w, w.regions[cap].owner, 0)) taken++;
+      if (cap >= 0 && w.regions[cap].owner >= 0 && w.slots[w.regions[cap].owner].ally === w.slots[0].ally) taken++;
     }
-    if (rivals && taken === rivals) { w.over = 'win'; say(w, 'Every rival capital is yours', 3); }
+    const share = w.regions.filter((r) => r.owner === 0).length / w.regions.length;
+    const hold = (w as unknown as Record<string, number>).holdT ?? 0;
+    (w as unknown as Record<string, number>).holdT = share >= 0.6 ? hold + dt : 0;
+    if (rivals && (taken === rivals || (w as unknown as Record<string, number>).holdT >= 300)) { w.over = 'win'; say(w, taken === rivals ? 'Every rival capital is yours' : 'You have held most of the world', 3); }
   }
 }
 
@@ -237,3 +549,42 @@ export function heldRegions(w: World, slot: number): Region[] {
   return w.regions.filter((r) => r.owner === slot);
 }
 
+/** Lay out a Conquest world for `rivals` rivals plus neutrals. */
+export function populateWorld(w: World, rng: Rng): void {
+  const n = w.neutral;
+  if (n < 0) return;
+  const ns = w.slots[n];
+  const capitals = new Set(w.capitals.filter((c) => c >= 0));
+  const nearCap = new Set<number>();
+  for (const c of capitals) { nearCap.add(c); for (const a of w.regions[c].adj) nearCap.add(a); }
+  let free = w.regions.filter((r) => !nearCap.has(r.id));
+  // Small worlds: anything that is not a capital will do.
+  if (free.length < 3) free = w.regions.filter((r) => !capitals.has(r.id));
+  const shuffled = free.slice();
+  for (let i = shuffled.length - 1; i > 0; i--) { const j = randInt(rng, i + 1); [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]; }
+  const kinds: Tier[] = ['camp', 'village', 'ruin', 'camp', 'village', 'ruin', 'camp'];
+  let k = 0;
+  for (const r of shuffled) {
+    if (k >= kinds.length) break;
+    const tier = kinds[k];
+    let placed = false;
+    for (let t = 0; t < 12 && !placed; t++) {
+      const ang = t * 0.9, rad = t * 6;
+      const x = r.cx + Math.cos(ang) * rad, y = r.cy + Math.sin(ang) * rad;
+      const tx = (x / TILE) | 0, ty = (y / TILE) | 0;
+      if (tx < 3 || ty < 2 || tx >= w.map.cols - 3 || ty >= w.map.rows - 2) continue;
+      // World generation may flatten rock and drain water for the neutrals' homes.
+      for (let yy = ty - 1; yy <= ty + 1; yy++) for (let xx = tx - 2; xx <= tx + 2; xx++) w.map.tiles[yy * w.map.cols + xx] = 0;
+      if (canPlaceSettlement(w, tx, ty) === null) { placeSettlement(w, n, x, y, tier, true); placed = true; }
+    }
+    if (placed) k++;
+  }
+  ns.gold = 0;
+}
+
+export function mkNeutralSlot(w: World): Slot {
+  return {
+    ally: 99, race: 'horde', diff: w.diff, alive: true, gold: 0, settlements: [], ai: false, aiT: 0, aiWant: null, aiLast: 0, queue: [], rally: null, mat: 0, neutral: true,
+    attitude: w.slots.map(() => -100), truce: w.slots.map(() => false), truceT: w.slots.map(() => 0),
+  };
+}

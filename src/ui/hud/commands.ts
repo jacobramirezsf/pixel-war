@@ -52,14 +52,17 @@ export function wireCommands(app: App): void {
     app.ui.updateUI();
     say(app, 'Tap the map to set where new units gather', 2);
   });
-  const toolToggle = (tool: 'settle' | 'upgrade', hint: string): void => {
+  const toolToggle = (tool: 'settle' | 'outpost' | 'upgrade' | 'absorb', hint: string): void => {
     if (!live()) return;
     app.tool = app.tool === tool ? 'cmd' : tool;
     app.ui.updateUI();
     if (app.tool === tool) say(app, hint, 2.5);
   };
-  on($('bSettle'), 'click', () => toolToggle('settle', 'Tap open ground in a region next to yours. 150 gold. Hold it 30s to claim.'));
-  on($('bFort'), 'click', () => toolToggle('upgrade', 'Tap one of your villages to upgrade it. 300 gold, 45s, weak while it builds.'));
+  on($('bSettle'), 'click', () => toolToggle('settle', 'Tap open ground in a region next to yours. 150 gold, 50 materials. Hold it 30s to claim.'));
+  on($('bOutpost'), 'click', () => toolToggle('outpost', 'Tap open ground next to your land. 50 gold, 20 materials, claims but makes nothing.'));
+  on($('bFort'), 'click', () => toolToggle('upgrade', 'Tap a settlement of yours to grow it: outpost, village, fortress, city. Weak while it builds.'));
+  on($('bAbsorb'), 'click', () => toolToggle('absorb', 'Tap an independent village with your units beside it. 200 gold, it joins intact.'));
+  on($('bTerr'), 'click', () => { app.terrOpen = !app.terrOpen; app.ui.updateUI(); });
   on($('bSave'), 'click', () => { say(app, saveConquest(app) ? 'Saved' : 'Nothing to save', 1.2); });
   on($('bLand'), 'click', () => { app.overlay = !app.overlay; app.ui.updateUI(); });
   on($('bSpeed'), 'click', () => { app.speed = app.speed >= 4 ? 1 : app.speed * 2; app.ui.updateUI(); });

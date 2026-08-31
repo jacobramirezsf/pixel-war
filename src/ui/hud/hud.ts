@@ -5,7 +5,7 @@ import { DIFF } from '../../data/difficulty.ts';
 import { TOOLS, type EditorTool } from '../../data/maps.ts';
 import { TNAME } from '../../data/teams.ts';
 import { ALL_UNITS, roster, TYPES, type UnitKey } from '../../data/units.ts';
-import { buildTime } from '../../sim/units.ts';
+import { buildTime, maxHp } from '../../sim/units.ts';
 import { RACES } from '../../data/races.ts';
 import { drawBldSpr, drawSprite } from '../../render/atlas.ts';
 import { drawTile } from '../../render/terrain.ts';
@@ -13,6 +13,8 @@ import { allied, count } from '../../sim/world.ts';
 import { centerOn, setZoom } from '../../render/camera.ts';
 import { minimapToWorld } from '../../render/minimap.ts';
 import { ctlRace, fit, issueAction, say, selectedUnits, type App } from '../app.ts';
+import { popCap, popUsed, matRate } from '../../sim/conquest.ts';
+import { renderTerritory, updateTerritoryVisibility } from '../territory.ts';
 import { $, on, show } from '../dom.ts';
 import { focusBase } from '../input/hotkeys.ts';
 
@@ -125,7 +127,7 @@ export function updateUI(app: App): void {
   const vis: Record<string, boolean> = {
     bAll: !map && !edit, bCharge: !map && !edit, bHold: !map && !edit, bRetreat: !map && !edit, bRally: !map && !edit && !sand, bPause: !map && !edit, bEdit: sand && !edit,
     bG1: !map && !edit && !sand, bG2: !map && !edit && !sand, bG3: !map && !edit && !sand,
-    bSettle: conq, bFort: conq, bSave: conq, bLand: conq, bSpeed: conq,
+    bSettle: conq, bOutpost: conq, bFort: conq, bAbsorb: conq, bTerr: conq, bSave: conq, bLand: conq, bSpeed: conq,
     bErase: sand && edit, bMirror: sand && edit, bClear: sand && edit, bMap: sand && edit, bPlay: sand && edit,
     bSize: map, bRandom: map, bMirrorMap: map, bClearMap: map, bCode: map, bDone: map,
   };
@@ -141,7 +143,11 @@ export function updateUI(app: App): void {
   B('bErase').classList.toggle('on', app.tool === 'erase');
   B('bRally').classList.toggle('on', app.tool === 'rally');
   B('bSettle').classList.toggle('on', app.tool === 'settle');
+  B('bOutpost').classList.toggle('on', app.tool === 'outpost');
   B('bFort').classList.toggle('on', app.tool === 'upgrade');
+  B('bAbsorb').classList.toggle('on', app.tool === 'absorb');
+  B('bTerr').classList.toggle('on', app.terrOpen);
+  updateTerritoryVisibility(app);
   B('bLand').classList.toggle('on', app.overlay);
   B('bSpeed').textContent = app.speed + '×';
   for (const n of [1, 2, 3]) B('bG' + n).classList.toggle('has', app.groups.has(n));
@@ -184,7 +190,7 @@ function renderSelCard(app: App): void {
   if (!sel.length) { if (el.textContent) el.textContent = ''; return; }
   const comp = new Map<string, number>();
   let hp = 0, max = 0;
-  for (const u of sel) { comp.set(u.type, (comp.get(u.type) ?? 0) + 1); hp += u.hp; max += TYPES[u.type].hp; }
+  for (const u of sel) { comp.set(u.type, (comp.get(u.type) ?? 0) + 1); hp += u.hp; max += maxHp(u); }
   const parts = [...comp.entries()].sort((a, b) => b[1] - a[1]).map(([k, n]) => n + ' ' + TYPES[k].name);
   el.innerHTML = '<b>' + sel.length + '</b> ' + parts.join(', ') + ' · ' + Math.round((100 * hp) / max) + '% hp';
 }
@@ -213,9 +219,12 @@ export function renderHud(app: App): void {
     if (w.mode === 'conquest') {
       const net = w.net[0];
       const secs = net < 0 ? gold / -net : Infinity;
-      tl.innerHTML = 'Gold <b>' + Math.floor(gold) + '</b> <span class="net' + (net < 0 ? ' neg' : '') + '">' + (net >= 0 ? '+' : '') + net.toFixed(1) + '/s</span>' + (secs < 60 ? ' <span class="warn">' + Math.ceil(secs) + 's of gold left</span>' : '');
-      const held = w.regions.filter((r) => r.owner === 0), broken = held.filter((r) => !r.connected).length, weak = held.filter((r) => r.garrison < r.need).length;
-      wave.textContent = 'Regions ' + held.length + '/' + w.regions.length + (broken ? ' · ' + broken + ' cut off' : '') + (weak ? ' · ' + weak + ' undermanned' : '');
+      const mat = w.rules.materials ? ' <span class="mat">Mat ' + Math.floor(w.slots[0].mat) + ' +' + matRate(w, 0).toFixed(1) + '</span>' : '';
+      const pop = w.rules.population ? ' <span class="pop">Pop ' + popUsed(w, 0) + '/' + popCap(w, 0) + '</span>' : '';
+      tl.innerHTML = 'Gold <b>' + Math.floor(gold) + '</b> <span class="net' + (net < 0 ? ' neg' : '') + '">' + (net >= 0 ? '+' : '') + net.toFixed(1) + '/s</span>' + (secs < 60 ? ' <span class="warn">' + Math.ceil(secs) + 's left</span>' : '') + mat + pop;
+      const held = w.regions.filter((r) => r.owner === 0), broken = held.filter((r) => !r.connected).length, weak = held.filter((r) => r.garrison < r.need).length, angry = held.filter((r) => r.unrest >= 50).length;
+      wave.textContent = 'Regions ' + held.length + '/' + w.regions.length + (broken ? ' · ' + broken + ' cut off' : '') + (weak ? ' · ' + weak + ' undermanned' : '') + (angry ? ' · ' + angry + ' restless' : '');
+      renderTerritory(app);
     } else {
     tl.innerHTML = 'Gold <b>' + (Number.isFinite(gold) ? Math.floor(gold) : '∞') + '</b> <span class="inc' + (w.incFlash > 0 ? ' flash' : '') + '">+' + w.income.toFixed(1) + '/s</span> <span class="race">' + RACES[w.slots[0].race].name + '</span>';
     if (w.mode === 'dom') wave.textContent = '⚑ ' + Math.floor(w.score[0]) + ':' + Math.floor(w.score[1]) + ' of 150';

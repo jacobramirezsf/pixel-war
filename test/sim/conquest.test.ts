@@ -11,7 +11,12 @@ import { deserialize, restore, serialize, snapshot, stateString } from '../../sr
 import { mkUnit } from '../../src/sim/units.ts';
 import { act, run, ticks } from './helpers.ts';
 
-const conquest = (seed = 3) => newGame({} as never, 'conquest', { seed });
+// The slice: later systems off, no neutrals, so these tests read like the M7 document.
+const conquest = (seed = 3) => {
+  const w = newGame({} as never, 'conquest', { seed, rules: { unrest: false, materials: false, population: false, diplomacy: false, veterancy: false } });
+  if (w.neutral >= 0) w.slots[w.neutral].settlements = [];
+  return w;
+};
 
 test('the slice world has nine regions, every tile assigned, capitals in opposite corners', () => {
   const w = conquest();
@@ -113,7 +118,10 @@ test('save, reload, and continue identically', () => {
 
 test('the rival expands and the game can be won by taking its capital', () => {
   const w = conquest(5);
+  const home = w.slots[0].settlements[0];
+  for (let i = 0; i < 8; i++) w.units.push(mkUnit(w, 0, 'kni', home.x + i * 8 - 28, home.y - 24));
   run(w, 240);
+  assert.equal(w.over, null, 'still playing');
   assert.ok(w.slots[1].settlements.length >= 2 || w.regions.filter((r) => r.owner === 1).length >= 2, 'rival settled: ' + w.slots[1].settlements.length);
   // Hand the player the rival capital region.
   for (const b of w.slots[1].settlements) b.hp = 0;

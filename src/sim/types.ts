@@ -9,7 +9,7 @@ import type { MapDef } from './map.ts';
 import type { Rng } from './rng.ts';
 
 export type Mode = 'skirmish' | 'multi' | 'dom' | 'rich' | 'sand' | 'conquest';
-export type Tier = 'village' | 'fortress';
+export type Tier = 'outpost' | 'village' | 'fortress' | 'city' | 'camp' | 'ruin';
 export type Phase = 'play' | 'edit';
 export type Outcome = 'win' | 'lose' | null;
 
@@ -27,6 +27,19 @@ export interface Settlement {
   region: number;
   /** Seconds of construction or upgrade left. Production and income pause while it runs. */
   buildT: number;
+  /** Last team to damage this settlement, for loot. */
+  hitBy: number;
+  /** Neutral timers: seconds until a camp raids again, or seconds a ruin has been held. */
+  nT: number;
+}
+
+export interface GameEvent {
+  tick: number;
+  kind: 'attack' | 'unrest' | 'built' | 'broke' | 'war' | 'truce' | 'revolt' | 'raid' | 'claim' | 'lost' | 'loot';
+  text: string;
+  x: number;
+  y: number;
+  region: number;
 }
 
 /** A Conquest region: the unit of ownership, upkeep, and garrison. */
@@ -47,6 +60,10 @@ export interface Region {
   /** Own army value inside, and what holding it asks for. */
   garrison: number;
   need: number;
+  /** 0 to 100. At 100 the region revolts. */
+  unrest: number;
+  /** Materials per second the land yields to its owner. */
+  mat: number;
 }
 
 export interface Rules {
@@ -54,6 +71,10 @@ export interface Rules {
   connection: boolean;
   garrison: boolean;
   unrest: boolean;
+  materials: boolean;
+  population: boolean;
+  diplomacy: boolean;
+  veterancy: boolean;
 }
 
 export interface Building {
@@ -120,6 +141,8 @@ export interface Unit {
   dropT: number;
   /** Index in the unit array this tick. Transient. */
   ix: number;
+  /** Kills, for veterancy. */
+  kills: number;
 }
 
 export interface Mine {
@@ -149,6 +172,16 @@ export interface Slot {
   queue: QueueItem[];
   /** Where new units walk to after spawning. Null means they stay at the gate. */
   rally: { x: number; y: number } | null;
+  /** Materials, the second Conquest resource. */
+  mat: number;
+  /** Bandits, independents, and rebels. Never eliminated, never a rival. */
+  neutral: boolean;
+  /** Attitude toward each slot, -100 to 100. */
+  attitude: number[];
+  /** Truce with each slot. Truced factions do not fight. */
+  truce: boolean[];
+  /** Sim time each truce began, for peace. */
+  truceT: number[];
 }
 
 export interface QueueItem {
@@ -167,7 +200,8 @@ export type Fx =
   | { k: 'boom'; x: number; y: number; r: number; t: number }
   | { k: 'heal'; x: number; y: number; t: number }
   | { k: 'fix'; x: number; y: number; t: number }
-  | { k: 'txt'; x: number; y: number; t: number; str: string; c: string };
+  | { k: 'txt'; x: number; y: number; t: number; str: string; c: string }
+  | { k: 'dmg'; x: number; y: number; t: number; n: number };
 
 /** Sandbox army layout, restored on replay and on return to edit. */
 export interface SandSnap {
@@ -233,6 +267,12 @@ export interface World {
   broke: number[];
   /** Capital region per slot in Conquest. */
   capitals: number[];
+  /** Things that happened, for the event queue and auto-pause. */
+  events: GameEvent[];
+  /** Index of the neutral slot in Conquest, or -1. */
+  neutral: number;
+  /** Terrain changed; the renderer rebuilds its background. Transient. */
+  mapDirty: boolean;
 }
 
 export interface TargetRef {
@@ -243,7 +283,9 @@ export interface TargetRef {
 export type Action =
   | { type: 'buy'; payload: { unit: UnitKey; held?: boolean } }
   | { type: 'cancel'; payload: { index: number } }
-  | { type: 'settle'; payload: { x: number; y: number } }
+  | { type: 'settle'; payload: { x: number; y: number; tier?: 'outpost' | 'village' } }
+  | { type: 'absorb'; payload: { id: number } }
+  | { type: 'truce'; payload: { slot: number; offer: boolean } }
   | { type: 'upgrade'; payload: { id: number } }
   | { type: 'rally'; payload: { x: number; y: number } | null }
   | { type: 'move'; payload: { ids: number[]; x: number; y: number } }

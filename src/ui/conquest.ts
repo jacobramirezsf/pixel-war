@@ -2,7 +2,7 @@
 
 import { deserialize, restore, serialize, snapshot } from '../sim/world.ts';
 import { newGame } from '../sim/game.ts';
-import { hideOverlay, loadMap, type App } from './app.ts';
+import { hideOverlay, loadMap, randomRace, type App } from './app.ts';
 
 export const SAVE_KEY = 'conquest-save';
 
@@ -31,6 +31,8 @@ function enter(app: App): void {
   app.bstrip = false;
   app.drag = null;
   app.overlay = true;
+  app.terrOpen = false;
+  app.seenEvents = app.world!.events.length;
   loadMap(app, app.world!.map);
   hideOverlay();
   app.ui.updateUI();
@@ -38,7 +40,9 @@ function enter(app: App): void {
 }
 
 export function startConquest(app: App): void {
-  app.world = newGame({} as never, 'conquest', { seed: (Math.random() * 2 ** 31) | 0, diff: app.diff, races: [app.race, app.foeRace ?? app.race] });
+  const rivals = app.rivals;
+  const races = [app.race, ...Array.from({ length: rivals }, () => app.foeRace ?? randomRace())];
+  app.world = newGame({} as never, 'conquest', { seed: (Math.random() * 2 ** 31) | 0, diff: app.diff, races, rivals });
   app.brush = app.world.slots[0].race === 'kingdom' ? 'inf' : app.brush;
   enter(app);
 }

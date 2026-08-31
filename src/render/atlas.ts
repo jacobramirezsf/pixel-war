@@ -7,6 +7,11 @@ import type { BldKey } from '../data/buildings.ts';
 
 const cache = new Map<string, HTMLCanvasElement>();
 
+/** Drop every cached sprite, for palette changes. */
+export function clearAtlas(): void {
+  cache.clear();
+}
+
 function renderSprite(type: UnitKey, team: number, white: boolean): HTMLCanvasElement {
   const rows = SPR[type], n = rows.length;
   const c = document.createElement('canvas');

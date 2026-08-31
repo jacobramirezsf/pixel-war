@@ -5,6 +5,7 @@ import { TYPES, unitVisible } from '../data/units.ts';
 import { TILE, type MapDef } from '../sim/map.ts';
 import type { Building, Mine, Settlement, World } from '../sim/types.ts';
 import { BASE_HP, mapH } from '../sim/world.ts';
+import { maxHp, rank } from '../sim/units.ts';
 import { drawBldSpr, drawSprite } from './atlas.ts';
 import { snapped, type Camera } from './camera.ts';
 import { drawFx } from './fx.ts';
@@ -18,10 +19,35 @@ export interface DragRect {
 
 function drawBase(ctx: CanvasRenderingContext2D, b: Settlement, H: number): void {
   const x = b.x - 12, y = b.y - 8;
-  if (b.tier === 'fortress' && b.hp > 0) {
+  if (b.tier === 'ruin') {
+    ctx.fillStyle = '#5a5d6a'; ctx.fillRect(x + 2, y + 8, 6, 8); ctx.fillRect(x + 14, y + 4, 4, 12); ctx.fillRect(x + 8, y + 12, 12, 4);
+    ctx.fillStyle = '#8a8f9c'; ctx.fillRect(x + 2, y + 8, 6, 1); ctx.fillRect(x + 14, y + 4, 4, 1);
+    if (b.nT > 0) { ctx.fillStyle = '#f2d34a'; ctx.fillRect(x, y - 3, Math.round((24 * b.nT) / 5), 2); }
+    return;
+  }
+  if (b.tier === 'camp') {
+    ctx.fillStyle = '#5b3d1e'; ctx.fillRect(x + 2, y + 6, 20, 10);
+    ctx.fillStyle = '#8a5a2b'; ctx.fillRect(x + 4, y + 2, 16, 5);
+    ctx.fillStyle = '#ff8c2a'; ctx.fillRect(x + 10, y + 10, 4, 4);
+    ctx.fillStyle = '#c0392b'; ctx.fillRect(x + 20, y - 4, 4, 3); ctx.fillStyle = '#dde2ec'; ctx.fillRect(x + 19, y - 4, 1, 8);
+    ctx.fillStyle = '#111'; ctx.fillRect(x, y - 9, 24, 2);
+    ctx.fillStyle = '#c0392b'; ctx.fillRect(x, y - 9, Math.round((24 * b.hp) / b.max), 2);
+    return;
+  }
+  if (b.tier === 'outpost' && b.hp > 0) {
+    ctx.fillStyle = '#5b3d1e'; ctx.fillRect(x + 6, y + 2, 12, 14);
+    ctx.fillStyle = '#8a5a2b'; ctx.fillRect(x + 6, y + 2, 12, 2);
+    ctx.fillStyle = TEAM[b.team]; ctx.fillRect(x + 17, y - 4, 4, 3); ctx.fillStyle = '#dde2ec'; ctx.fillRect(x + 16, y - 4, 1, 8);
+    ctx.fillStyle = '#111'; ctx.fillRect(x, y - 9, 24, 2);
+    ctx.fillStyle = TEAM[b.team]; ctx.fillRect(x, y - 9, Math.round((24 * b.hp) / b.max), 2);
+    if (b.buildT > 0) { ctx.fillStyle = '#f2d34a'; ctx.fillRect(x, y - 12, 24, 1); }
+    return;
+  }
+  if ((b.tier === 'fortress' || b.tier === 'city') && b.hp > 0) {
     // A fortress gets a second story and corner towers.
     ctx.fillStyle = '#4a4f5e'; ctx.fillRect(x - 3, y - 2, 30, 20);
     ctx.fillStyle = '#6e7480'; ctx.fillRect(x - 3, y - 2, 4, 6); ctx.fillRect(x + 23, y - 2, 4, 6); ctx.fillRect(x - 3, y + 12, 4, 6); ctx.fillRect(x + 23, y + 12, 4, 6);
+    if (b.tier === 'city') { ctx.fillStyle = '#9aa0ae'; ctx.fillRect(x + 2, y - 6, 20, 5); ctx.fillStyle = '#f2d34a'; ctx.fillRect(x + 10, y - 8, 4, 2); }
   }
   if (b.hp <= 0) {
     ctx.fillStyle = '#2c2f3a'; ctx.fillRect(x, y + 6, 24, 10);
@@ -91,8 +117,8 @@ function drawBld(ctx: CanvasRenderingContext2D, b: Building): void {
 }
 
 /** Set the world transform and clear the viewport. Returns the visible world rect. */
-function beginView(ctx: CanvasRenderingContext2D, cam: Camera, dpr: number): { x0: number; y0: number; x1: number; y1: number } {
-  const z = cam.zoom * dpr, o = snapped(cam);
+function beginView(ctx: CanvasRenderingContext2D, cam: Camera, dpr: number, shake = { x: 0, y: 0 }): { x0: number; y0: number; x1: number; y1: number } {
+  const z = cam.zoom * dpr, o = { x: snapped(cam).x + shake.x, y: snapped(cam).y + shake.y };
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, cam.vw * dpr, cam.vh * dpr);
@@ -113,7 +139,7 @@ export function drawEditor(ctx: CanvasRenderingContext2D, bg: HTMLCanvasElement,
   for (let y = TILE; y < H; y += TILE) { ctx.moveTo(0, y + 0.5); ctx.lineTo(W, y + 0.5); }
   ctx.stroke();
   for (const q of m.mines) drawMine(ctx, { x: q.tx * TILE + 4, y: q.ty * TILE + 4, owner: -1, prev: -1 });
-  m.bases.forEach((b, i) => drawBase(ctx, { ent: 'base', id: 0, team: i, x: b.tx * TILE + 4, y: b.ty * TILE + 4, hp: BASE_HP, max: BASE_HP, cd: 0, tier: 'village', region: -1, buildT: 0 }, H));
+  m.bases.forEach((b, i) => drawBase(ctx, { ent: 'base', id: 0, team: i, x: b.tx * TILE + 4, y: b.ty * TILE + 4, hp: BASE_HP, max: BASE_HP, cd: 0, tier: 'village', region: -1, buildT: 0, hitBy: -1, nT: 0 }, H));
 }
 
 export interface ViewState {
@@ -130,6 +156,9 @@ export interface ViewState {
   dpr: number;
   /** Territory overlay with region outlines and names. */
   overlay: boolean;
+  damageNumbers: boolean;
+  /** Screen shake offset in world pixels. */
+  shake: { x: number; y: number };
 }
 
 let tintCanvas: HTMLCanvasElement | null = null, tintKey = '';
@@ -168,7 +197,7 @@ function tintLayer(w: World): HTMLCanvasElement | null {
 
 export function drawWorld(ctx: CanvasRenderingContext2D, bg: HTMLCanvasElement, w: World, v: ViewState): void {
   const { drag, alpha, cam } = v;
-  const r = beginView(ctx, cam, v.dpr);
+  const r = beginView(ctx, cam, v.dpr, v.shake);
   const vis = (x: number, y: number, pad = 16): boolean => x > r.x0 - pad && x < r.x1 + pad && y > r.y0 - pad && y < r.y1 + pad;
   ctx.drawImage(bg, 0, 0);
   if (w.regionOf && (v.overlay || w.regions.some((r) => r.contested))) { const t = tintLayer(w); if (t) ctx.drawImage(t, 0, 0); }
@@ -193,10 +222,13 @@ export function drawWorld(ctx: CanvasRenderingContext2D, bg: HTMLCanvasElement, 
     if (v.selection.has(u.id)) { ctx.strokeStyle = '#7dff7d'; ctx.strokeRect(x - 1.5, y - 1.5, sz + 3, sz + 3); }
     else if (v.hover === u.id) { ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.strokeRect(x - 1.5, y - 1.5, sz + 3, sz + 3); }
     drawSprite(ctx, u.type, u.team, x, y, 1, u.flash > 0);
-    if (u.hp < T.hp) {
+    const M = maxHp(u);
+    if (u.hp < M) {
       ctx.fillStyle = '#111'; ctx.fillRect(x, y - 3, sz, 2);
-      ctx.fillStyle = TEAM[u.team]; ctx.fillRect(x, y - 3, Math.max(1, Math.round((sz * u.hp) / T.hp)), 2);
+      ctx.fillStyle = TEAM[u.team]; ctx.fillRect(x, y - 3, Math.max(1, Math.round((sz * u.hp) / M)), 2);
     }
+    const rk = w.rules.veterancy ? rank(u) : 0;
+    if (rk) { ctx.fillStyle = '#f2d34a'; for (let i = 0; i < rk; i++) ctx.fillRect(x + sz - 2 - i * 2, y - 5, 1, 1); }
     if (u.rootT > 0) { ctx.fillStyle = '#4caf50'; ctx.fillRect(x, y + sz - 1, sz, 1); }
     else if (u.slowT > 0) { ctx.fillStyle = '#dde2ec'; ctx.fillRect(x, y + sz - 1, sz, 1); }
     if (hidden) ctx.globalAlpha = 1;
@@ -226,7 +258,7 @@ export function drawWorld(ctx: CanvasRenderingContext2D, bg: HTMLCanvasElement, 
     ctx.fillStyle = TEAM[v.viewer]; ctx.fillRect(rally.x + 1, rally.y - 8, 4, 3);
     ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.strokeRect(rally.x - 3.5, rally.y - 2.5, 7, 4);
   }
-  drawFx(ctx, w.fx);
+  drawFx(ctx, w.fx, { damageNumbers: v.damageNumbers });
   if (drag) {
     ctx.fillStyle = 'rgba(125,255,125,.14)'; ctx.fillRect(drag.x, drag.y, drag.w, drag.h);
     ctx.strokeStyle = '#7dff7d'; ctx.strokeRect(drag.x + 0.5, drag.y + 0.5, drag.w, drag.h);

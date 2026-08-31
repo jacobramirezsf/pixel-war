@@ -9,7 +9,7 @@ import { applyCommand, cmd } from '../commands.ts';
 import { rand } from '../rng.ts';
 import type { Settlement, Unit, World } from '../types.ts';
 import { allied, slotDiff } from '../world.ts';
-import { canSettle, TIERS } from '../conquest.ts';
+import { canAbsorb, canSettle, NEXT_TIER, TIERS } from '../conquest.ts';
 import { pickUnit, roleMix } from './composition.ts';
 import { PROFILES, type AiProfile } from './profiles.ts';
 import { hostileValueNear, mineTargets, moveTo, nearestHostileBase, order, ownValueNear, pullBack, rallyPoint } from './tactics.ts';
@@ -95,14 +95,19 @@ function settleCandidates(w: World, slot: number): import('../types.ts').Region[
 /** Conquest: with a free region next door and a standing army, hold gold back for a village. */
 function savingForLand(w: World, slot: number, a: Assessment): boolean {
   if (w.mode !== 'conquest' || a.threat > 0 || a.own.length < 4) return false;
-  return settleCandidates(w, slot).length > 0 && w.slots[slot].gold < TIERS.village.cost + 60;
+  return settleCandidates(w, slot).length > 0 && w.slots[slot].gold < TIERS.village.gold + 60;
 }
 
 /** Conquest: settle the nearest adjacent free region when the treasury allows, upgrade a border village when rich. */
 function expandTerritory(w: World, slot: number, a: Assessment): boolean {
   const s = w.slots[slot];
   if (w.mode !== 'conquest' || a.threat > 0) return false;
-  if (s.gold >= TIERS.village.cost + 60 && w.net[slot] > 0.5) {
+  const canAfford = (t: 'outpost' | 'village' | 'fortress' | 'city'): boolean => s.gold >= TIERS[t].gold + 60 && (!w.rules.materials || s.mat >= TIERS[t].mat);
+  // Independents next door join for gold rather than blood.
+  if (w.neutral >= 0 && s.gold >= 260) {
+    for (const b of w.slots[w.neutral].settlements) if (b.hp > 0 && b.tier === 'village' && !canAbsorb(w, slot, b)) { applyCommand(w, cmd(w, slot, { type: 'absorb', payload: { id: b.id } }), true); return true; }
+  }
+  if (canAfford('village') && w.net[slot] > 0.5) {
     const own = w.regions.filter((r) => r.owner === slot);
     const cands = settleCandidates(w, slot);
     const home = s.settlements.find((b) => b.hp > 0);
@@ -115,10 +120,15 @@ function expandTerritory(w: World, slot: number, a: Assessment): boolean {
         if (!canSettle(w, slot, x, y)) { applyCommand(w, cmd(w, slot, { type: 'settle', payload: { x, y } }), true); return true; }
       }
     }
-    if (own.length && s.gold >= TIERS.fortress.cost + 120) {
+    if (own.length && canAfford('fortress') && s.gold >= TIERS.fortress.gold + 120) {
       const v = s.settlements.find((b) => b.hp > 0 && b.tier === 'village' && b.buildT <= 0 && w.regions[b.region].adj.some((x) => { const o = w.regions[x].owner; return o >= 0 && !allied(w, o, slot); }));
       if (v) { applyCommand(w, cmd(w, slot, { type: 'upgrade', payload: { id: v.id } }), true); return true; }
     }
+  }
+  // A city at the capital once the frontier is settled.
+  if (canAfford('city') && s.gold >= TIERS.city.gold + 150 && !s.settlements.some((b) => b.tier === 'city')) {
+    const cap = s.settlements.find((b) => b.hp > 0 && b.buildT <= 0 && NEXT_TIER[b.tier] === 'city');
+    if (cap) { applyCommand(w, cmd(w, slot, { type: 'upgrade', payload: { id: cap.id } }), true); return true; }
   }
   return false;
 }

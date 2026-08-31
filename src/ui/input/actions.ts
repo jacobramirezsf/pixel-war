@@ -77,8 +77,17 @@ export function toolAt(app: App, x: number, y: number, ts: ToolState, first: boo
     return true;
   }
   if (app.tool === 'sell') { if (first) issueAction(app, { type: 'sell', payload: { x, y } }); return true; }
-  if (app.tool === 'settle') {
-    if (first) { if (issueAction(app, { type: 'settle', payload: { x, y } })) { app.tool = 'cmd'; app.ui.updateUI(); } }
+  if (app.tool === 'settle' || app.tool === 'outpost') {
+    if (first) { if (issueAction(app, { type: 'settle', payload: { x, y, tier: app.tool === 'outpost' ? 'outpost' : 'village' } })) { app.tool = 'cmd'; app.ui.updateUI(); } }
+    return true;
+  }
+  if (app.tool === 'absorb') {
+    if (first) {
+      const w2 = app.world!;
+      const b = w2.neutral >= 0 ? w2.slots[w2.neutral].settlements.find((q) => q.hp > 0 && Math.abs(q.x - x) < 16 && Math.abs(q.y - y) < 12) : undefined;
+      if (b) { if (issueAction(app, { type: 'absorb', payload: { id: b.id } })) { app.tool = 'cmd'; app.ui.updateUI(); } }
+      else say(app, 'Tap an independent village', 1.2);
+    }
     return true;
   }
   if (app.tool === 'upgrade') {
@@ -106,5 +115,5 @@ export function toolAt(app: App, x: number, y: number, ts: ToolState, first: boo
 }
 
 export function usesTool(app: App): boolean {
-  return !!app.editor || app.tool === 'build' || app.tool === 'sell' || app.tool === 'rally' || app.tool === 'settle' || app.tool === 'upgrade' || app.world?.phase === 'edit';
+  return !!app.editor || app.tool !== 'cmd' || app.world?.phase === 'edit';
 }

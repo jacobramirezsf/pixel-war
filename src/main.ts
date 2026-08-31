@@ -4,11 +4,16 @@ import { registerServiceWorker } from './platform/sw.ts';
 import { updateCam } from './render/camera.ts';
 import { drawMinimap } from './render/minimap.ts';
 import { drawEditor, drawWorld } from './render/scene.ts';
+import { buildBg } from './render/terrain.ts';
 import { step } from './sim/step.ts';
 import { DT } from './sim/world.ts';
 import { createApp, fit, loadMap } from './ui/app.ts';
 import { startBench } from './ui/bench.ts';
 import { autosaveTick, wireAutosave } from './ui/conquest.ts';
+import { watchEvents } from './ui/territory.ts';
+import { synth } from './audio/synth.ts';
+import { applySettings } from './ui/menus/settings.ts';
+import { soundTick, shakeTick } from './ui/feedback.ts';
 import { $ } from './ui/dom.ts';
 import { wireCommands } from './ui/hud/commands.ts';
 import { buildHints, updateHints } from './ui/hud/hint.ts';
@@ -25,6 +30,8 @@ const app = createApp(createStorage());
 app.ui = { updateUI: () => updateUI(app), showMenu: () => showMenu(app), endScreen: () => endScreen(app) };
 
 applyLayout(app.layout);
+applySettings(app);
+for (const ev of ['pointerdown', 'keydown', 'touchend']) window.addEventListener(ev, () => synth.unlock(), { passive: true });
 buildStrips(app);
 buildHints(app);
 wireCommands(app);
@@ -58,12 +65,16 @@ function loop(ts: number): void {
       while (acc >= DT && n < maxSteps) { step(w); acc -= DT; n++; }
       if (n === maxSteps) acc = 0;
       autosaveTick(app);
+      watchEvents(app);
     } else acc = 0;
     if (w.over && !overShown) { overShown = true; app.running = false; setTimeout(() => app.ui.endScreen(), 700); }
     if (!w.over) overShown = false;
+    if (w.mapDirty) { buildBg(w.map, app.bg); w.mapDirty = false; }
     updateCam(app.cam, frame);
     edgePan(app, frame);
-    drawWorld(app.ctx, app.bg, w, { drag: app.drag, alpha: app.running && !app.paused ? Math.min(1, acc / DT) : 1, selection: app.selection, paused: app.paused, viewer: app.ctl, hover: app.hover, cam: app.cam, dpr: app.dpr, overlay: app.overlay });
+    soundTick(app, w);
+    const shake = shakeTick(app, w, frame);
+    drawWorld(app.ctx, app.bg, w, { drag: app.drag, alpha: app.running && !app.paused ? Math.min(1, acc / DT) : 1, selection: app.selection, paused: app.paused, viewer: app.ctl, hover: app.hover, cam: app.cam, dpr: app.dpr, overlay: app.overlay, damageNumbers: app.settings.damageNumbers, shake });
     drawMinimap($<HTMLCanvasElement>('mini'), app.minimap, w.map, w, app.cam, MINI(), app.dpr);
   } else if (app.editor) {
     if (app.msgT > 0) app.msgT -= frame;

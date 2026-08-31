@@ -5,6 +5,8 @@ import { TEAM, TNAME } from '../data/teams.ts';
 import { TYPES, unitVisible, type UnitDef } from '../data/units.ts';
 import { removeBld } from './buildings.ts';
 import { rnd } from './rng.ts';
+import { onSettlementDeath } from './conquest.ts';
+import { maxHp, rank } from './units.ts';
 import { forNear, gridOf, nearestHostileWithin } from './spatial.ts';
 import type { Settlement, Target, Unit, World, Building } from './types.ts';
 import { allied, hasLivingSettlement, say } from './world.ts';
@@ -20,10 +22,13 @@ export function targetsFor(w: World, team: number): Target[] {
 /** Hostile towers and bases for a team. Small list, cached per slot per tick by the step. */
 export function staticTargets(w: World, team: number): (Building | Settlement)[] {
   const a: (Building | Settlement)[] = [];
+  // Bandits and rebels raid people, not walls. They never lay siege.
+  if (w.slots[team].neutral) return a;
   for (const b of w.blds) if (!allied(w, b.team, team) && b.kind === 'tower' && b.hp > 0) a.push(b);
   for (let i = 0; i < w.nP; i++) {
     if (allied(w, i, team) || !w.slots[i].alive) continue;
-    for (const s of w.slots[i].settlements) if (s.hp > 0) a.push(s);
+    const passive = w.slots[i].neutral;
+    for (const s of w.slots[i].settlements) if (s.hp > 0 && !(passive && s.tier !== 'camp')) a.push(s);
   }
   return a;
 }
@@ -34,27 +39,28 @@ export function edist(u: { x: number; y: number }, t: Target): number {
   return t.ent === 'base' ? Math.max(0, d - 10) : t.ent === 'bld' ? Math.max(0, d - 4) : d;
 }
 
-/** Per-tick targeting caches built by the step. */
+/** Per-tick targeting caches built by the step. Truces count: a truced faction is not hostile. */
 export interface TargetCache {
-  /** Alliance id per slot. */
-  allyOf: number[];
-  /** Visible hostile units per alliance id, in world order. */
-  hostiles: Map<number, Unit[]>;
+  /** hostile[slot][team]: does `slot` fight `team`. */
+  hostile: boolean[][];
+  /** Visible hostile units per slot, in world order. */
+  hostiles: Unit[][];
   /** Hostile towers and bases per slot. */
   statics: (Building | Settlement)[][];
 }
 
 export function buildTargetCache(w: World): TargetCache {
-  const allyOf = w.slots.map((s) => s.ally);
-  const hostiles = new Map<number, Unit[]>();
-  for (const a of new Set(allyOf)) hostiles.set(a, []);
+  const hostile: boolean[][] = [], hostiles: Unit[][] = [], statics: (Building | Settlement)[][] = [];
+  for (let i = 0; i < w.nP; i++) {
+    hostile.push(w.slots.map((_, j) => !allied(w, i, j)));
+    hostiles.push([]);
+    statics.push(staticTargets(w, i));
+  }
   for (const u of w.units) {
     if (u.hp <= 0 || !unitVisible(u)) continue;
-    for (const [a, list] of hostiles) if (allyOf[u.team] !== a) list.push(u);
+    for (let i = 0; i < w.nP; i++) if (hostile[i][u.team]) hostiles[i].push(u);
   }
-  const statics: (Building | Settlement)[][] = [];
-  for (let i = 0; i < w.nP; i++) statics.push(staticTargets(w, i));
-  return { allyOf, hostiles, statics };
+  return { hostile, hostiles, statics };
 }
 
 /**
@@ -63,11 +69,10 @@ export function buildTargetCache(w: World): TargetCache {
  * from the per-slot cache. Same answer as scanning everything.
  */
 export function nearestHostile(w: World, u: Unit, R: number, tc: TargetCache): { tgt: Target | null; best: number } {
-  const ally = tc.allyOf[u.team];
-  const list = tc.hostiles.get(ally)!;
+  const list = tc.hostiles[u.team];
   // The grid pays off only when there are more hostiles than cells inside R.
   const cells = ((2 * R) / 16 + 1) ** 2;
-  const near = list.length > cells ? nearestHostileWithin(gridOf(w), u.x, u.y, R, ally, tc.allyOf, u, unitVisible) : { u: null, d2: Infinity };
+  const near = list.length > cells ? nearestHostileWithin(gridOf(w), u.x, u.y, R, tc.hostile[u.team], u, unitVisible) : { u: null, d2: Infinity };
   let tgt: Target | null = near.u, best = near.u ? Math.sqrt(near.d2) : Infinity;
   if (!near.u) {
     let bd = Infinity;
@@ -130,7 +135,7 @@ const guarded = (w: World, u: Unit): boolean => inAura(w, u, 'guardAura', 20);
 /** Remove a faction from play. Slot 0 is the player, so its elimination ends the game. */
 export function elim(w: World, slot: number): void {
   const s = w.slots[slot];
-  if (!s.alive) return;
+  if (!s.alive || s.neutral) return;
   s.alive = false;
   for (const b of s.settlements) w.fx.push({ k: 'boom', x: b.x, y: b.y, r: 22, t: 0.25 });
   if (slot === 0) { w.over = 'lose'; return; }
@@ -138,7 +143,7 @@ export function elim(w: World, slot: number): void {
   for (const q of w.blds.slice()) if (q.team === slot) removeBld(w, q);
   say(w, TNAME[slot] + ' IS ELIMINATED', 2.5);
   let foes = 0;
-  for (let i = 0; i < w.nP; i++) if (w.slots[i].alive && !allied(w, 0, i)) foes++;
+  for (let i = 0; i < w.nP; i++) if (w.slots[i].alive && !w.slots[i].neutral && !allied(w, 0, i)) foes++;
   if (!foes) w.over = 'win';
 }
 
@@ -151,7 +156,7 @@ export function unitArmor(w: World, u: Unit): number {
 }
 
 /** Apply damage. Returns the amount that landed. `ranged` lets guard auras soften it. */
-export function damage(w: World, t: Target, dmg: number, ranged = false): number {
+export function damage(w: World, t: Target, dmg: number, ranged = false, by: Unit | null = null): number {
   if (t.ent === 'bld') {
     dmg = Math.max(1, dmg - (BLD[t.type].armor || 0));
     t.hp -= dmg;
@@ -164,10 +169,15 @@ export function damage(w: World, t: Target, dmg: number, ranged = false): number
     t.flash = 0.12;
   }
   t.hp -= dmg;
-  if (t.ent === 'base' && t.hp <= 0) {
-    t.hp = 0;
-    if (!hasLivingSettlement(w, t.team)) elim(w, t.team);
-  }
+  w.fx.push({ k: 'dmg', x: t.x, y: t.y - 6, t: 0.6, n: dmg });
+  if (t.ent === 'base') {
+    if (by) t.hitBy = by.team;
+    if (t.hp <= 0) {
+      t.hp = 0;
+      onSettlementDeath(w, t);
+      if (!hasLivingSettlement(w, t.team)) elim(w, t.team);
+    }
+  } else if (by && t.hp <= 0 && w.rules.veterancy && t.ent === 'unit') by.kills++;
   return dmg;
 }
 
@@ -176,7 +186,7 @@ export function explode(w: World, u: Unit, x: number, y: number, r: number, dmg:
   w.fx.push({ k: 'boom', x, y, r, t: 0.25 });
   const hit = (t: Target): void => {
     const dd = Math.hypot(t.x - x, t.y - y), d = t.ent === 'base' ? Math.max(0, dd - 10) : t.ent === 'bld' ? Math.max(0, dd - 4) : dd;
-    if (d <= r) damage(w, t, t === primary ? dmg : Math.round(dmg * 0.6), ranged);
+    if (d <= r) damage(w, t, t === primary ? dmg : Math.round(dmg * 0.6), ranged, u);
   };
   const victims: Unit[] = [];
   forNear(gridOf(w), x, y, r, (t) => { if (!allied(w, t.team, u.team) && t.hp > 0) victims.push(t); });
@@ -198,6 +208,7 @@ function afflict(t: Target, T: UnitDef): void {
 
 export function attack(w: World, u: Unit, t: Target, T: UnitDef): void {
   let dmg = T.dmg;
+  if (w.rules.veterancy && u.kills) dmg = Math.round(dmg * (1 + 0.1 * rank(u)));
   if (hasBanner(w, u)) dmg = Math.round(dmg * 1.3);
   if (T.vsBld && t.ent !== 'unit') dmg = Math.round(dmg * T.vsBld);
   if (T.charge && u.run >= 20) dmg = Math.round(dmg * T.charge);
@@ -209,7 +220,7 @@ export function attack(w: World, u: Unit, t: Target, T: UnitDef): void {
   else w.fx.push({ k: 'hit', x: t.x + rnd(w.fxRng, -2, 2), y: t.y - 3 + rnd(w.fxRng, -2, 2), t: 0.14 });
   let dealt = 0;
   if (T.splash) { explode(w, u, t.x, t.y, T.splash, dmg, t, ranged); dealt = dmg; }
-  else { dealt = damage(w, t, dmg, ranged); afflict(t, T); }
+  else { dealt = damage(w, t, dmg, ranged, u); afflict(t, T); }
   if (T.pierce) {
     // Everything hostile within 4px of the shot line takes the hit too.
     const dx = t.x - u.x, dy = t.y - u.y, len = Math.hypot(dx, dy) || 1;
@@ -221,7 +232,7 @@ export function attack(w: World, u: Unit, t: Target, T: UnitDef): void {
       if (Math.abs(px * dy - py * dx) / len <= 4) hits.push(o);
     });
     hits.sort((a, b) => a.ix - b.ix);
-    for (const o of hits) { damage(w, o, dmg, true); afflict(o, T); }
+    for (const o of hits) { damage(w, o, dmg, true, u); afflict(o, T); }
   }
   if (T.chain) {
     const near: Unit[] = [];
@@ -229,8 +240,8 @@ export function attack(w: World, u: Unit, t: Target, T: UnitDef): void {
     near.sort((a, b) => a.ix - b.ix);
     for (const o of near.slice(0, T.chain)) {
       w.fx.push({ k: 'shot', x1: t.x, y1: t.y - 2, x2: o.x, y2: o.y - 2, t: 0.1, c: T.shot || TEAM[u.team] });
-      damage(w, o, Math.round(dmg / 2), true);
+      damage(w, o, Math.round(dmg / 2), true, u);
     }
   }
-  if (T.lifesteal && dealt > 0) u.hp = Math.min(T.hp, u.hp + dealt * T.lifesteal);
+  if (T.lifesteal && dealt > 0) u.hp = Math.min(maxHp(u), u.hp + dealt * T.lifesteal);
 }

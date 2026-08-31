@@ -82,7 +82,7 @@ export function nearest(g: Grid, x: number, y: number, ok: (u: Unit) => boolean,
  * `self` and hidden units. Exact: only a hit inside R counts, so callers fall back to a full scan
  * of their hostile list when this returns null. No closures, this runs for every unit every tick.
  */
-export function nearestHostileWithin(g: Grid, x: number, y: number, R: number, ally: number, allyOf: readonly number[], self: Unit | null, visible: (u: Unit) => boolean): { u: Unit | null; d2: number } {
+export function nearestHostileWithin(g: Grid, x: number, y: number, R: number, hostile: readonly boolean[], self: Unit | null, visible: (u: Unit) => boolean): { u: Unit | null; d2: number } {
   const x0 = Math.max(0, ((x - R) / CELL) | 0), x1 = Math.min(g.cols - 1, ((x + R) / CELL) | 0);
   const y0 = Math.max(0, ((y - R) / CELL) | 0), y1 = Math.min(g.rows - 1, ((y + R) / CELL) | 0);
   let best: Unit | null = null, bd = R * R;
@@ -91,7 +91,7 @@ export function nearestHostileWithin(g: Grid, x: number, y: number, R: number, a
       const cell = g.cells[cy * g.cols + cx];
       for (let i = 0; i < cell.length; i++) {
         const o = cell[i];
-        if (o === self || o.hp <= 0 || allyOf[o.team] === ally) continue;
+        if (o === self || o.hp <= 0 || !hostile[o.team]) continue;
         const dx = o.x - x, dy = o.y - y, d2 = dx * dx + dy * dy;
         if (d2 < bd && visible(o)) { bd = d2; best = o; }
       }

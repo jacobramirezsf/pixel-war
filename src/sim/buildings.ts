@@ -87,7 +87,7 @@ export function canPlaceSettlement(w: World, tx: number, ty: number): string | n
       const x = tx + dx, y = ty + dy;
       if (x < 1 || y < 1 || x >= m.cols - 1 || y >= m.rows - 1) return 'too close to the edge';
       const t = m.tiles[y * m.cols + x];
-      if (t !== 0 && t !== 1) return 'needs open ground';
+      if (t === 3 || t === 4) return 'needs dry, flat ground';
       if (bldAt(w, x, y)) return 'buildings in the way';
     }
   for (const s of w.slots) for (const b of s.settlements) if (b.hp > 0 && Math.abs(b.x - (tx * TILE + 4)) < 48 && Math.abs(b.y - (ty * TILE + 4)) < 40) return 'too close to another settlement';

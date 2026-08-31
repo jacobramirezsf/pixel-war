@@ -9,9 +9,11 @@ export interface Settings {
   volume: number;
   muted: boolean;
   colorblind: boolean;
+  /** Conquest pauses when something needs attention. Always on for touch layouts. */
+  autoPause: boolean;
 }
 
-export const DEFAULT_SETTINGS: Settings = { edgePan: false, hints: true, damageNumbers: false, volume: 0.7, muted: false, colorblind: false };
+export const DEFAULT_SETTINGS: Settings = { edgePan: false, hints: true, damageNumbers: false, volume: 0.7, muted: false, colorblind: false, autoPause: true };
 
 export function loadSettings(s: Storage): Settings {
   return { ...DEFAULT_SETTINGS, ...getJSON<Partial<Settings>>(s, 'settings', {}) };
