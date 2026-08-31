@@ -6,12 +6,13 @@ import { TYPES, type UnitDef } from '../data/units.ts';
 import { aiTick } from './ai/index.ts';
 import { bldAtPx, passableFor, removeBld } from './buildings.ts';
 import { attack, damage, dirTo, edist, targetsFor } from './combat.ts';
+import { drainQueue } from './commands.ts';
 import { dominationTick, hasEconomy, incomeTick, mineTick, minesHeld, payRepair } from './economy.ts';
 import { clamp, tileAt } from './map.ts';
 import { computeFlow, flowDir } from './pathing.ts';
 import { rand, rnd } from './rng.ts';
 import type { Building, Target, Unit, World } from './types.ts';
-import { allied, mapH, mapW, primaryBase } from './world.ts';
+import { allied, DT, mapH, mapW, primaryBase } from './world.ts';
 
 type Vec = [number, number] | null;
 
@@ -46,10 +47,15 @@ function tryMove(w: World, u: Unit, mv: [number, number], sp: number, fly: boole
   return blk;
 }
 
-export function step(w: World, dt: number): void {
-  if (w.over || w.phase !== 'play' || w.paused) return;
+/** Advance one fixed tick. Queued commands apply first, then the world updates. */
+export function step(w: World): void {
+  drainQueue(w);
+  if (w.over || w.phase !== 'play') { w.tick++; return; }
+  const dt = DT;
   if (w.flowDirty) { computeFlow(w); w.flowDirty = false; }
+  w.tick++;
   w.t += dt;
+  for (const u of w.units) { u.ox = u.x; u.oy = u.y; }
   const eco = hasEconomy(w);
   mineTick(w);
   const mcount = minesHeld(w);
@@ -131,7 +137,7 @@ export function step(w: World, dt: number): void {
         if (tb && tbd <= 14 && payRepair(w, u.team, 0.5)) {
           u.cd = T.cd;
           tb.hp = Math.min(tb.max, tb.hp + T.repair);
-          w.fx.push({ k: 'fix', x: tb.x + rnd(w.rng, -3, 3), y: tb.y - 5, t: 0.25 });
+          w.fx.push({ k: 'fix', x: tb.x + rnd(w.fxRng, -3, 3), y: tb.y - 5, t: 0.25 });
         } else if (tgt && best <= T.range) { u.cd = T.cd; attack(w, u, tgt, T); }
       }
     } else if (T.heal) {

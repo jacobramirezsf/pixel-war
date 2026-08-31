@@ -8,9 +8,10 @@ import type { UnitKey } from '../data/units.ts';
 import type { Storage } from '../platform/storage.ts';
 import { buildBg } from '../render/terrain.ts';
 import type { DragRect } from '../render/scene.ts';
-import { newGame } from '../sim/game.ts';
+import { cmd, issue } from '../sim/commands.ts';
 import { cloneMap, TILE, type MapDef } from '../sim/map.ts';
-import type { Mode, World } from '../sim/types.ts';
+import { setupWorld, type GameSetup } from '../sim/replay.ts';
+import type { Action, Mode, World } from '../sim/types.ts';
 import { say as simSay } from '../sim/world.ts';
 import { $ } from './dom.ts';
 
@@ -36,6 +37,8 @@ export interface UiHooks {
 
 export interface App {
   world: World | null;
+  /** How the current world was started, for replays. */
+  setup: GameSetup | null;
   editor: EditorState | null;
   curMap: MapDef;
   custom: MapDef | null;
@@ -47,6 +50,9 @@ export interface App {
   tool: Tool;
   bstrip: boolean;
   running: boolean;
+  paused: boolean;
+  /** Ids of the selected units. Selection is a UI matter, not a sim one. */
+  selection: Set<number>;
   drag: DragRect | null;
   /** Message shown when there is no world, such as in the editor. */
   msg: string;
@@ -64,9 +70,9 @@ export function createApp(storage: Storage): App {
   const cv = $<HTMLCanvasElement>('c');
   const ctx = cv.getContext('2d')!;
   return {
-    world: null, editor: null, curMap: BUILTIN[0], custom: null, diff: 'std',
+    world: null, setup: null, editor: null, curMap: BUILTIN[0], custom: null, diff: 'std',
     mset: [{ on: true, team: 0 }, { on: true, team: 1 }, { on: true, team: 2 }, { on: false, team: 3 }, { on: false, team: 4 }],
-    ctl: 0, brush: 'inf', bbrush: 'stk', tool: 'cmd', bstrip: false, running: false, drag: null, msg: '', msgT: 0,
+    ctl: 0, brush: 'inf', bbrush: 'stk', tool: 'cmd', bstrip: false, running: false, paused: false, selection: new Set(), drag: null, msg: '', msgT: 0,
     cv, ctx, bg: document.createElement('canvas'), W: 160, H: 224, storage,
     ui: { updateUI: () => {}, showMenu: () => {}, endScreen: () => {} },
   };
@@ -100,11 +106,29 @@ export function hideOverlay(): void {
   $('ov').classList.add('hide');
 }
 
+/** Send an action for the controlled slot. Applied now, logged for replay. */
+export function issueAction(app: App, a: Action): boolean {
+  if (!app.world) return false;
+  return issue(app.world, cmd(app.world, app.ctl, a));
+}
+
+/** Selected units that are still alive, in world order. */
+export function selectedUnits(app: App): import('../sim/types.ts').Unit[] {
+  const w = app.world;
+  if (!w) return [];
+  return w.units.filter((u) => u.team === app.ctl && u.hp > 0 && app.selection.has(u.id));
+}
+
 export function startGame(app: App, mode: Mode, allies?: number[]): void {
-  const w = newGame(app.curMap, mode, { allies, diff: app.diff, seed: (Math.random() * 2 ** 31) | 0 });
+  const al = allies ?? [0, 1];
+  const setup: GameSetup = { seed: (Math.random() * 2 ** 31) | 0, mode, map: app.curMap, allies: al, diff: app.diff, ai: al.map((_, i) => i !== 0) };
+  const w = setupWorld(setup);
   app.world = w;
+  app.setup = setup;
   app.editor = null;
   app.running = true;
+  app.paused = false;
+  app.selection.clear();
   app.ctl = 0;
   app.brush = 'inf';
   app.bbrush = 'stk';

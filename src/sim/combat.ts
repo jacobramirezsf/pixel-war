@@ -89,7 +89,7 @@ export function attack(w: World, u: Unit, t: Target, T: UnitDef): void {
   if (hasBanner(w, u)) dmg = Math.round(dmg * 1.3);
   if (T.suicide) { explode(w, u, u.x, u.y, T.splash!, dmg, t); u.hp = 0; return; }
   if (T.range > 12) w.fx.push({ k: 'shot', x1: u.x, y1: u.y - 3, x2: t.x, y2: t.y - 2, t: 0.1, c: T.shot || TEAM[u.team] });
-  else w.fx.push({ k: 'hit', x: t.x + rnd(w.rng, -2, 2), y: t.y - 3 + rnd(w.rng, -2, 2), t: 0.14 });
+  else w.fx.push({ k: 'hit', x: t.x + rnd(w.fxRng, -2, 2), y: t.y - 3 + rnd(w.fxRng, -2, 2), t: 0.14 });
   if (T.splash) explode(w, u, t.x, t.y, T.splash, dmg, t);
   else damage(w, t, dmg);
 }

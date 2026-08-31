@@ -3,9 +3,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { BUILTIN } from '../../src/data/maps.ts';
-import * as C from '../../src/sim/commands.ts';
 import type { Mode } from '../../src/sim/types.ts';
-import { game, ticks } from './helpers.ts';
+import { act, buy, game, place, ticks } from './helpers.ts';
 
 const MODES: Mode[] = ['skirmish', 'multi', 'dom', 'rich', 'sand'];
 
@@ -14,15 +13,13 @@ test('all modes on all maps run 300 ticks', () => {
     for (const mode of MODES) {
       const w = game(mode, map, mode === 'multi' ? { allies: [0, 1, 2] } : undefined);
       if (mode === 'sand') {
-        C.placeUnit(w, 0, 'inf', 60, 150);
-        C.placeUnit(w, 1, 'inf', 60, 40);
-        assert.ok(C.startBattle(w));
-      } else {
-        C.buyUnit(w, 0, 'inf');
-      }
+        place(w, 0, 'inf', 60, 150);
+        place(w, 1, 'inf', 60, 40);
+        assert.ok(act(w, 0, { type: 'startBattle', payload: null }));
+      } else buy(w, 0, 'inf');
       ticks(w, 300);
       for (const u of w.units) assert.ok(Number.isFinite(u.x) && Number.isFinite(u.y), mode + ' on ' + map.name + ': unit position is NaN');
-      assert.ok(Number.isFinite(w.t));
+      assert.equal(w.tick, 300);
     }
 });
 

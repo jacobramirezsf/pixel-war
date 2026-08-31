@@ -58,7 +58,6 @@ export interface Unit {
   hp: number;
   cd: number;
   order: Order | null;
-  sel: boolean;
   flash: number;
   walk: number;
   moving: boolean;
@@ -68,6 +67,9 @@ export interface Unit {
   blk: Building | null;
   px: number;
   py: number;
+  /** Position at the start of the tick, for render interpolation. */
+  ox: number;
+  oy: number;
 }
 
 export interface Mine {
@@ -84,6 +86,8 @@ export interface Slot {
   gold: number;
   /** A faction owns a collection of settlements. Skirmish puts one here. */
   settlements: Settlement[];
+  /** True when the built-in AI drives this slot. */
+  ai: boolean;
   aiT: number;
   aiWant: UnitKey | null;
 }
@@ -112,7 +116,8 @@ export interface World {
   slots: Slot[];
   diff: DiffKey;
   cap: number;
-  paused: boolean;
+  /** Ticks stepped so far. Commands are stamped with the tick they apply on. */
+  tick: number;
   t: number;
   /** Player income, shown in the HUD. */
   income: number;
@@ -136,10 +141,40 @@ export interface World {
   msg: string;
   msgT: number;
   snap: SandSnap | null;
+  /** Commands waiting for their tick. */
+  queue: Command[];
+  /** Every external command applied so far. Seed plus log replays the game. */
+  log: Command[];
+  /** Cosmetic randomness. Never feeds gameplay, so effects cannot change outcomes. */
+  fxRng: Rng;
 }
+
+export interface TargetRef {
+  kind: 'unit' | 'bld' | 'base';
+  id: number;
+}
+
+export type Action =
+  | { type: 'buy'; payload: { unit: UnitKey } }
+  | { type: 'move'; payload: { ids: number[]; x: number; y: number } }
+  | { type: 'attack'; payload: { ids: number[]; target: TargetRef | null } }
+  | { type: 'hold'; payload: { ids: number[] } }
+  | { type: 'gate'; payload: { id: number } }
+  | { type: 'build'; payload: { x: number; y: number; bld: BldKey } }
+  | { type: 'sell'; payload: { x: number; y: number } }
+  | { type: 'place'; payload: { unit: UnitKey; x: number; y: number } }
+  | { type: 'erase'; payload: { x: number; y: number } }
+  | { type: 'clear'; payload: null }
+  | { type: 'mirror'; payload: null }
+  | { type: 'startBattle'; payload: null }
+  | { type: 'toEdit'; payload: null };
+
+export type Command = Action & { tick: number; slot: number };
 
 export interface WorldConfig {
   allies: number[];
   diff: DiffKey;
   seed?: number;
+  /** Which slots the built-in AI drives. Default: every slot but 0. */
+  ai?: boolean[];
 }

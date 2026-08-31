@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.sim.json --noEmit",
     "test": "node --test \"test/**/*.test.ts\"",
-    "check": "npm run typecheck && npm test && npm run build"
+    "check": "npm run typecheck && npm test && npm run build",
+    "sim": "node tools/sim-cli.ts"
   },
   "devDependencies": {
     "@types/node": "^26.4.0",

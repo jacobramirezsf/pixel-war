@@ -9,8 +9,8 @@ import { count, mapH, primaryBase } from './world.ts';
 export function mkUnit(w: World, team: number, type: UnitKey, x: number, y: number): Unit {
   const T = TYPES[type];
   return {
-    ent: 'unit', id: w.nextId++, team, type, x, y, hp: T.hp, cd: rnd(w.rng, 0, 0.4), order: null, sel: false,
-    flash: 0, walk: 0, moving: false, held: false, blk: null, px: x, py: y,
+    ent: 'unit', id: w.nextId++, team, type, x, y, hp: T.hp, cd: rnd(w.rng, 0, 0.4), order: null,
+    flash: 0, walk: 0, moving: false, held: false, blk: null, px: x, py: y, ox: x, oy: y,
   };
 }
 

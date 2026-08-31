@@ -4,9 +4,9 @@
 import { BLD } from '../../data/buildings.ts';
 import { ORDER, TYPES, type UnitKey } from '../../data/units.ts';
 import { addBld, canBuild } from '../buildings.ts';
+import { applyCommand, cmd } from '../commands.ts';
 import { rand, rnd } from '../rng.ts';
 import type { World } from '../types.ts';
-import { spawn } from '../units.ts';
 import { allied, diffDef, say } from '../world.ts';
 
 /** Cheap units early, expensive ones weighted up as the match goes on. Never workers. */
@@ -25,44 +25,47 @@ export function aiPick(w: World): UnitKey {
   return 'inf';
 }
 
+/** Buy through the command layer, then mark the unit held until the next wave. */
+function aiBuy(w: World, slot: number, unit: UnitKey): boolean {
+  const before = w.units.length;
+  if (!applyCommand(w, cmd(w, slot, { type: 'buy', payload: { unit } }), true)) return false;
+  if (w.units.length > before) w.units[w.units.length - 1].held = true;
+  return true;
+}
+
 export function aiTick(w: World, dt: number): void {
   const diff = diffDef(w);
-  for (let i = 1; i < w.nP; i++) {
+  for (let i = 0; i < w.nP; i++) {
     const s = w.slots[i];
-    if (!s.alive) continue;
+    if (!s.alive || !s.ai) continue;
     s.aiT -= dt;
     if (s.aiT <= 0) {
       s.aiT = 0.7;
       if (!s.aiWant) s.aiWant = aiPick(w);
       const T = TYPES[s.aiWant];
-      if (s.gold >= T.cost) {
-        const u = spawn(w, i, s.aiWant);
-        if (u) { s.gold -= T.cost; u.held = true; }
-        s.aiWant = null;
-      }
+      if (s.gold >= T.cost) { aiBuy(w, i, s.aiWant); s.aiWant = null; }
     }
   }
   w.wave -= dt;
   if (w.wave <= 0) {
     w.waveN++;
     w.wave = Math.max(diff.wave * 0.5, diff.wave - w.waveN * 1.5);
-    for (let i = 1; i < w.nP; i++) {
+    for (let i = 0; i < w.nP; i++) {
       const s = w.slots[i];
-      if (!s.alive) continue;
+      if (!s.alive || !s.ai) continue;
       const held = w.units.filter((u) => u.team === i && u.held);
       for (const m of w.mines) {
         if (m.owner < 0 || !allied(w, m.owner, i))
           for (let k = 0; k < 2 && held.length > 2; k++) {
             const u = held.pop()!;
             u.held = false;
-            u.order = { type: 'move', x: m.x + rnd(w.rng, -4, 4), y: m.y + rnd(w.rng, -4, 4) };
+            // One unit per move command keeps the prototype's per-unit scatter.
+            applyCommand(w, cmd(w, i, { type: 'move', payload: { ids: [u.id], x: m.x + rnd(w.rng, -4, 4), y: m.y + rnd(w.rng, -4, 4) } }), true);
           }
       }
-      for (const u of held) { u.held = false; u.order = { type: 'attack', tgt: null }; }
-      if (diff.wrk && s.gold >= 60 && (w.waveN === 1 || w.waveN % 3 === 0) && !w.units.some((u) => u.team === i && TYPES[u.type].repair)) {
-        const u = spawn(w, i, 'wrk');
-        if (u) { s.gold -= TYPES.wrk.cost; u.held = true; }
-      }
+      for (const u of held) u.held = false;
+      if (held.length) applyCommand(w, cmd(w, i, { type: 'attack', payload: { ids: held.map((u) => u.id), target: null } }), true);
+      if (diff.wrk && s.gold >= 60 && (w.waveN === 1 || w.waveN % 3 === 0) && !w.units.some((u) => u.team === i && TYPES[u.type].repair)) aiBuy(w, i, 'wrk');
       if (s.gold >= BLD.stt.cost + 60 && rand(w.rng) < diff.twrC) {
         const mb = w.map.bases[i];
         for (let k = 0; k < 14; k++) {

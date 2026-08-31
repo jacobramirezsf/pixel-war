@@ -5,10 +5,13 @@ import type { UnitKey } from '../data/units.ts';
 import type { BldKey, BldKind } from '../data/buildings.ts';
 import { TILE, type MapDef, type TilePos } from './map.ts';
 import { makeRng, type Rng } from './rng.ts';
-import type { Building, Fx, Mode, Order, Outcome, Phase, SandSnap, Settlement, Slot, Target, Unit, World, WorldConfig } from './types.ts';
+import type { Building, Command, Fx, Mode, Order, Outcome, Phase, SandSnap, Settlement, Slot, Target, Unit, World, WorldConfig } from './types.ts';
 
 export const BASE_HP = 400;
 export const ARMY_CAP = 40;
+/** Fixed simulation timestep in seconds. */
+export const DT = 1 / 60;
+export const TICKS_PER_SEC = 60;
 
 export function reset(map: MapDef, cfg?: Partial<WorldConfig>): World {
   const allies = cfg?.allies ?? [0, 1];
@@ -18,7 +21,8 @@ export function reset(map: MapDef, cfg?: Partial<WorldConfig>): World {
   const slots: Slot[] = allies.map((ally, i) => {
     const b = map.bases[i];
     const base: Settlement = { ent: 'base', id: nextId++, team: i, x: b.tx * TILE + 4, y: b.ty * TILE + 4, hp: BASE_HP, max: BASE_HP, cd: 0 };
-    return { ally, alive: true, gold: i === 0 ? 60 : 40, settlements: [base], aiT: 1.5, aiWant: null };
+    const ai = cfg?.ai ? !!cfg.ai[i] : i !== 0;
+    return { ally, alive: true, gold: i === 0 ? 60 : 40, settlements: [base], ai, aiT: 1.5, aiWant: null };
   });
   return {
     map,
@@ -28,7 +32,7 @@ export function reset(map: MapDef, cfg?: Partial<WorldConfig>): World {
     slots,
     diff,
     cap: ARMY_CAP,
-    paused: false,
+    tick: 0,
     t: 0,
     income: 2,
     incFlash: 0,
@@ -49,7 +53,15 @@ export function reset(map: MapDef, cfg?: Partial<WorldConfig>): World {
     msg: '',
     msgT: 0,
     snap: null,
+    queue: [],
+    log: [],
+    fxRng: makeRng((cfg?.seed ?? 1) ^ 0x5f3759df),
   };
+}
+
+/** Queue a command for its tick. Commands stamped in the past apply on the next step. */
+export function enqueue(w: World, c: Command): void {
+  w.queue.push(c);
 }
 
 export const mapW = (w: World): number => w.map.cols * TILE;
@@ -80,10 +92,6 @@ export function count(w: World, team: number): number {
   return n;
 }
 
-export function selected(w: World): Unit[] {
-  return w.units.filter((u) => u.sel);
-}
-
 // ---------- snapshot and restore ----------
 
 type SnapRef = { kind: 'unit' | 'bld' | 'base'; id: number };
@@ -91,8 +99,8 @@ type SnapOrder = { type: 'move'; x: number; y: number } | { type: 'attack'; tgt:
 
 interface SnapUnit {
   id: number; team: number; type: UnitKey; x: number; y: number; hp: number; cd: number;
-  order: SnapOrder | null; sel: boolean; flash: number; walk: number; moving: boolean; held: boolean;
-  blk: number | null; px: number; py: number;
+  order: SnapOrder | null; flash: number; walk: number; moving: boolean; held: boolean;
+  blk: number | null; px: number; py: number; ox: number; oy: number;
 }
 
 interface SnapBld {
@@ -101,19 +109,22 @@ interface SnapBld {
 }
 
 interface SnapSlot {
-  ally: number; alive: boolean; gold: number; settlements: Settlement[]; aiT: number; aiWant: UnitKey | null;
+  ally: number; alive: boolean; gold: number; settlements: Settlement[]; ai: boolean; aiT: number; aiWant: UnitKey | null;
 }
 
 export interface Snapshot {
   v: 1;
   map: { name: string; cols: number; rows: number; tiles: number[]; bases: TilePos[]; mines: TilePos[] };
-  mode: Mode; phase: Phase; nP: number; slots: SnapSlot[]; diff: DiffKey; cap: number; paused: boolean;
-  t: number; income: number; incFlash: number;
+  mode: Mode; phase: Phase; nP: number; slots: SnapSlot[]; diff: DiffKey; cap: number;
+  tick: number; t: number; income: number; incFlash: number;
   units: SnapUnit[]; blds: SnapBld[]; fx: Fx[]; score: number[]; barbT: number; over: Outcome;
   mines: { x: number; y: number; owner: number; prev: number }[];
   flow: (number[] | null)[] | null; flowDirty: boolean;
   wave: number; waveN: number; nextId: number; rng: Rng; msg: string; msgT: number; snap: SandSnap | null;
+  queue: Command[]; log: Command[]; fxRng: Rng;
 }
+
+const copyCmd = (c: Command): Command => JSON.parse(JSON.stringify(c)) as Command;
 
 function ref(t: Target): SnapRef {
   return { kind: t.ent, id: t.id };
@@ -134,11 +145,11 @@ export function snapshot(w: World): Snapshot {
       bases: w.map.bases.map((b) => ({ tx: b.tx, ty: b.ty })), mines: w.map.mines.map((q) => ({ tx: q.tx, ty: q.ty })),
     },
     mode: w.mode, phase: w.phase, nP: w.nP,
-    slots: w.slots.map((s) => ({ ally: s.ally, alive: s.alive, gold: s.gold, settlements: s.settlements.map((b) => ({ ...b })), aiT: s.aiT, aiWant: s.aiWant })),
-    diff: w.diff, cap: w.cap, paused: w.paused, t: w.t, income: w.income, incFlash: w.incFlash,
+    slots: w.slots.map((s) => ({ ally: s.ally, alive: s.alive, gold: s.gold, settlements: s.settlements.map((b) => ({ ...b })), ai: s.ai, aiT: s.aiT, aiWant: s.aiWant })),
+    diff: w.diff, cap: w.cap, tick: w.tick, t: w.t, income: w.income, incFlash: w.incFlash,
     units: w.units.map((u) => ({
-      id: u.id, team: u.team, type: u.type, x: u.x, y: u.y, hp: u.hp, cd: u.cd, order: snapOrder(u.order), sel: u.sel,
-      flash: u.flash, walk: u.walk, moving: u.moving, held: u.held, blk: u.blk ? u.blk.id : null, px: u.px, py: u.py,
+      id: u.id, team: u.team, type: u.type, x: u.x, y: u.y, hp: u.hp, cd: u.cd, order: snapOrder(u.order),
+      flash: u.flash, walk: u.walk, moving: u.moving, held: u.held, blk: u.blk ? u.blk.id : null, px: u.px, py: u.py, ox: u.ox, oy: u.oy,
     })),
     blds: w.blds.map((b) => ({
       id: b.id, team: b.team, type: b.type, kind: b.kind, tx: b.tx, ty: b.ty, x: b.x, y: b.y, hp: b.hp, max: b.max, cd: b.cd,
@@ -150,6 +161,7 @@ export function snapshot(w: World): Snapshot {
     flow: w.flow ? w.flow.map((f) => (f ? Array.from(f) : null)) : null,
     flowDirty: w.flowDirty, wave: w.wave, waveN: w.waveN, nextId: w.nextId, rng: { s: w.rng.s }, msg: w.msg, msgT: w.msgT,
     snap: w.snap ? { units: w.snap.units.map((u) => ({ ...u })), blds: w.snap.blds.map((b) => ({ ...b })) } : null,
+    queue: w.queue.map(copyCmd), log: w.log.map(copyCmd), fxRng: { s: w.fxRng.s },
   };
 }
 
@@ -159,7 +171,7 @@ export function restore(s: Snapshot): World {
     name: s.map.name, cols: s.map.cols, rows: s.map.rows, tiles: Uint8Array.from(s.map.tiles),
     bases: s.map.bases.map((b) => ({ tx: b.tx, ty: b.ty })), mines: s.map.mines.map((q) => ({ tx: q.tx, ty: q.ty })),
   };
-  const slots: Slot[] = s.slots.map((x) => ({ ally: x.ally, alive: x.alive, gold: x.gold, settlements: x.settlements.map((b) => ({ ...b })), aiT: x.aiT, aiWant: x.aiWant }));
+  const slots: Slot[] = s.slots.map((x) => ({ ally: x.ally, alive: x.alive, gold: x.gold, settlements: x.settlements.map((b) => ({ ...b })), ai: x.ai, aiT: x.aiT, aiWant: x.aiWant }));
   const blds: Building[] = s.blds.map((b) => ({ ent: 'bld', ...b, tiles: b.tiles.map((q) => [q[0], q[1]] as [number, number]) }));
   const bmap = new Map<number, Building>();
   for (const b of blds) for (const q of b.tiles) bmap.set(q[1] * map.cols + q[0], b);
@@ -168,8 +180,8 @@ export function restore(s: Snapshot): World {
   const bldById = new Map<number, Building>();
   for (const b of blds) bldById.set(b.id, b);
   const units: Unit[] = s.units.map((u) => ({
-    ent: 'unit', id: u.id, team: u.team, type: u.type, x: u.x, y: u.y, hp: u.hp, cd: u.cd, order: null, sel: u.sel,
-    flash: u.flash, walk: u.walk, moving: u.moving, held: u.held, blk: u.blk != null ? bldById.get(u.blk) ?? null : null, px: u.px, py: u.py,
+    ent: 'unit', id: u.id, team: u.team, type: u.type, x: u.x, y: u.y, hp: u.hp, cd: u.cd, order: null,
+    flash: u.flash, walk: u.walk, moving: u.moving, held: u.held, blk: u.blk != null ? bldById.get(u.blk) ?? null : null, px: u.px, py: u.py, ox: u.ox, oy: u.oy,
   }));
   const unitById = new Map<number, Unit>();
   for (const u of units) unitById.set(u.id, u);
@@ -185,13 +197,14 @@ export function restore(s: Snapshot): World {
     units[i].order = o.type === 'move' ? { type: 'move', x: o.x, y: o.y } : { type: 'attack', tgt: resolve(o.tgt) };
   });
   return {
-    map, mode: s.mode, phase: s.phase, nP: s.nP, slots, diff: s.diff, cap: s.cap, paused: s.paused,
-    t: s.t, income: s.income, incFlash: s.incFlash, units, blds, bmap,
+    map, mode: s.mode, phase: s.phase, nP: s.nP, slots, diff: s.diff, cap: s.cap,
+    tick: s.tick, t: s.t, income: s.income, incFlash: s.incFlash, units, blds, bmap,
     fx: s.fx.map((f) => ({ ...f })), score: s.score.slice(), barbT: s.barbT, over: s.over,
     mines: s.mines.map((m) => ({ ...m })),
     flow: s.flow ? s.flow.map((f) => (f ? Float32Array.from(f) : null)) : null,
     flowDirty: s.flowDirty, wave: s.wave, waveN: s.waveN, nextId: s.nextId, rng: { s: s.rng.s }, msg: s.msg, msgT: s.msgT,
     snap: s.snap ? { units: s.snap.units.map((u) => ({ ...u })), blds: s.snap.blds.map((b) => ({ ...b })) } : null,
+    queue: s.queue.map(copyCmd), log: s.log.map(copyCmd), fxRng: { s: s.fxRng.s },
   };
 }
 
@@ -214,7 +227,18 @@ export function deserialize(text: string): Snapshot {
   return JSON.parse(text, reviver) as Snapshot;
 }
 
-/** Stable string of the whole state, for equality checks in tests and the balance harness. */
-export function stateHash(w: World): string {
+/** Stable string of the whole state, for equality checks in tests. */
+export function stateString(w: World): string {
   return serialize(snapshot(w));
+}
+
+/** FNV-1a 64-bit hash of the state string, as 16 hex digits. */
+export function stateHash(w: World): string {
+  const s = stateString(w);
+  let h = 0xcbf29ce484222325n;
+  for (let i = 0; i < s.length; i++) {
+    h ^= BigInt(s.charCodeAt(i));
+    h = (h * 0x100000001b3n) & 0xffffffffffffffffn;
+  }
+  return h.toString(16).padStart(16, '0');
 }

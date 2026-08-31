@@ -5,25 +5,23 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { BUILTIN } from '../../src/data/maps.ts';
-import * as C from '../../src/sim/commands.ts';
-import { deserialize, restore, serialize, snapshot, stateHash } from '../../src/sim/world.ts';
-import { game, ticks } from './helpers.ts';
+import { deserialize, restore, serialize, snapshot, stateString } from '../../src/sim/world.ts';
+import { act, buy, chargeAll, game, ticks } from './helpers.ts';
 
 test('restore then 600 ticks equals an uninterrupted run', () => {
   for (const [mode, map] of [['skirmish', BUILTIN[0]], ['multi', BUILTIN[3]], ['rich', BUILTIN[2]]] as const) {
     const a = game(mode, map, mode === 'multi' ? { allies: [0, 1, 2] } : undefined);
-    C.buyUnit(a, 0, 'inf');
-    C.buyUnit(a, 0, 'arc');
+    buy(a, 0, 'inf');
+    buy(a, 0, 'arc');
     ticks(a, 200);
-    C.selectAll(a, 0);
-    C.charge(a, 0);
+    chargeAll(a, 0);
     ticks(a, 40);
     const text = serialize(snapshot(a));
     const b = restore(deserialize(text));
-    assert.equal(stateHash(a), stateHash(b), mode + ': restored state differs before stepping');
+    assert.equal(stateString(a), stateString(b), mode + ': restored state differs before stepping');
     ticks(a, 600);
     ticks(b, 600);
-    assert.equal(stateHash(a), stateHash(b), mode + ': runs diverged after restore');
+    assert.equal(stateString(a), stateString(b), mode + ': runs diverged after restore');
     assert.ok(a.t > 10);
   }
 });
@@ -36,11 +34,10 @@ test('snapshot carries an unlimited treasury through JSON', () => {
 
 test('snapshot keeps target references', () => {
   const w = game('skirmish');
-  C.buyUnit(w, 0, 'inf');
+  buy(w, 0, 'inf');
   ticks(w, 5);
   const enemyBase = w.slots[1].settlements[0];
-  C.selectAll(w, 0);
-  C.tap(w, 0, enemyBase.x, enemyBase.y);
+  act(w, 0, { type: 'attack', payload: { ids: [w.units[0].id], target: { kind: 'base', id: enemyBase.id } } });
   const u = w.units[0];
   assert.ok(u.order && u.order.type === 'attack' && u.order.tgt === enemyBase);
   const b = restore(snapshot(w));

@@ -11,6 +11,8 @@ export interface GameConfig {
   allies?: number[];
   diff?: DiffKey;
   seed?: number;
+  /** Which slots the built-in AI drives. Default: all but slot 0. AI slots start with a fort. */
+  ai?: boolean[];
 }
 
 /** Copy of the chosen map, with extra bases placed for 3 to 5 players. */
@@ -21,7 +23,7 @@ export function prepareMap(map: MapDef, nP: number): MapDef {
 
 export function newGame(map: MapDef, mode: Mode, cfg?: GameConfig): World {
   const allies = cfg?.allies ?? [0, 1];
-  const w = reset(prepareMap(map, allies.length), { allies, diff: cfg?.diff ?? 'std', seed: cfg?.seed });
+  const w = reset(prepareMap(map, allies.length), { allies, diff: cfg?.diff ?? 'std', seed: cfg?.seed, ai: cfg?.ai });
   w.mode = mode;
   if (mode === 'sand') {
     w.phase = 'edit';
@@ -29,7 +31,7 @@ export function newGame(map: MapDef, mode: Mode, cfg?: GameConfig): World {
   } else {
     if (mode === 'rich') { w.slots[0].gold = Infinity; w.cap = 60; }
     const d = diffDef(w);
-    for (let i = 1; i < w.nP; i++) buildFort(w, i, d.wall, d.twr, d.extra);
+    for (let i = 0; i < w.nP; i++) if (w.slots[i].ai) buildFort(w, i, d.wall, d.twr, d.extra);
   }
   w.flowDirty = true;
   say(

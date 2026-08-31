@@ -3,13 +3,12 @@
 import { BUILTIN } from '../../data/maps.ts';
 import { DIFF, DIFF_KEYS, type DiffKey } from '../../data/difficulty.ts';
 import { TEAM } from '../../data/teams.ts';
-import * as C from '../../sim/commands.ts';
 import { decodeMap, encodeMap } from '../../sim/map.ts';
 import type { Mode } from '../../sim/types.ts';
 import { allied, count } from '../../sim/world.ts';
 import { hideOverlay, openEditor, say, setEditorMap, startGame, type App } from '../app.ts';
 import { $, on } from '../dom.ts';
-import { toEdit } from '../hud/commands.ts';
+import { startBattle, toEdit } from '../hud/commands.ts';
 
 const ov = (): HTMLElement => $('ov');
 
@@ -131,13 +130,7 @@ export function endScreen(app: App): void {
   const a = document.getElementById('eAgain'), e = document.getElementById('eEdit'), r = document.getElementById('eReplay');
   if (a) on(a, 'click', () => { if (w.mode === 'multi') startGame(app, 'multi', w.slots.map((s) => s.ally)); else startGame(app, w.mode); });
   if (e) on(e, 'click', () => toEdit(app));
-  if (r) on(r, 'click', () => {
-    C.startBattle(w);
-    app.tool = 'cmd';
-    app.running = true;
-    hideOverlay();
-    app.ui.updateUI();
-  });
+  if (r) on(r, 'click', () => startBattle(app));
   on($('eMenu'), 'click', () => showMenu(app));
   ov().classList.remove('hide');
 }

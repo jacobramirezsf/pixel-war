@@ -91,7 +91,16 @@ export function drawEditor(ctx: CanvasRenderingContext2D, bg: HTMLCanvasElement,
   m.bases.forEach((b, i) => drawBase(ctx, { ent: 'base', id: 0, team: i, x: b.tx * TILE + 4, y: b.ty * TILE + 4, hp: BASE_HP, max: BASE_HP, cd: 0 }, H));
 }
 
-export function drawWorld(ctx: CanvasRenderingContext2D, bg: HTMLCanvasElement, w: World, drag: DragRect | null): void {
+export interface ViewState {
+  drag: DragRect | null;
+  /** 0..1 position between the previous tick and the current one. */
+  alpha: number;
+  selection: ReadonlySet<number>;
+  paused: boolean;
+}
+
+export function drawWorld(ctx: CanvasRenderingContext2D, bg: HTMLCanvasElement, w: World, v: ViewState): void {
+  const { drag, alpha } = v;
   ctx.drawImage(bg, 0, 0);
   const H = mapH(w);
   for (const m of w.mines) drawMine(ctx, m);
@@ -101,13 +110,14 @@ export function drawWorld(ctx: CanvasRenderingContext2D, bg: HTMLCanvasElement, 
   const us = [...w.units].sort((a, b) => a.y - b.y);
   for (const u of us) {
     const T = TYPES[u.type], sz = T.sz, h = sz / 2;
-    const x = Math.round(u.x) - h, y = Math.round(u.y) - h + (u.moving ? Math.floor(u.walk * 8) % 2 : 0);
+    const ux = u.ox + (u.x - u.ox) * alpha, uy = u.oy + (u.y - u.oy) * alpha;
+    const x = Math.round(ux) - h, y = Math.round(uy) - h + (u.moving ? Math.floor(u.walk * 8) % 2 : 0);
     if (T.aura && w.phase === 'play') {
       ctx.strokeStyle = TEAM[u.team]; ctx.globalAlpha = 0.35;
-      ctx.beginPath(); ctx.arc(u.x, u.y, T.aura, 0, 7); ctx.stroke();
+      ctx.beginPath(); ctx.arc(ux, uy, T.aura, 0, 7); ctx.stroke();
       ctx.globalAlpha = 1;
     }
-    if (u.sel) { ctx.strokeStyle = '#7dff7d'; ctx.strokeRect(x - 1.5, y - 1.5, sz + 3, sz + 3); }
+    if (v.selection.has(u.id)) { ctx.strokeStyle = '#7dff7d'; ctx.strokeRect(x - 1.5, y - 1.5, sz + 3, sz + 3); }
     drawSprite(ctx, u.type, u.team, x, y, 1, u.flash > 0);
     if (u.hp < T.hp) {
       ctx.fillStyle = '#111'; ctx.fillRect(x, y - 3, sz, 2);
@@ -119,5 +129,5 @@ export function drawWorld(ctx: CanvasRenderingContext2D, bg: HTMLCanvasElement, 
     ctx.fillStyle = 'rgba(125,255,125,.14)'; ctx.fillRect(drag.x, drag.y, drag.w, drag.h);
     ctx.strokeStyle = '#7dff7d'; ctx.strokeRect(drag.x + 0.5, drag.y + 0.5, drag.w, drag.h);
   }
-  if (w.paused) { ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(0, 0, w.map.cols * TILE, H); }
+  if (v.paused) { ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(0, 0, w.map.cols * TILE, H); }
 }

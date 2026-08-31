@@ -7,9 +7,8 @@ import { TNAME } from '../../data/teams.ts';
 import { ORDER, TYPES, type UnitKey } from '../../data/units.ts';
 import { drawBldSpr, drawSprite } from '../../render/atlas.ts';
 import { drawTile } from '../../render/terrain.ts';
-import { buyUnit } from '../../sim/commands.ts';
 import { allied, count } from '../../sim/world.ts';
-import { fit, say, type App } from '../app.ts';
+import { fit, issueAction, say, selectedUnits, type App } from '../app.ts';
 import { $, on, show } from '../dom.ts';
 
 const unitBtns = {} as Record<UnitKey, HTMLButtonElement>;
@@ -41,7 +40,7 @@ function unitTap(app: App, k: UnitKey): void {
     say(app, 'Tap or drag on the map to place ' + T.name, 1.5);
     return;
   }
-  buyUnit(app.world, 0, k);
+  issueAction(app, { type: 'buy', payload: { unit: k } });
 }
 
 export function buildStrips(app: App): void {
@@ -109,8 +108,8 @@ export function updateUI(app: App): void {
   show($('bstrip'), pal && app.bstrip);
   show($('tstrip'), map);
   B('bErase').classList.toggle('on', app.tool === 'erase');
-  B('bPause').classList.toggle('on', !!w?.paused);
-  B('bPause').textContent = w?.paused ? 'RESUME' : 'PAUSE';
+  B('bPause').classList.toggle('on', app.paused);
+  B('bPause').textContent = app.paused ? 'RESUME' : 'PAUSE';
   sellBtn.classList.toggle('on', app.tool === 'sell');
   for (const k of ORDER) { unitBtns[k].classList.toggle('on', sand && edit && app.tool === 'place' && app.brush === k); if (sand) unitBtns[k].classList.remove('dis'); }
   for (const k of BORDER) { bldBtns[k].classList.toggle('on', app.tool === 'build' && app.bbrush === k); if (sand) bldBtns[k].classList.remove('dis'); }
@@ -133,11 +132,9 @@ export function renderHud(app: App): void {
   }
   if (!w) { msg.textContent = ''; return; }
   if (w.mode === 'sand') {
-    tl.textContent = w.phase === 'edit' ? 'Sandbox: edit' : w.paused ? 'PAUSED' : 'Sandbox: live';
+    tl.textContent = w.phase === 'edit' ? 'Sandbox: edit' : app.paused ? 'PAUSED' : 'Sandbox: live';
     wave.textContent = 'Blue ' + count(w, 0) + ' · Red ' + count(w, 1);
-    let n = 0;
-    for (const u of w.units) if (u.sel) n++;
-    sel.textContent = 'Sel ' + n;
+    sel.textContent = 'Sel ' + selectedUnits(app).length;
   } else {
     const gold = w.slots[0].gold;
     tl.innerHTML = 'Gold <b>' + (Number.isFinite(gold) ? Math.floor(gold) : '∞') + '</b> <span class="inc' + (w.incFlash > 0 ? ' flash' : '') + '">+' + w.income.toFixed(1) + '/s</span>';
@@ -149,9 +146,7 @@ export function renderHud(app: App): void {
     } else wave.textContent = w.waveN ? 'Wave ' + w.waveN + ' · next ' + Math.ceil(w.wave) + 's' : 'First wave ' + Math.ceil(w.wave) + 's';
     for (const k of ORDER) unitBtns[k].classList.toggle('dis', gold < TYPES[k].cost);
     for (const k of BORDER) bldBtns[k].classList.toggle('dis', gold < BLD[k].cost);
-    let n = 0;
-    for (const u of w.units) if (u.sel) n++;
-    sel.textContent = 'Sel ' + n;
+    sel.textContent = 'Sel ' + selectedUnits(app).length;
   }
   msg.textContent = w.msgT > 0 ? w.msg : '';
 }
