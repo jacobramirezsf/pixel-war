@@ -1,0 +1,123 @@
+// Draws a world, or a map in the editor, onto the game canvas at 1 world pixel per canvas pixel.
+
+import { TEAM } from '../data/teams.ts';
+import { TYPES } from '../data/units.ts';
+import { TILE, type MapDef } from '../sim/map.ts';
+import type { Building, Mine, Settlement, World } from '../sim/types.ts';
+import { BASE_HP, mapH } from '../sim/world.ts';
+import { drawBldSpr, drawSprite } from './atlas.ts';
+import { drawFx } from './fx.ts';
+
+export interface DragRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+function drawBase(ctx: CanvasRenderingContext2D, b: Settlement, H: number): void {
+  const x = b.x - 12, y = b.y - 8;
+  if (b.hp <= 0) {
+    ctx.fillStyle = '#2c2f3a'; ctx.fillRect(x, y + 6, 24, 10);
+    ctx.fillStyle = '#454a5a'; ctx.fillRect(x + 2, y + 4, 6, 4); ctx.fillRect(x + 14, y + 3, 7, 5);
+    ctx.fillStyle = '#141520'; ctx.fillRect(x + 9, y + 8, 5, 4);
+    return;
+  }
+  ctx.fillStyle = '#5f6474'; ctx.fillRect(x, y + 2, 24, 14);
+  ctx.fillStyle = '#454a5a'; for (let i = 0; i < 24; i += 4) ctx.fillRect(x + i, y, 2, 3);
+  ctx.fillStyle = '#7a8093'; ctx.fillRect(x, y + 3, 24, 1);
+  ctx.fillStyle = '#3a3f4e'; ctx.fillRect(x + 3, y + 6, 2, 2); ctx.fillRect(x + 19, y + 6, 2, 2);
+  ctx.fillStyle = '#141520'; ctx.fillRect(b.x - 2, b.y < H / 2 ? y + 2 : y + 9, 4, 7);
+  ctx.fillStyle = '#dde2ec'; ctx.fillRect(x + 21, y - 5, 1, 7);
+  ctx.fillStyle = TEAM[b.team]; ctx.fillRect(x + 22, y - 5, 3, 3);
+  ctx.fillStyle = '#111'; ctx.fillRect(x, y - 9, 24, 2);
+  ctx.fillStyle = TEAM[b.team]; ctx.fillRect(x, y - 9, Math.round((24 * b.hp) / b.max), 2);
+}
+
+function drawMine(ctx: CanvasRenderingContext2D, m: Mine): void {
+  ctx.fillStyle = '#4e4e58'; ctx.fillRect(m.x - 5, m.y - 3, 10, 7);
+  ctx.fillStyle = '#6a6a76'; ctx.fillRect(m.x - 4, m.y - 4, 8, 2);
+  ctx.fillStyle = '#f2d34a'; ctx.fillRect(m.x - 3, m.y - 1, 1, 1); ctx.fillRect(m.x + 1, m.y, 1, 1); ctx.fillRect(m.x - 1, m.y + 2, 1, 1);
+  ctx.fillStyle = '#dde2ec'; ctx.fillRect(m.x + 5, m.y - 10, 1, 8);
+  ctx.fillStyle = m.owner < 0 ? '#8a8a94' : TEAM[m.owner]; ctx.fillRect(m.x + 6, m.y - 10, 4, 3);
+}
+
+function drawGate(ctx: CanvasRenderingContext2D, b: Building): void {
+  const f = (c: string, x: number, y: number, w: number, h: number): void => { ctx.fillStyle = c; ctx.fillRect(x, y, w, h); };
+  const x = b.tx * TILE, y = b.ty * TILE, hz = b.dir === 'h', w = hz ? 16 : 8, h = hz ? 8 : 16;
+  f('#5f6474', x, y, hz ? 2 : w, hz ? h : 2);
+  f('#5f6474', hz ? x + w - 2 : x, hz ? y : y + h - 2, hz ? 2 : w, hz ? h : 2);
+  if (b.locked) {
+    f('#8a5a2b', hz ? x + 2 : x, hz ? y : y + 2, hz ? 12 : 8, hz ? 8 : 12);
+    if (hz) { f('#5b3d1e', x + 2, y + 2, 12, 1); f('#5b3d1e', x + 2, y + 5, 12, 1); f('#3a2a14', x + 8, y, 1, 8); }
+    else { f('#5b3d1e', x + 2, y + 2, 1, 12); f('#5b3d1e', x + 5, y + 2, 1, 12); f('#3a2a14', x, y + 8, 8, 1); }
+    f('#f2d34a', b.x - 1, b.y - 1, 2, 2);
+  } else {
+    if (hz) { f('#8a5a2b', x + 2, y, 2, 8); f('#8a5a2b', x + 12, y, 2, 8); f('#454a5a', x + 2, y, 12, 1); }
+    else { f('#8a5a2b', x, y + 2, 8, 2); f('#8a5a2b', x, y + 12, 8, 2); f('#454a5a', x, y + 2, 1, 12); }
+  }
+  f(TEAM[b.team], x, y, 2, 2);
+}
+
+function drawBld(ctx: CanvasRenderingContext2D, b: Building): void {
+  if (b.kind === 'gate') {
+    drawGate(ctx, b);
+    if (b.hp < b.max) {
+      const x = b.tx * TILE, y = b.ty * TILE, w = b.dir === 'h' ? 16 : 8;
+      ctx.fillStyle = '#111'; ctx.fillRect(x, y - 3, w, 2);
+      ctx.fillStyle = TEAM[b.team]; ctx.fillRect(x, y - 3, Math.max(1, Math.round((w * b.hp) / b.max)), 2);
+    }
+    return;
+  }
+  const x = b.tx * TILE, y = b.ty * TILE;
+  drawBldSpr(ctx, b.type, b.team, x, y, 1);
+  if (b.hp < b.max) {
+    const by = b.kind === 'tower' ? y - 8 : y - 3;
+    ctx.fillStyle = '#111'; ctx.fillRect(x, by, 8, 2);
+    ctx.fillStyle = TEAM[b.team]; ctx.fillRect(x, by, Math.max(1, Math.round((8 * b.hp) / b.max)), 2);
+  }
+}
+
+/** The map editor view: terrain, a tile grid, mines, and bases. */
+export function drawEditor(ctx: CanvasRenderingContext2D, bg: HTMLCanvasElement, m: MapDef): void {
+  ctx.drawImage(bg, 0, 0);
+  const W = m.cols * TILE, H = m.rows * TILE;
+  ctx.strokeStyle = 'rgba(255,255,255,.08)';
+  ctx.beginPath();
+  for (let x = TILE; x < W; x += TILE) { ctx.moveTo(x + 0.5, 0); ctx.lineTo(x + 0.5, H); }
+  for (let y = TILE; y < H; y += TILE) { ctx.moveTo(0, y + 0.5); ctx.lineTo(W, y + 0.5); }
+  ctx.stroke();
+  for (const q of m.mines) drawMine(ctx, { x: q.tx * TILE + 4, y: q.ty * TILE + 4, owner: -1, prev: -1 });
+  m.bases.forEach((b, i) => drawBase(ctx, { ent: 'base', id: 0, team: i, x: b.tx * TILE + 4, y: b.ty * TILE + 4, hp: BASE_HP, max: BASE_HP, cd: 0 }, H));
+}
+
+export function drawWorld(ctx: CanvasRenderingContext2D, bg: HTMLCanvasElement, w: World, drag: DragRect | null): void {
+  ctx.drawImage(bg, 0, 0);
+  const H = mapH(w);
+  for (const m of w.mines) drawMine(ctx, m);
+  for (const s of w.slots) for (const b of s.settlements) drawBase(ctx, b, H);
+  for (const b of w.blds) if (b.kind !== 'tower') drawBld(ctx, b);
+  for (const b of w.blds) if (b.kind === 'tower') drawBld(ctx, b);
+  const us = [...w.units].sort((a, b) => a.y - b.y);
+  for (const u of us) {
+    const T = TYPES[u.type], sz = T.sz, h = sz / 2;
+    const x = Math.round(u.x) - h, y = Math.round(u.y) - h + (u.moving ? Math.floor(u.walk * 8) % 2 : 0);
+    if (T.aura && w.phase === 'play') {
+      ctx.strokeStyle = TEAM[u.team]; ctx.globalAlpha = 0.35;
+      ctx.beginPath(); ctx.arc(u.x, u.y, T.aura, 0, 7); ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+    if (u.sel) { ctx.strokeStyle = '#7dff7d'; ctx.strokeRect(x - 1.5, y - 1.5, sz + 3, sz + 3); }
+    drawSprite(ctx, u.type, u.team, x, y, 1, u.flash > 0);
+    if (u.hp < T.hp) {
+      ctx.fillStyle = '#111'; ctx.fillRect(x, y - 3, sz, 2);
+      ctx.fillStyle = TEAM[u.team]; ctx.fillRect(x, y - 3, Math.max(1, Math.round((sz * u.hp) / T.hp)), 2);
+    }
+  }
+  drawFx(ctx, w.fx);
+  if (drag) {
+    ctx.fillStyle = 'rgba(125,255,125,.14)'; ctx.fillRect(drag.x, drag.y, drag.w, drag.h);
+    ctx.strokeStyle = '#7dff7d'; ctx.strokeRect(drag.x + 0.5, drag.y + 0.5, drag.w, drag.h);
+  }
+  if (w.paused) { ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(0, 0, w.map.cols * TILE, H); }
+}

@@ -154,9 +154,10 @@ test('elimination clears one slot and leaves the others', () => {
 test('mine capture and loss update income, message, flash, and float text', () => {
   const w = game('skirmish', 'Skirmish');
   const mine = w.mines[0];
+  const owner = (): number => mine.owner;
   for (let i = 0; i < 3; i++) w.units.push(mkUnit(w, 0, 'inf', mine.x + i * 3 - 3, mine.y));
   let n = 0;
-  while (mine.owner !== 0 && n < 300) { step(w, DT); n++; }
+  while (owner() !== 0 && n < 300) { step(w, DT); n++; }
   assert.equal(mine.owner, 0, 'captured after ' + n + ' ticks');
   assert.ok(Math.abs(w.income - 3.5) < 0.01, 'income=' + w.income);
   assert.match(w.msg, /captured/i);
@@ -169,7 +170,7 @@ test('mine capture and loss update income, message, flash, and float text', () =
   step(w, DT);
   for (let i = 0; i < 3; i++) w.units.push(mkUnit(w, 1, 'inf', mine.x + i * 3 - 3, mine.y));
   n = 0;
-  while (mine.owner !== 1 && n < 300) { step(w, DT); n++; }
+  while (owner() !== 1 && n < 300) { step(w, DT); n++; }
   assert.equal(mine.owner, 1);
   assert.match(w.msg, /lost/i);
   assert.ok(Math.abs(w.income - 2) < 0.01, 'income back to 2');

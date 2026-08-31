@@ -19,7 +19,8 @@ export class MemoryStorage implements Storage {
 const PREFIX = 'pixelwar:';
 
 class LocalStorageBackend implements Storage {
-  constructor(private ls: globalThis.Storage) {}
+  private ls: globalThis.Storage;
+  constructor(ls: globalThis.Storage) { this.ls = ls; }
   get(key: string): string | null { return this.ls.getItem(PREFIX + key); }
   set(key: string, value: string): void { this.ls.setItem(PREFIX + key, value); }
   remove(key: string): void { this.ls.removeItem(PREFIX + key); }
