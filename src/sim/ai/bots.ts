@@ -64,13 +64,14 @@ export const BOTS: Record<string, Bot> = {
   /** The built-in AI. The world drives it; the bot issues nothing. */
   ai: { name: 'ai', act: () => [] },
 
-  /** Cheap melee, sent the moment there are six of them. */
+  /** Melee heavy with a little ranged support, sent in packs of eight. */
   aggro: {
     name: 'aggro',
     act(w, slot) {
-      const out = spend(w, slot, ['brk', 'spr', 'inf', 'inf']);
-      const n = unitsOf(w, slot).length;
-      if (n >= 6 && Math.floor(sec(w)) % 8 === 0) out.push(chargeAll(w, slot));
+      const t = sec(w);
+      const out = spend(w, slot, t < 60 ? ['brk', 'spr', 'inf', 'arc'] : ['kni', 'brk', 'shd', 'mor', 'bmb', 'arc']);
+      const idle = unitsOf(w, slot).filter((u) => !u.order);
+      if (idle.length >= 10) out.push(cmd(w, slot, { type: 'attack', payload: { ids: idsOf(idle), target: null } }));
       return out;
     },
   },
@@ -82,8 +83,13 @@ export const BOTS: Record<string, Bot> = {
       const t = sec(w), n = unitsOf(w, slot).length;
       const out: Command[] = [];
       if (t < 60) out.push(...fortify(w, slot, 'stk', 'twr'));
-      out.push(...spend(w, slot, t < 90 ? ['xbw', 'arc', 'shd'] : ['mor', 'xbw', 'shd', 'med']));
-      if (n >= 24 && Math.floor(t) % 20 === 0) out.push(chargeAll(w, slot));
+      if (t < 20) {
+        out.push(...spend(w, slot, ['sct']));
+        const m = nearestMine(w, slot), scouts = unitsOf(w, slot).filter((u) => u.type === 'sct' && !u.order);
+        if (m && scouts.length) out.push(cmd(w, slot, { type: 'move', payload: { ids: idsOf(scouts), x: m.x, y: m.y } }));
+      }
+      out.push(...spend(w, slot, t < 90 ? ['xbw', 'arc', 'shd'] : ['mor', 'xbw', 'shd', 'med', 'tnk']));
+      if (n >= 14 && Math.floor(t) % 20 === 0) out.push(chargeAll(w, slot));
       return out;
     },
   },

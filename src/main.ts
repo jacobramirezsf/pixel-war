@@ -1,11 +1,13 @@
 import './style.css';
 import { createStorage } from './platform/storage.ts';
+import { registerServiceWorker } from './platform/sw.ts';
 import { updateCam } from './render/camera.ts';
 import { drawMinimap } from './render/minimap.ts';
 import { drawEditor, drawWorld } from './render/scene.ts';
 import { step } from './sim/step.ts';
 import { DT } from './sim/world.ts';
 import { createApp, fit, loadMap } from './ui/app.ts';
+import { startBench } from './ui/bench.ts';
 import { $ } from './ui/dom.ts';
 import { wireCommands } from './ui/hud/commands.ts';
 import { buildHints, updateHints } from './ui/hud/hint.ts';
@@ -17,6 +19,7 @@ import { applyLayout, detectLayout } from './ui/layout.ts';
 import { wireEditor } from './ui/menus/editor.ts';
 import { endScreen, showMenu } from './ui/menus/menu.ts';
 
+registerServiceWorker();
 const app = createApp(createStorage());
 app.ui = { updateUI: () => updateUI(app), showMenu: () => showMenu(app), endScreen: () => endScreen(app) };
 
@@ -72,3 +75,6 @@ loadMap(app, app.curMap);
 updateUI(app);
 showMenu(app);
 requestAnimationFrame(loop);
+
+// ?bench starts a five-way brawl with 300 units and prints frame times to the message line.
+if (new URLSearchParams(location.search).has('bench')) startBench(app);

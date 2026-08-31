@@ -2,6 +2,17 @@
 
 A pixel-art real-time strategy game. Vanilla TypeScript, Vite, canvas 2D. Runs in a desktop browser and installs on a phone as a web app.
 
+## Play it
+
+Live build: https://jacobramirezsf.github.io/pixel-war/ (GitHub Pages, deployed by CI on every push to main).
+
+On a phone, open that link, then add it to the home screen:
+
+- iPhone (Safari): Share, then "Add to Home Screen". It opens full screen and works in airplane mode after the first load.
+- Android (Chrome): the menu, then "Install app" or "Add to Home screen".
+
+To play a local build on your phone without deploying, run `npm run dev -- --host` and open the LAN address it prints (something like `http://192.168.1.20:5173`) on the phone. Both devices need to be on the same network.
+
 ## Run it
 
 ```

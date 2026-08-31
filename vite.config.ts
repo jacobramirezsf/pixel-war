@@ -49,7 +49,7 @@ export default defineConfig({
     // Offline caching is a convenience. The game never depends on the service worker.
     VitePWA({
       registerType: 'autoUpdate',
-      injectRegister: 'inline',
+      injectRegister: null,
       includeAssets: ['icons/*.png'],
       manifest: {
         name: 'Pixel War',

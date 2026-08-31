@@ -1,6 +1,7 @@
 // Run one bot-versus-bot match headless.
 
 import type { DiffKey } from '../../data/difficulty.ts';
+import type { RaceKey } from '../../data/races.ts';
 import type { MapDef } from '../map.ts';
 import { enqueue, stateHash } from '../world.ts';
 import { step } from '../step.ts';
@@ -14,6 +15,9 @@ export interface MatchOpts {
   b: Bot | string;
   seed: number;
   diff?: DiffKey;
+  /** Per-slot difficulty for AI slots, for ladder tests. */
+  diffs?: [DiffKey, DiffKey];
+  races?: [RaceKey, RaceKey];
   /** Sim seconds before the match is called a draw. */
   maxSec?: number;
 }
@@ -34,7 +38,7 @@ function bot(b: Bot | string): Bot {
 
 export function runMatch(o: MatchOpts): MatchResult {
   const A = bot(o.a), B = bot(o.b);
-  const w = newGame(o.map, 'skirmish', { seed: o.seed, diff: o.diff ?? 'std', ai: [A.name === 'ai', B.name === 'ai'] });
+  const w = newGame(o.map, 'skirmish', { seed: o.seed, diff: o.diff ?? 'std', ai: [A.name === 'ai', B.name === 'ai'], diffs: o.diffs, races: o.races });
   const maxTicks = Math.round((o.maxSec ?? 480) * 60);
   runBots(w, [A, B], maxTicks);
   return { winner: w.over === 'win' ? 0 : w.over === 'lose' ? 1 : null, time: w.t, ticks: w.tick, hash: stateHash(w) };

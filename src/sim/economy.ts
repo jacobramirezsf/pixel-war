@@ -1,8 +1,10 @@
 // Mines, income, and the Domination score.
 
 import { TEAM } from '../data/teams.ts';
+import { forNear, gridOf } from './spatial.ts';
 import type { World } from './types.ts';
-import { allied, diffDef, say } from './world.ts';
+import { PROFILES } from './ai/profiles.ts';
+import { allied, say } from './world.ts';
 
 /** Sandbox has no economy. */
 export const hasEconomy = (w: World): boolean => w.mode !== 'sand';
@@ -21,7 +23,7 @@ export function payRepair(w: World, team: number, amt: number): boolean {
 export function mineTick(w: World): void {
   for (const m of w.mines) {
     const cnt: number[] = Array.from({ length: w.nP }, () => 0);
-    for (const u of w.units) if (u.hp > 0 && Math.hypot(u.x - m.x, u.y - m.y) < 13) cnt[u.team]++;
+    forNear(gridOf(w), m.x, m.y, 13, (u) => { if (u.hp > 0 && Math.hypot(u.x - m.x, u.y - m.y) < 13) cnt[u.team]++; });
     const present: number[] = [];
     for (let i = 0; i < w.nP; i++) if (cnt[i]) present.push(i);
     if (present.length) {
@@ -52,14 +54,19 @@ export function minesHeld(w: World): number[] {
   return mcount;
 }
 
-/** Player gets 2 plus 1.5 per mine. AI gets a rising base rate scaled by difficulty. */
+/** Everyone earns 2 plus 1.5 per mine. AI slots scale that by their profile's income lever. */
+export function incomeRate(w: World, slot: number, mcount: number[]): number {
+  const s = w.slots[slot];
+  const base = 2 + 1.5 * mcount[slot];
+  if (!s.ai) return base;
+  return base * PROFILES[s.diff].income * (w.mode === 'rich' ? 2 : 1);
+}
+
 export function incomeTick(w: World, dt: number, mcount: number[]): void {
-  w.income = 2 + 1.5 * mcount[0];
-  w.slots[0].gold += w.income * dt;
-  const inc = diffDef(w).inc * (w.mode === 'rich' ? 2 : 1);
-  for (let i = 1; i < w.nP; i++) {
+  w.income = incomeRate(w, 0, mcount);
+  for (let i = 0; i < w.nP; i++) {
     if (!w.slots[i].alive) continue;
-    w.slots[i].gold += (1.4 + 0.012 * w.t + 1.5 * mcount[i]) * inc * dt;
+    w.slots[i].gold += incomeRate(w, i, mcount) * dt;
   }
 }
 

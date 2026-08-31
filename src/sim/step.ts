@@ -1,22 +1,55 @@
-// The per-tick update. Order matches the prototype exactly.
+// The per-tick update. Order matches the prototype. Every scan over units goes through the
+// spatial hash, which is rebuilt at the top of the unit phase.
 
-import { BLD } from '../data/buildings.ts';
+import { BLD, BUILD_CAP } from '../data/buildings.ts';
 import { TEAM } from '../data/teams.ts';
 import { TYPES, unitVisible, type UnitDef } from '../data/units.ts';
 import { aiTick } from './ai/index.ts';
 import { addBld, bldAtPx, canBuild, passableFor, removeBld } from './buildings.ts';
-import { BUILD_CAP } from '../data/buildings.ts';
-import { mkUnit } from './units.ts';
-import { attack, damage, dirTo, edist, targetsFor } from './combat.ts';
+import { attack, auraTeams, buildTargetCache, damage, dirTo, edist, hasSpeedAura, nearestHostile, type TargetCache } from './combat.ts';
 import { drainQueue } from './commands.ts';
 import { dominationTick, hasEconomy, incomeTick, mineTick, minesHeld, payRepair } from './economy.ts';
 import { clamp, tileAt } from './map.ts';
 import { computeFlow, computeHome, flowDir } from './pathing.ts';
 import { rand, rnd } from './rng.ts';
+import { fillGrid, forNear, gridOf, nearestHostileWithin } from './spatial.ts';
 import type { Building, Target, Unit, World } from './types.ts';
 import { allied, count, DT, mapH, mapW, primaryBase } from './world.ts';
+import { mkUnit } from './units.ts';
 
 type Vec = [number, number] | null;
+
+/** Flow fields rebuild at most once every 15 ticks, and right away when none exist yet. */
+const FLOW_EVERY = 15;
+
+/** Deaths this tick: necromancers raise skeletons, colossi split. Runs before corpses are removed. */
+function onDeaths(w: World, dead: Unit[]): void {
+  for (const d of dead) {
+    const T = TYPES[d.type];
+    if (T.split && count(w, d.team) < w.cap) {
+      for (let i = 0; i < T.split.n && count(w, d.team) < w.cap; i++) {
+        const a = (i / T.split.n) * Math.PI * 2;
+        const x = d.x + Math.cos(a) * 6, y = d.y + Math.sin(a) * 6;
+        if (passableFor(w, d.team, x, y)) w.units.push(mkUnit(w, d.team, T.split.unit, x, y));
+      }
+    }
+    // Nearest hostile necromancer claims the corpse.
+    const found = { u: null as Unit | null, d: Infinity };
+    forNear(gridOf(w), d.x, d.y, 30, (o) => {
+      const R = TYPES[o.type].raise;
+      if (!R || o.hp <= 0 || allied(w, o.team, d.team)) return;
+      const dist = Math.hypot(o.x - d.x, o.y - d.y);
+      if (dist <= R && (dist < found.d || (dist === found.d && found.u && o.ix < found.u.ix))) { found.d = dist; found.u = o; }
+    });
+    const nec = found.u;
+    if (nec && count(w, nec.team) < w.cap && passableFor(w, nec.team, d.x, d.y)) {
+      const sk = mkUnit(w, nec.team, 'u_inf', d.x, d.y);
+      sk.order = nec.order && nec.order.type === 'attack' ? { type: 'attack', tgt: null } : null;
+      w.units.push(sk);
+      w.fx.push({ k: 'heal', x: d.x, y: d.y - 7, t: 0.3 });
+    }
+  }
+}
 
 /** Retreating units head for the base by the shortest terrain path and stop near it. */
 function retreatDir(w: World, u: Unit): Vec {
@@ -67,43 +100,6 @@ function moveLogic(w: World, u: Unit, T: UnitDef, tgt: Target | null, best: numb
   return null;
 }
 
-/** True when a friendly Warchief is within its aura. */
-function hasSpeedAura(w: World, u: Unit): boolean {
-  for (const o of w.units) {
-    const A = TYPES[o.type].speedAura;
-    if (A && o.team === u.team && o !== u && o.hp > 0 && Math.hypot(o.x - u.x, o.y - u.y) <= A) return true;
-  }
-  return false;
-}
-
-/** Deaths this tick: necromancers raise skeletons, colossi split. Runs before corpses are removed. */
-function onDeaths(w: World, dead: Unit[]): void {
-  for (const d of dead) {
-    const T = TYPES[d.type];
-    if (T.split && count(w, d.team) < w.cap) {
-      for (let i = 0; i < T.split.n && count(w, d.team) < w.cap; i++) {
-        const a = (i / T.split.n) * Math.PI * 2;
-        const x = d.x + Math.cos(a) * 6, y = d.y + Math.sin(a) * 6;
-        if (passableFor(w, d.team, x, y)) w.units.push(mkUnit(w, d.team, T.split.unit, x, y));
-      }
-    }
-    // Nearest hostile necromancer claims the corpse.
-    let nec: Unit | null = null, nd = Infinity;
-    for (const o of w.units) {
-      const R = TYPES[o.type].raise;
-      if (!R || o.hp <= 0 || allied(w, o.team, d.team)) continue;
-      const dist = Math.hypot(o.x - d.x, o.y - d.y);
-      if (dist <= R && dist < nd) { nd = dist; nec = o; }
-    }
-    if (nec && count(w, nec.team) < w.cap && passableFor(w, nec.team, d.x, d.y)) {
-      const sk = mkUnit(w, nec.team, 'u_inf', d.x, d.y);
-      sk.order = nec.order && nec.order.type === 'attack' ? { type: 'attack', tgt: null } : null;
-      w.units.push(sk);
-      w.fx.push({ k: 'heal', x: d.x, y: d.y - 7, t: 0.3 });
-    }
-  }
-}
-
 /** Move, sliding along blockers. Returns the enemy building that stopped the move, if any. */
 function tryMove(w: World, u: Unit, mv: [number, number], sp: number, fly: boolean | undefined): Building | null {
   const nx = u.x + mv[0] * sp, ny = u.y + mv[1] * sp;
@@ -115,15 +111,30 @@ function tryMove(w: World, u: Unit, mv: [number, number], sp: number, fly: boole
   return blk;
 }
 
-/** Advance one fixed tick. Queued commands apply first, then the world updates. */
+/** Nearest visible hostile unit within `range` of a fixed shooter. */
+function nearestInRange(w: World, x: number, y: number, team: number, range: number, tc: TargetCache): Unit | null {
+  const list = tc.hostiles.get(tc.allyOf[team])!;
+  if (list.length <= ((2 * range) / 16 + 1) ** 2) {
+    let best: Unit | null = null, bd = range * range;
+    for (let i = 0; i < list.length; i++) { const o = list[i]; const dx = o.x - x, dy = o.y - y, d2 = dx * dx + dy * dy; if (d2 < bd) { bd = d2; best = o; } }
+    return best;
+  }
+  const r = nearestHostileWithin(gridOf(w), x, y, range, tc.allyOf[team], tc.allyOf, null, unitVisible);
+  return r.u && Math.sqrt(r.d2) < range ? r.u : null;
+}
+
 export function step(w: World): void {
   drainQueue(w);
   if (w.over || w.phase !== 'play') { w.tick++; return; }
   const dt = DT;
-  if (w.flowDirty) { computeFlow(w); computeHome(w); w.flowDirty = false; }
+  if (w.flowDirty && (w.flow === null || w.tick - w.flowTick >= FLOW_EVERY)) { computeFlow(w); computeHome(w); w.flowDirty = false; w.flowTick = w.tick; }
   w.tick++;
   w.t += dt;
-  for (const u of w.units) { u.ox = u.x; u.oy = u.y; }
+  const grid = gridOf(w);
+  w.units.forEach((u, i) => { u.ox = u.x; u.oy = u.y; u.ix = i; });
+  fillGrid(grid, w.units);
+  w.auras = auraTeams(w);
+  const tc = buildTargetCache(w);
   const eco = hasEconomy(w);
   mineTick(w);
   const mcount = minesHeld(w);
@@ -139,12 +150,7 @@ export function step(w: World): void {
       if (b.hp <= 0) continue;
       b.cd -= dt;
       if (b.cd > 0) continue;
-      let tg: Unit | null = null, bd = 36;
-      for (const u of w.units) {
-        if (allied(w, u.team, b.team) || u.hp <= 0 || !unitVisible(u)) continue;
-        const d = Math.hypot(u.x - b.x, u.y - b.y);
-        if (d < bd) { bd = d; tg = u; }
-      }
+      const tg = nearestInRange(w, b.x, b.y, b.team, 36, tc);
       if (tg) { b.cd = 0.45; w.fx.push({ k: 'shot', x1: b.x, y1: b.y - 8, x2: tg.x, y2: tg.y - 2, t: 0.1, c: '#ffffff' }); damage(w, tg, 8); }
     }
   // Towers.
@@ -153,14 +159,13 @@ export function step(w: World): void {
     b.cd -= dt;
     if (b.cd > 0) continue;
     const D = BLD[b.type];
-    let tg: Unit | null = null, bd = D.range!;
-    for (const u of w.units) {
-      if (allied(w, u.team, b.team) || u.hp <= 0 || !unitVisible(u)) continue;
-      const d = Math.hypot(u.x - b.x, u.y - b.y);
-      if (d < bd) { bd = d; tg = u; }
-    }
+    const tg = nearestInRange(w, b.x, b.y, b.team, D.range!, tc);
     if (tg) { b.cd = D.cd!; w.fx.push({ k: 'shot', x1: b.x, y1: b.y - 6, x2: tg.x, y2: tg.y - 2, t: 0.1, c: TEAM[b.team] }); damage(w, tg, D.dmg!); }
   }
+  // Damaged own buildings per slot, for workers.
+  const statics = tc.statics, damaged: Building[][] = [];
+  for (let i = 0; i < w.nP; i++) damaged.push([]);
+  for (const b of w.blds) if (b.hp < b.max) damaged[b.team].push(b);
   // Barbed wire ticks twice a second.
   w.barbT += dt;
   const barbTick = w.barbT >= 0.5;
@@ -180,7 +185,9 @@ export function step(w: World): void {
     if (T.regen) u.hp = Math.min(T.hp, u.hp + T.regen * dt * (T.treeArmor && onTree ? 2 : 1));
     if (T.stealth && u.reveal <= 0) {
       // Standing next to an enemy gives a shade away.
-      for (const o of w.units) if (!allied(w, o.team, u.team) && o.hp > 0 && Math.hypot(o.x - u.x, o.y - u.y) < 10) { u.reveal = 1; break; }
+      let seen = false;
+      forNear(grid, u.x, u.y, 10, (o) => { if (!seen && !allied(w, o.team, u.team) && o.hp > 0 && Math.hypot(o.x - u.x, o.y - u.y) < 10) seen = true; });
+      if (seen) u.reveal = 1;
     }
     if (T.dropTrap) {
       u.dropT -= dt;
@@ -198,7 +205,7 @@ export function step(w: World): void {
     if (!T.fly) {
       const bb = bldAtPx(w, u.x, u.y);
       if (bb && bb.kind === 'trap' && !allied(w, bb.team, u.team)) {
-        slow = 0.4;
+        slow *= 0.4;
         if (barbTick) {
           u.hp -= 2; u.flash = 0.1; bb.hp -= 1;
           if (bb.hp <= 0) removeBld(w, bb);
@@ -206,15 +213,13 @@ export function step(w: World): void {
         }
       }
     }
-    const foes = targetsFor(w, u.team);
-    let tgt: Target | null = null, best = 1e9;
-    for (const t of foes) { const d = edist(u, t); if (d < best) { best = d; tgt = t; } }
+    const { tgt, best } = nearestHostile(w, u, Math.max(T.aggro, T.range) + 8, tc);
     let mv: Vec = null;
     if (T.repair) {
       // Workers seek the nearest damaged friendly building or base within 70.
       let tb: Target | null = null, tbd = 70;
-      for (const b2 of w.blds) {
-        if (b2.team !== u.team || b2.hp >= b2.max) continue;
+      for (const b2 of damaged[u.team]) {
+        if (b2.hp >= b2.max) continue;
         const d = Math.hypot(b2.x - u.x, b2.y - u.y);
         if (d < tbd) { tbd = d; tb = b2; }
       }
@@ -232,16 +237,17 @@ export function step(w: World): void {
       }
     } else if (T.heal) {
       // Medics favor close, badly hurt allies.
-      let ally: Unit | null = null, ab = 1e9;
-      for (const o of w.units) {
-        if (!allied(w, o.team, u.team) || o === u || o.hp <= 0) continue;
+      const pick = { u: null as Unit | null, sc: 1e9 };
+      forNear(grid, u.x, u.y, T.aggro, (o) => {
+        if (!allied(w, o.team, u.team) || o === u || o.hp <= 0) return;
         const M = TYPES[o.type].hp;
-        if (o.hp >= M) continue;
+        if (o.hp >= M) return;
         const d = Math.hypot(o.x - u.x, o.y - u.y);
-        if (d > T.aggro) continue;
+        if (d > T.aggro) return;
         const sc = d * (0.3 + o.hp / M);
-        if (sc < ab) { ab = sc; ally = o; }
-      }
+        if (sc < pick.sc || (sc === pick.sc && pick.u && o.ix < pick.u.ix)) { pick.sc = sc; pick.u = o; }
+      });
+      const ally = pick.u;
       if (u.order && u.order.type === 'move') mv = moveLogic(w, u, T, tgt, best);
       else if (ally && Math.hypot(ally.x - u.x, ally.y - u.y) > 14) mv = dirTo(u, ally);
       else mv = moveLogic(w, u, T, tgt, best);
@@ -261,8 +267,15 @@ export function step(w: World): void {
         }
         if (!at) {
           if (T.minRange) {
-            let bb2 = 1e9;
-            for (const t of foes) { const d = edist(u, t); if (d >= T.minRange && d <= T.range && d < bb2) { bb2 = d; at = t; } }
+            // Nearest target inside the ring [minRange, range].
+            const ring = { t: null as Target | null, d: 1e9 };
+            forNear(grid, u.x, u.y, T.range, (o) => {
+              if (o.hp <= 0 || allied(w, o.team, u.team) || !unitVisible(o)) return;
+              const d = Math.hypot(o.x - u.x, o.y - u.y);
+              if (d >= T.minRange! && d <= T.range && (d < ring.d || (d === ring.d && ring.t && ring.t.ent === 'unit' && o.ix < ring.t.ix))) { ring.d = d; ring.t = o; }
+            });
+            for (const t of statics[u.team]) { const d = edist(u, t); if (d >= T.minRange && d <= T.range && d < ring.d) { ring.d = d; ring.t = t; } }
+            at = ring.t;
           } else if (tgt && best <= T.range) at = tgt;
         }
         if (at) { u.cd = T.cd; attack(w, u, at, T); }
@@ -292,12 +305,15 @@ export function step(w: World): void {
       if (d <= Math.max(T.range, 8)) { u.cd = T.cd; attack(w, u, u.blk, T); }
     }
   }
-  // Separation, pairwise. M4 replaces this with a spatial hash.
+  // Separation through the grid. Each pair is handled once, from the lower index.
   const us = w.units;
   for (const u of us) { u.px = u.x; u.py = u.y; }
-  for (let i = 0; i < us.length; i++)
-    for (let j = i + 1; j < us.length; j++) {
-      const a = us[i], b = us[j], min = TYPES[a.type].r + TYPES[b.type].r;
+  fillGrid(grid, us);
+  for (const a of us) {
+    const ra = TYPES[a.type].r;
+    forNear(grid, a.x, a.y, ra + 5, (b) => {
+      if (b.ix <= a.ix) return;
+      const min = ra + TYPES[b.type].r;
       let dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy);
       if (d < min) {
         if (d < 0.01) { dx = rand(w.rng) - 0.5; dy = rand(w.rng) - 0.5; d = Math.hypot(dx, dy) || 1; }
@@ -305,7 +321,8 @@ export function step(w: World): void {
         dx /= d; dy /= d;
         a.x -= dx * p; a.y -= dy * p; b.x += dx * p; b.y += dy * p;
       }
-    }
+    });
+  }
   for (const u of us) {
     u.x = clamp(u.x, 4, W - 4);
     u.y = clamp(u.y, 4, H - 4);

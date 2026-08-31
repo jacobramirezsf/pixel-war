@@ -176,7 +176,12 @@ export function renderHud(app: App): void {
       let r = 0;
       for (let i = 1; i < w.nP; i++) if (w.slots[i].alive && !allied(w, 0, i)) r++;
       wave.textContent = r + ' rival' + (r === 1 ? '' : 's') + ' left · ' + DIFF[w.diff].name;
-    } else wave.textContent = w.waveN ? 'Wave ' + w.waveN + ' · next ' + Math.ceil(w.wave) + 's' : 'First wave ' + Math.ceil(w.wave) + 's';
+    } else {
+      // Threat readout: how much the enemy has waiting, and whether it is on the move.
+      let held = 0, moving = 0;
+      for (const u of w.units) if (u.team !== 0 && !allied(w, 0, u.team)) { if (u.held) held++; else moving++; }
+      wave.textContent = moving > held ? 'Enemy attacking: ' + moving : held ? 'Enemy massing: ' + held : 'Enemy quiet';
+    }
     for (const k of roster(ctlRace(app))) unitBtns[k].classList.toggle('dis', gold < TYPES[k].cost);
     for (const k of BORDER) bldBtns[k].classList.toggle('dis', gold < BLD[k].cost);
     sel.textContent = 'Sel ' + selectedUnits(app).length;

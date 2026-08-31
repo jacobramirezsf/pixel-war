@@ -85,6 +85,8 @@ export interface Unit {
   blinkT: number;
   /** Time until the next trap drop. */
   dropT: number;
+  /** Index in the unit array this tick. Transient. */
+  ix: number;
 }
 
 export interface Mine {
@@ -98,6 +100,8 @@ export interface Slot {
   /** Alliance id. Slots with the same value are allies. */
   ally: number;
   race: RaceKey;
+  /** Difficulty for this slot's AI. Defaults to the world's. */
+  diff: DiffKey;
   alive: boolean;
   gold: number;
   /** A faction owns a collection of settlements. Skirmish puts one here. */
@@ -106,6 +110,8 @@ export interface Slot {
   ai: boolean;
   aiT: number;
   aiWant: UnitKey | null;
+  /** Sim time of the last wave this slot sent. */
+  aiLast: number;
 }
 
 export type Fx =
@@ -152,6 +158,12 @@ export interface World {
   /** Per-slot distance to the slot's own base, for retreats. Derived, rebuilt with flow. */
   home: (Float32Array | null)[] | null;
   flowDirty: boolean;
+  /** Tick the flow fields were last built. Rebuilds are throttled to once per 15 ticks. */
+  flowTick: number;
+  /** Spatial hash, rebuilt every tick. Derived, never snapshotted. */
+  grid: unknown;
+  /** Which teams field auras this tick. Derived, never snapshotted. */
+  auras: unknown;
   wave: number;
   waveN: number;
   nextId: number;
@@ -198,4 +210,6 @@ export interface WorldConfig {
   ai?: boolean[];
   /** Race per slot. Default: kingdom. */
   races?: RaceKey[];
+  /** Difficulty per slot. Default: the world's difficulty. */
+  diffs?: DiffKey[];
 }

@@ -8,6 +8,7 @@ import { BUILTIN, builtinByName } from '../src/data/maps.ts';
 import { BOT_NAMES } from '../src/sim/ai/bots.ts';
 import { runMatch, type MatchResult } from '../src/sim/ai/match.ts';
 import type { MapDef } from '../src/sim/map.ts';
+import type { DiffKey } from '../src/data/difficulty.ts';
 
 const args = new Map<string, string>();
 for (const a of process.argv.slice(2)) {
@@ -15,11 +16,15 @@ for (const a of process.argv.slice(2)) {
   if (m) args.set(m[1], m[2] ?? 'true');
 }
 const runs = +(args.get('runs') ?? 10), seed0 = +(args.get('seed') ?? 1), maxSec = +(args.get('max') ?? 480);
-const matrix = args.has('matrix');
-const mapArg = args.get('map') ?? (matrix ? 'all' : 'crossroads');
+const matrix = args.has('matrix'), ladder = args.has('ladder');
+const diffA = args.get('diffA') as DiffKey | undefined, diffB = args.get('diffB') as DiffKey | undefined;
+const mapArg = args.get('map') ?? (matrix || ladder ? 'all' : 'crossroads');
 const maps: MapDef[] = mapArg === 'all' ? BUILTIN.slice(0, 5) : [builtinByName(mapArg) ?? BUILTIN[0]];
 const pairs: [string, string][] = [];
-if (matrix) {
+// Ladder: the built-in AI against itself at neighboring difficulties, both sides symmetric.
+const ladderPairs: [DiffKey, DiffKey][] = [['ext', 'hard'], ['hard', 'std'], ['std', 'easy']];
+if (ladder) for (const p of ladderPairs) pairs.push(['ai:' + p[0], 'ai:' + p[1]]);
+else if (matrix) {
   const bots = BOT_NAMES.filter((b) => b !== 'ai');
   for (const a of bots) for (const b of bots) if (a !== b) pairs.push([a, b]);
 } else pairs.push([args.get('a') ?? 'balanced', args.get('b') ?? 'ai']);
@@ -35,7 +40,8 @@ for (const map of maps)
   for (const [a, b] of pairs) {
     const res: MatchResult[] = [];
     for (let i = 0; i < runs; i++) {
-      const r = runMatch({ map, a, b, seed: seed0 + i, maxSec });
+      const da = (a.startsWith('ai:') ? a.slice(3) : diffA) as DiffKey | undefined, db = (b.startsWith('ai:') ? b.slice(3) : diffB) as DiffKey | undefined;
+      const r = runMatch({ map, a: a.startsWith('ai:') ? 'ai' : a, b: b.startsWith('ai:') ? 'ai' : b, seed: seed0 + i, maxSec, diffs: da || db ? [da ?? 'std', db ?? 'std'] : undefined });
       res.push(r);
       games++;
       rows.push([map.name, a, b, seed0 + i, r.winner ?? 'draw', r.time.toFixed(1), r.ticks, r.hash].join(','));
@@ -47,6 +53,6 @@ for (const map of maps)
   }
 const secs = (performance.now() - t0) / 1000;
 mkdirSync('test/balance/out', { recursive: true });
-const out = 'test/balance/out/' + (args.get('out') ?? (matrix ? 'matrix' : `${mapArg}-${pairs[0][0]}-vs-${pairs[0][1]}`)) + '.csv';
+const out = 'test/balance/out/' + (args.get('out') ?? (ladder ? 'ladder' : matrix ? 'matrix' : `${mapArg}-${pairs[0][0]}-vs-${pairs[0][1]}`)).replace(/:/g, '-') + '.csv';
 writeFileSync(out, rows.join('\n') + '\n');
 console.log(`${games} games in ${secs.toFixed(1)}s (${(games / secs).toFixed(1)} games/s). Wrote ${out}`);

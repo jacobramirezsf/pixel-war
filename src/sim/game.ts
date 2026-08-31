@@ -6,7 +6,7 @@ import { buildFort } from './buildings.ts';
 import { cloneMap, type MapDef } from './map.ts';
 import { mkBases } from './mapgen.ts';
 import type { Mode, World } from './types.ts';
-import { diffDef, reset, say } from './world.ts';
+import { reset, say, slotDiff } from './world.ts';
 
 export interface GameConfig {
   allies?: number[];
@@ -15,6 +15,7 @@ export interface GameConfig {
   /** Which slots the built-in AI drives. Default: all but slot 0. AI slots start with a fort. */
   ai?: boolean[];
   races?: RaceKey[];
+  diffs?: DiffKey[];
 }
 
 /** Copy of the chosen map, with extra bases placed for 3 to 5 players. */
@@ -25,15 +26,14 @@ export function prepareMap(map: MapDef, nP: number): MapDef {
 
 export function newGame(map: MapDef, mode: Mode, cfg?: GameConfig): World {
   const allies = cfg?.allies ?? [0, 1];
-  const w = reset(prepareMap(map, allies.length), { allies, diff: cfg?.diff ?? 'std', seed: cfg?.seed, ai: cfg?.ai, races: cfg?.races });
+  const w = reset(prepareMap(map, allies.length), { allies, diff: cfg?.diff ?? 'std', seed: cfg?.seed, ai: cfg?.ai, races: cfg?.races, diffs: cfg?.diffs });
   w.mode = mode;
   if (mode === 'sand') {
     w.phase = 'edit';
     w.cap = 80;
   } else {
     if (mode === 'rich') { w.slots[0].gold = Infinity; w.cap = 60; }
-    const d = diffDef(w);
-    for (let i = 0; i < w.nP; i++) if (w.slots[i].ai) buildFort(w, i, d.wall, d.twr, d.extra);
+    for (let i = 0; i < w.nP; i++) if (w.slots[i].ai) { const d = slotDiff(w, i); buildFort(w, i, d.wall, d.twr, d.extra); }
   }
   w.flowDirty = true;
   say(
@@ -41,7 +41,7 @@ export function newGame(map: MapDef, mode: Mode, cfg?: GameConfig): World {
     mode === 'sand' ? 'Pick a unit below, tap the map to place it'
       : mode === 'dom' ? 'Hold the mines. First to 150 points.'
       : mode === 'multi' ? (w.nP - 1) + ' rivals on the field. Last alliance standing.'
-      : 'Build units and walls. First wave in ' + Math.ceil(w.wave) + 's.',
+      : 'Build units and walls. The enemy is gathering.',
     3,
   );
   return w;

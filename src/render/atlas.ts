@@ -1,23 +1,42 @@
-// Unit and building sprites. Drawn pixel by pixel for now; M4 prerenders these into an atlas.
+// Prerendered sprites. Each unit type crossed with each team color (and the white hit flash)
+// becomes one small canvas on first use, then draws with a single drawImage.
 
 import { TEAM } from '../data/teams.ts';
 import { PAL, SPR, type UnitKey } from '../data/units.ts';
 import type { BldKey } from '../data/buildings.ts';
 
-export function drawSprite(c: CanvasRenderingContext2D, type: UnitKey, team: number, x: number, y: number, sc: number, white: boolean): void {
+const cache = new Map<string, HTMLCanvasElement>();
+
+function renderSprite(type: UnitKey, team: number, white: boolean): HTMLCanvasElement {
   const rows = SPR[type], n = rows.length;
+  const c = document.createElement('canvas');
+  c.width = n; c.height = n;
+  const g = c.getContext('2d')!;
   for (let r = 0; r < n; r++)
     for (let q = 0; q < n; q++) {
       const ch = rows[r][q];
       if (ch === '.') continue;
-      c.fillStyle = white ? '#ffffff' : ch === 'T' ? TEAM[team] : PAL[ch];
-      c.fillRect(x + q * sc, y + r * sc, sc, sc);
+      g.fillStyle = white ? '#ffffff' : ch === 'T' ? TEAM[team] : PAL[ch];
+      g.fillRect(q, r, 1, 1);
     }
+  return c;
 }
 
-export function drawBldSpr(c: CanvasRenderingContext2D, type: BldKey, team: number, x: number, y: number, sc: number): void {
-  const f = (col: string, px: number, py: number, w: number, h: number): void => { c.fillStyle = col; c.fillRect(x + px * sc, y + py * sc, w * sc, h * sc); };
-  const tc = TEAM[team];
+export function spriteImage(type: UnitKey, team: number, white: boolean): HTMLCanvasElement {
+  const k = type + '/' + team + (white ? '/w' : '');
+  let c = cache.get(k);
+  if (!c) { c = renderSprite(type, team, white); cache.set(k, c); }
+  return c;
+}
+
+/** Draw a unit sprite at scale `sc` (world pixels per sprite pixel). */
+export function drawSprite(c: CanvasRenderingContext2D, type: UnitKey, team: number, x: number, y: number, sc: number, white: boolean): void {
+  const img = spriteImage(type, team, white);
+  c.drawImage(img, x, y, img.width * sc, img.height * sc);
+}
+
+/** Building pixels, drawn with the same rectangles as the prototype. Towers extend one row above. */
+function paintBld(f: (col: string, px: number, py: number, w: number, h: number) => void, type: BldKey, tc: string): void {
   if (type === 'brb') {
     f('#5b4a2e', 1, 4, 1, 4); f('#5b4a2e', 6, 4, 1, 4); f('#8a8f9c', 0, 3, 8, 1); f('#8a8f9c', 0, 6, 8, 1);
     f('#c9ced8', 1, 2, 1, 1); f('#c9ced8', 3, 4, 1, 1); f('#c9ced8', 5, 2, 1, 1); f('#c9ced8', 2, 5, 1, 1); f('#c9ced8', 6, 7, 1, 1); f(tc, 0, 0, 2, 1);
@@ -37,3 +56,23 @@ export function drawBldSpr(c: CanvasRenderingContext2D, type: BldKey, team: numb
     f('#3d4453', 1, 6, 6, 6); f('#59637a', 1, 6, 6, 1); f('#8a8f9c', 2, 2, 4, 4); f('#c9ced8', 2, 2, 4, 1); f('#dde2ec', 5, 3, 3, 2); f(tc, 1, 1, 2, 2);
   }
 }
+
+const BLD_TOP = 1;
+
+function bldImage(type: BldKey, team: number): HTMLCanvasElement {
+  const k = 'b/' + type + '/' + team;
+  let c = cache.get(k);
+  if (c) return c;
+  c = document.createElement('canvas');
+  c.width = 8; c.height = 8 + BLD_TOP + 5;
+  const g = c.getContext('2d')!;
+  paintBld((col, px, py, w, h) => { g.fillStyle = col; g.fillRect(px, py + BLD_TOP, w, h); }, type, TEAM[team]);
+  cache.set(k, c);
+  return c;
+}
+
+export function drawBldSpr(c: CanvasRenderingContext2D, type: BldKey, team: number, x: number, y: number, sc: number): void {
+  const img = bldImage(type, team);
+  c.drawImage(img, x, y - BLD_TOP * sc, img.width * sc, img.height * sc);
+}
+
