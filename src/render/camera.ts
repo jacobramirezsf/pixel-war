@@ -46,11 +46,15 @@ export function fitZoom(cam: Camera, mode: 'width' | 'both'): number {
   return Math.max(1, Math.min(ZOOM_MAX, z));
 }
 
-/** Keep the view inside the map. Maps smaller than the view sit centered. */
+/**
+ * Keep the view near the map. The view may hang up to 40% past an edge so a base in a corner can
+ * still sit in the middle of the screen. Maps smaller than the view sit centered.
+ */
 export function clampCam(cam: Camera): void {
   const vw = cam.vw / cam.zoom, vh = cam.vh / cam.zoom;
-  cam.x = cam.mapW <= vw ? (cam.mapW - vw) / 2 : Math.max(0, Math.min(cam.mapW - vw, cam.x));
-  cam.y = cam.mapH <= vh ? (cam.mapH - vh) / 2 : Math.max(0, Math.min(cam.mapH - vh, cam.y));
+  const mx = vw * 0.4, my = vh * 0.4;
+  cam.x = cam.mapW <= vw ? (cam.mapW - vw) / 2 : Math.max(-mx, Math.min(cam.mapW - vw + mx, cam.x));
+  cam.y = cam.mapH <= vh ? (cam.mapH - vh) / 2 : Math.max(-my, Math.min(cam.mapH - vh + my, cam.y));
 }
 
 /** Change zoom to a whole step keeping the world point under screen point (ax, ay) fixed. */
@@ -121,9 +125,7 @@ export function updateCam(cam: Camera, dt: number): void {
   cam.x += (cam.tx - cam.x) * k;
   cam.y += (cam.ty - cam.y) * k;
   if (Math.abs(cam.tx - cam.x) < 0.3 && Math.abs(cam.ty - cam.y) < 0.3) { cam.x = cam.tx; cam.y = cam.ty; cam.tx = cam.ty = null; }
-  const vw = cam.vw / cam.zoom, vh = cam.vh / cam.zoom;
-  if (cam.mapW > vw) cam.x = Math.max(0, Math.min(cam.mapW - vw, cam.x)); else cam.x = (cam.mapW - vw) / 2;
-  if (cam.mapH > vh) cam.y = Math.max(0, Math.min(cam.mapH - vh, cam.y)); else cam.y = (cam.mapH - vh) / 2;
+  clampCam(cam);
 }
 
 export function toWorld(cam: Camera, sx: number, sy: number): { x: number; y: number } {
