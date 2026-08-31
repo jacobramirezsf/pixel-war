@@ -82,11 +82,11 @@ export function computeFlow(w: World): void {
   w.flow = [];
   for (let i = 0; i < w.nP; i++) {
     if (!w.slots[i].alive) { w.flow.push(null); continue; }
+    // Seeds are every living hostile settlement. Skirmish has one per slot.
     const starts: number[] = [];
     for (let j = 0; j < w.nP; j++) {
       if (!w.slots[j].alive || allied(w, i, j)) continue;
-      const b = m.bases[j];
-      starts.push(b.ty * m.cols + b.tx);
+      for (const b of w.slots[j].settlements) if (b.hp > 0) starts.push(((b.y / TILE) | 0) * m.cols + ((b.x / TILE) | 0));
     }
     w.flow.push(starts.length ? dijk(m.cols, m.rows, starts, costFor(i)) : null);
   }
