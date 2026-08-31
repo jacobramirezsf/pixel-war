@@ -76,6 +76,13 @@ export function applyCommand(w: World, c: Command, quiet = false): boolean {
       say('Holding', 1);
       return true;
     }
+    case 'retreat': {
+      const us = ownUnits(w, slot, c.payload.ids);
+      if (!us.length) return false;
+      for (const u of us) u.order = { type: 'retreat' };
+      say('Falling back', 1);
+      return true;
+    }
     case 'gate': {
       const gb = w.blds.find((b) => b.id === c.payload.id);
       if (!gb || gb.kind !== 'gate' || gb.team !== slot) return false;

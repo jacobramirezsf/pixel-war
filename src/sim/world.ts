@@ -47,6 +47,7 @@ export function reset(map: MapDef, cfg?: Partial<WorldConfig>): World {
     over: null,
     mines: map.mines.map((q) => ({ x: q.tx * TILE + 4, y: q.ty * TILE + 4, owner: -1, prev: -1 })),
     flow: null,
+    home: null,
     flowDirty: true,
     wave: DIFF[diff].wave + 2,
     waveN: 0,
@@ -97,7 +98,7 @@ export function count(w: World, team: number): number {
 // ---------- snapshot and restore ----------
 
 type SnapRef = { kind: 'unit' | 'bld' | 'base'; id: number };
-type SnapOrder = { type: 'move'; x: number; y: number } | { type: 'attack'; tgt: SnapRef | null };
+type SnapOrder = { type: 'move'; x: number; y: number } | { type: 'attack'; tgt: SnapRef | null } | { type: 'retreat' };
 
 interface SnapUnit {
   id: number; team: number; type: UnitKey; x: number; y: number; hp: number; cd: number;
@@ -122,7 +123,7 @@ export interface Snapshot {
   tick: number; t: number; income: number; incFlash: number;
   units: SnapUnit[]; blds: SnapBld[]; fx: Fx[]; score: number[]; barbT: number; over: Outcome;
   mines: { x: number; y: number; owner: number; prev: number }[];
-  flow: (number[] | null)[] | null; flowDirty: boolean;
+  flow: (number[] | null)[] | null; home: (number[] | null)[] | null; flowDirty: boolean;
   wave: number; waveN: number; nextId: number; rng: Rng; msg: string; msgT: number; snap: SandSnap | null;
   queue: Command[]; log: Command[]; fxRng: Rng;
 }
@@ -136,6 +137,7 @@ function ref(t: Target): SnapRef {
 function snapOrder(o: Order | null): SnapOrder | null {
   if (!o) return null;
   if (o.type === 'move') return { type: 'move', x: o.x, y: o.y };
+  if (o.type === 'retreat') return { type: 'retreat' };
   return { type: 'attack', tgt: o.tgt ? ref(o.tgt) : null };
 }
 
@@ -163,6 +165,7 @@ export function snapshot(w: World): Snapshot {
     score: w.score.slice(), barbT: w.barbT, over: w.over,
     mines: w.mines.map((m) => ({ ...m })),
     flow: w.flow ? w.flow.map((f) => (f ? Array.from(f) : null)) : null,
+    home: w.home ? w.home.map((f) => (f ? Array.from(f) : null)) : null,
     flowDirty: w.flowDirty, wave: w.wave, waveN: w.waveN, nextId: w.nextId, rng: { s: w.rng.s }, msg: w.msg, msgT: w.msgT,
     snap: w.snap ? { units: w.snap.units.map((u) => ({ ...u })), blds: w.snap.blds.map((b) => ({ ...b })) } : null,
     queue: w.queue.map(copyCmd), log: w.log.map(copyCmd), fxRng: { s: w.fxRng.s },
@@ -199,7 +202,7 @@ export function restore(s: Snapshot): World {
   s.units.forEach((su, i) => {
     const o = su.order;
     if (!o) return;
-    units[i].order = o.type === 'move' ? { type: 'move', x: o.x, y: o.y } : { type: 'attack', tgt: resolve(o.tgt) };
+    units[i].order = o.type === 'move' ? { type: 'move', x: o.x, y: o.y } : o.type === 'retreat' ? { type: 'retreat' } : { type: 'attack', tgt: resolve(o.tgt) };
   });
   return {
     map, mode: s.mode, phase: s.phase, nP: s.nP, slots, diff: s.diff, cap: s.cap,
@@ -207,6 +210,7 @@ export function restore(s: Snapshot): World {
     fx: s.fx.map((f) => ({ ...f })), score: s.score.slice(), barbT: s.barbT, over: s.over,
     mines: s.mines.map((m) => ({ ...m })),
     flow: s.flow ? s.flow.map((f) => (f ? Float32Array.from(f) : null)) : null,
+    home: s.home ? s.home.map((f) => (f ? Float32Array.from(f) : null)) : null,
     flowDirty: s.flowDirty, wave: s.wave, waveN: s.waveN, nextId: s.nextId, rng: { s: s.rng.s }, msg: s.msg, msgT: s.msgT,
     snap: s.snap ? { units: s.snap.units.map((u) => ({ ...u })), blds: s.snap.blds.map((b) => ({ ...b })) } : null,
     queue: s.queue.map(copyCmd), log: s.log.map(copyCmd), fxRng: { s: s.fxRng.s },

@@ -6,6 +6,7 @@ import { TILE, type MapDef } from '../sim/map.ts';
 import type { Building, Mine, Settlement, World } from '../sim/types.ts';
 import { BASE_HP, mapH } from '../sim/world.ts';
 import { drawBldSpr, drawSprite } from './atlas.ts';
+import { snapped, type Camera } from './camera.ts';
 import { drawFx } from './fx.ts';
 
 export interface DragRect {
@@ -78,8 +79,21 @@ function drawBld(ctx: CanvasRenderingContext2D, b: Building): void {
   }
 }
 
+/** Set the world transform and clear the viewport. Returns the visible world rect. */
+function beginView(ctx: CanvasRenderingContext2D, cam: Camera, dpr: number): { x0: number; y0: number; x1: number; y1: number } {
+  const z = cam.zoom * dpr, o = snapped(cam);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, cam.vw * dpr, cam.vh * dpr);
+  ctx.setTransform(z, 0, 0, z, -o.x * z, -o.y * z);
+  ctx.imageSmoothingEnabled = false;
+  ctx.lineWidth = 1;
+  return { x0: o.x, y0: o.y, x1: o.x + cam.vw / cam.zoom, y1: o.y + cam.vh / cam.zoom };
+}
+
 /** The map editor view: terrain, a tile grid, mines, and bases. */
-export function drawEditor(ctx: CanvasRenderingContext2D, bg: HTMLCanvasElement, m: MapDef): void {
+export function drawEditor(ctx: CanvasRenderingContext2D, bg: HTMLCanvasElement, m: MapDef, cam: Camera, dpr: number): void {
+  beginView(ctx, cam, dpr);
   ctx.drawImage(bg, 0, 0);
   const W = m.cols * TILE, H = m.rows * TILE;
   ctx.strokeStyle = 'rgba(255,255,255,.08)';
@@ -99,17 +113,23 @@ export interface ViewState {
   paused: boolean;
   /** Slot whose point of view this is. Hidden enemy shades are not drawn. */
   viewer: number;
+  /** Unit under the mouse, for hover feedback. */
+  hover: number | null;
+  cam: Camera;
+  dpr: number;
 }
 
 export function drawWorld(ctx: CanvasRenderingContext2D, bg: HTMLCanvasElement, w: World, v: ViewState): void {
-  const { drag, alpha } = v;
+  const { drag, alpha, cam } = v;
+  const r = beginView(ctx, cam, v.dpr);
+  const vis = (x: number, y: number, pad = 16): boolean => x > r.x0 - pad && x < r.x1 + pad && y > r.y0 - pad && y < r.y1 + pad;
   ctx.drawImage(bg, 0, 0);
   const H = mapH(w);
-  for (const m of w.mines) drawMine(ctx, m);
-  for (const s of w.slots) for (const b of s.settlements) drawBase(ctx, b, H);
-  for (const b of w.blds) if (b.kind !== 'tower') drawBld(ctx, b);
-  for (const b of w.blds) if (b.kind === 'tower') drawBld(ctx, b);
-  const us = [...w.units].sort((a, b) => a.y - b.y);
+  for (const m of w.mines) if (vis(m.x, m.y)) drawMine(ctx, m);
+  for (const s of w.slots) for (const b of s.settlements) if (vis(b.x, b.y, 24)) drawBase(ctx, b, H);
+  for (const b of w.blds) if (b.kind !== 'tower' && vis(b.x, b.y)) drawBld(ctx, b);
+  for (const b of w.blds) if (b.kind === 'tower' && vis(b.x, b.y)) drawBld(ctx, b);
+  const us = w.units.filter((u) => vis(u.x, u.y)).sort((a, b) => a.y - b.y);
   for (const u of us) {
     const T = TYPES[u.type], sz = T.sz, h = sz / 2;
     const hidden = !unitVisible(u);
@@ -123,6 +143,7 @@ export function drawWorld(ctx: CanvasRenderingContext2D, bg: HTMLCanvasElement, 
       ctx.globalAlpha = 1;
     }
     if (v.selection.has(u.id)) { ctx.strokeStyle = '#7dff7d'; ctx.strokeRect(x - 1.5, y - 1.5, sz + 3, sz + 3); }
+    else if (v.hover === u.id) { ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.strokeRect(x - 1.5, y - 1.5, sz + 3, sz + 3); }
     drawSprite(ctx, u.type, u.team, x, y, 1, u.flash > 0);
     if (u.hp < T.hp) {
       ctx.fillStyle = '#111'; ctx.fillRect(x, y - 3, sz, 2);
@@ -137,5 +158,5 @@ export function drawWorld(ctx: CanvasRenderingContext2D, bg: HTMLCanvasElement, 
     ctx.fillStyle = 'rgba(125,255,125,.14)'; ctx.fillRect(drag.x, drag.y, drag.w, drag.h);
     ctx.strokeStyle = '#7dff7d'; ctx.strokeRect(drag.x + 0.5, drag.y + 0.5, drag.w, drag.h);
   }
-  if (v.paused) { ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(0, 0, w.map.cols * TILE, H); }
+  if (v.paused) { ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(r.x0, r.y0, r.x1 - r.x0, r.y1 - r.y0); }
 }

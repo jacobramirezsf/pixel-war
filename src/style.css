@@ -2,19 +2,24 @@
 @font-face{font-family:'Plex Mono';font-weight:700;font-style:normal;font-display:block;src:url('./assets/fonts/IBMPlexMono-Bold.woff2') format('woff2')}
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;width:100%;position:fixed;inset:0;overscroll-behavior:none;background:#0a0b10;color:#e6e6ee;font-family:'Plex Mono',ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums;overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
-#wrap{height:100%;max-width:520px;margin:0 auto;display:flex;flex-direction:column;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
-#top{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 10px 2px;font-size:12px;letter-spacing:1px;text-transform:uppercase;white-space:nowrap}
+#wrap{height:100%;display:flex;flex-direction:column;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+#top{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 10px 4px;font-size:12px;letter-spacing:1px;text-transform:uppercase;white-space:nowrap;flex:0 0 auto}
 #top b{color:#f2d34a;font-size:15px}
 #top .inc{color:#8fd08f}
 #top .inc.flash{color:#f2d34a}
-#top .wave{color:#ff9a9a;overflow:hidden;text-overflow:ellipsis}
+#top .wave{color:#ff9a9a;overflow:hidden;text-overflow:ellipsis;flex:1;text-align:center}
 #top .race{color:#8a8d9e;font-size:10px;margin-left:4px}
-#ov p.blurb{font-size:11px;color:#8a8d9e;margin:2px 0 4px}
-#top .mini{min-height:0;padding:4px 8px;font-size:11px;border-width:1px}
-#stage{flex:1;display:flex;align-items:center;justify-content:center;min-height:0;padding:4px 0}
+#top .mini,#hints .mini{min-height:0;padding:4px 8px;font-size:11px;border-width:1px}
+#view{display:flex;gap:4px}
+#view .mini{min-width:32px}
+#main{flex:1;display:flex;min-height:0}
+#side{display:none}
+#stage{flex:1;position:relative;min-height:0;min-width:0;background:#000;overflow:hidden}
 canvas{image-rendering:pixelated;image-rendering:crisp-edges;display:block}
-#c{touch-action:none;background:#000}
-#msg{font-size:11px;color:#b9bccb;text-align:center;padding:0 8px;min-height:15px;letter-spacing:.5px}
+#c{touch-action:none;background:#000;position:absolute;inset:0}
+#mini{position:absolute;top:6px;right:6px;border:1px solid #3a3d4a;background:#0a0b10;opacity:.92;touch-action:none}
+#bottom{flex:0 0 auto;display:flex;flex-direction:column}
+#msg{font-size:11px;color:#b9bccb;text-align:center;padding:2px 8px;min-height:17px;letter-spacing:.5px}
 .strip{display:flex;gap:6px;padding:6px 8px 2px;overflow-x:auto;overflow-y:hidden;touch-action:pan-x;-webkit-overflow-scrolling:touch;scrollbar-width:none}
 .strip::-webkit-scrollbar{display:none}
 .strip button{flex:0 0 auto;width:64px;min-height:0;padding:4px 2px 5px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;font-size:9px;letter-spacing:.5px}
@@ -33,14 +38,37 @@ button.on small{color:#141520}
 #bTeam.t1{border-color:#ff4d4d;color:#ffc3c3}
 #bPlay,#bDone{border-color:#f2d34a;color:#f2d34a}
 #bPause.on{background:#ff9a4a;border-color:#ff9a4a}
+#bRetreat{border-color:#ffb02a;color:#ffe0a8}
 button:focus-visible{outline:2px solid #f2d34a;outline-offset:2px}
-#ov{position:fixed;inset:0;background:rgba(8,9,14,.93);display:flex;align-items:flex-start;justify-content:center;text-align:center;padding:24px;overflow-y:auto;touch-action:pan-y}
-#ov>div{max-width:340px;width:100%;margin:auto}
+#hints{font-size:11px;color:#b9bccb;padding:8px 10px;border-top:1px solid #23252f;line-height:1.7}
+#hints .hhead{display:flex;justify-content:space-between;align-items:center;color:#f2d34a;letter-spacing:2px;margin-bottom:4px}
+#hints b{color:#e6e6ee;display:inline-block;min-width:88px}
+/* desktop: side panel left, viewport center, wide strip under */
+body.desktop #wrap{max-width:none}
+body.desktop #main{flex-direction:row}
+body.desktop #side{display:flex;flex-direction:column;width:250px;flex:0 0 250px;border-right:1px solid #23252f;overflow-y:auto}
+body.desktop #cmd{grid-template-columns:repeat(2,1fr);padding:8px}
+body.desktop #cmd button{min-height:44px}
+body.desktop #msg{position:absolute;left:0;right:0;bottom:6px;pointer-events:none;text-shadow:0 1px 2px #000;font-size:13px;z-index:2}
+body.desktop #bottom{flex-direction:row}
+body.desktop #strips{flex:1;min-width:0}
+body.desktop .strip{padding:8px 12px}
+body.desktop .strip button{width:72px}
+body.desktop #top{padding:8px 14px 6px}
+/* mobile: vertical stack, thumb controls in the bottom third */
+body.mobile #wrap{max-width:none}
+body.mobile #bottom{padding-bottom:2px}
+body.coarse button{min-height:46px}
+body.coarse #cmd button{min-height:48px}
+body.coarse .strip button{width:64px;min-height:56px}
+#ov{position:fixed;inset:0;background:rgba(8,9,14,.93);display:flex;align-items:flex-start;justify-content:center;text-align:center;padding:24px;overflow-y:auto;touch-action:pan-y;z-index:10}
+#ov>div{max-width:360px;width:100%;margin:auto}
 #ov h1{font-size:30px;margin:0 0 4px;letter-spacing:4px}
 #ov h1 span{color:#f2d34a}
 #ov .ver{font-size:11px;color:#8a8d9e;letter-spacing:2px;margin:0 0 8px}
 #ov h2{font-size:14px;letter-spacing:3px;margin:0 0 8px;color:#f2d34a}
 #ov p{font-size:13px;line-height:1.6;color:#c9cbd6;margin:8px 0}
+#ov p.blurb{font-size:11px;color:#8a8d9e;margin:2px 0 4px}
 #ov .k{color:#7dff7d}
 #ov button{width:100%;margin-top:8px;font-size:14px;padding:8px}
 #ov button small{display:block;font-weight:400;font-size:11px;color:#b9bccb;letter-spacing:0;margin-top:2px}
@@ -50,9 +78,8 @@ button:focus-visible{outline:2px solid #f2d34a;outline-offset:2px}
 #ov button.pick span{font-weight:400;color:#b9bccb;font-size:11px}
 #ov .row button.sm{font-size:11px;padding:6px 2px;min-height:38px;margin-top:8px}
 #ov .slotrow{display:flex;gap:8px}
-#ov .slotrow button{flex:1}
+#ov .slotrow button{flex:1;font-size:11px;padding:8px 2px}
 #ov .slotrow button.name{flex:1.2;text-align:left}
-#ov .slotrow button{font-size:11px;padding:8px 2px}
 #ov textarea{width:100%;height:110px;background:#111;color:#ddd;border:1px solid #3a3d4a;font:11px 'Plex Mono',monospace;padding:6px;margin-top:8px;-webkit-user-select:text;user-select:text}
 .row{display:flex;gap:8px}.row button{flex:1}
 .hide{display:none!important}

@@ -3,6 +3,7 @@
 import { TNAME } from '../../data/teams.ts';
 import { TYPES } from '../../data/units.ts';
 import { unitsOf } from '../../sim/queries.ts';
+import { retreat } from '../input/hotkeys.ts';
 import { hideOverlay, issueAction, leaveEditor, openEditor, say, selectedUnits, type App } from '../app.ts';
 import { $, on } from '../dom.ts';
 
@@ -41,6 +42,7 @@ export function wireCommands(app: App): void {
   on($('bAll'), 'click', () => { if (live()) selectAll(app); });
   on($('bCharge'), 'click', () => { if (live()) charge(app); });
   on($('bHold'), 'click', () => { if (live()) hold(app); });
+  on($('bRetreat'), 'click', () => { if (live()) retreat(app); });
   on($('bTeam'), 'click', () => {
     const x = app.world;
     app.ctl = 1 - app.ctl;

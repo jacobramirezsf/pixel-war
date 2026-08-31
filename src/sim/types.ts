@@ -47,7 +47,9 @@ export type Target = Unit | Building | Settlement;
 
 export type Order =
   | { type: 'move'; x: number; y: number }
-  | { type: 'attack'; tgt: Target | null };
+  | { type: 'attack'; tgt: Target | null }
+  /** Disengage and walk home. No attacking on the way, not even when blocked. */
+  | { type: 'retreat' };
 
 export interface Unit {
   ent: 'unit';
@@ -147,6 +149,8 @@ export interface World {
   mines: Mine[];
   /** Per-slot flow field toward hostile bases. Null entries for dead or unopposed slots. */
   flow: (Float32Array | null)[] | null;
+  /** Per-slot distance to the slot's own base, for retreats. Derived, rebuilt with flow. */
+  home: (Float32Array | null)[] | null;
   flowDirty: boolean;
   wave: number;
   waveN: number;
@@ -173,6 +177,7 @@ export type Action =
   | { type: 'move'; payload: { ids: number[]; x: number; y: number } }
   | { type: 'attack'; payload: { ids: number[]; target: TargetRef | null } }
   | { type: 'hold'; payload: { ids: number[] } }
+  | { type: 'retreat'; payload: { ids: number[] } }
   | { type: 'gate'; payload: { id: number } }
   | { type: 'build'; payload: { x: number; y: number; bld: BldKey } }
   | { type: 'sell'; payload: { x: number; y: number } }

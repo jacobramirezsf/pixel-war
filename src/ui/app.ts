@@ -7,6 +7,8 @@ import { RACE_KEYS, type RaceKey } from '../data/races.ts';
 import { BUILTIN, type EditorTool } from '../data/maps.ts';
 import { roster, type UnitKey } from '../data/units.ts';
 import type { Storage } from '../platform/storage.ts';
+import { fitZoom, makeCamera, setMap, setViewport, type Camera } from '../render/camera.ts';
+import { makeMinimapCache, type MinimapCache } from '../render/minimap.ts';
 import { buildBg } from '../render/terrain.ts';
 import type { DragRect } from '../render/scene.ts';
 import { cmd, issue } from '../sim/commands.ts';
@@ -15,6 +17,8 @@ import { setupWorld, type GameSetup } from '../sim/replay.ts';
 import type { Action, Mode, World } from '../sim/types.ts';
 import { say as simSay } from '../sim/world.ts';
 import { $ } from './dom.ts';
+import { detectLayout, type LayoutMode } from './layout.ts';
+import { loadSettings, saveSettings as persistSettings, type Settings } from './settings.ts';
 
 export type Tool = 'cmd' | 'build' | 'sell' | 'place' | 'erase';
 
@@ -69,6 +73,21 @@ export interface App {
   bg: HTMLCanvasElement;
   W: number;
   H: number;
+  cam: Camera;
+  dpr: number;
+  layout: LayoutMode;
+  minimap: MinimapCache;
+  /** Unit id under the mouse. */
+  hover: number | null;
+  /** Mouse position in viewport CSS pixels, for edge pan. */
+  mouse: { x: number; y: number } | null;
+  /** Keys currently held. */
+  keys: Set<string>;
+  spaceT: number;
+  spaceDragged: boolean;
+  /** Control groups: number to unit ids. */
+  groups: Map<number, Set<number>>;
+  settings: Settings;
   storage: Storage;
   ui: UiHooks;
 }
@@ -80,9 +99,15 @@ export function createApp(storage: Storage): App {
     world: null, setup: null, editor: null, curMap: BUILTIN[0], custom: null, diff: 'std', race: 'kingdom', foeRace: null,
     mset: [{ on: true, team: 0, race: null }, { on: true, team: 1, race: null }, { on: true, team: 2, race: null }, { on: false, team: 3, race: null }, { on: false, team: 4, race: null }],
     ctl: 0, brush: 'inf', bbrush: 'stk', tool: 'cmd', bstrip: false, running: false, paused: false, selection: new Set(), drag: null, msg: '', msgT: 0,
-    cv, ctx, bg: document.createElement('canvas'), W: 160, H: 224, storage,
+    cv, ctx, bg: document.createElement('canvas'), W: 160, H: 224,
+    cam: makeCamera(), dpr: 1, layout: detectLayout(), minimap: makeMinimapCache(), hover: null, mouse: null,
+    keys: new Set(), spaceT: 0, spaceDragged: false, groups: new Map(), settings: loadSettings(storage), storage,
     ui: { updateUI: () => {}, showMenu: () => {}, endScreen: () => {} },
   };
+}
+
+export function saveSettings(app: App): void {
+  persistSettings(app.storage, app.settings);
 }
 
 export function say(app: App, t: string, d = 2): void {
@@ -90,23 +115,35 @@ export function say(app: App, t: string, d = 2): void {
   else { app.msg = t; app.msgT = d; }
 }
 
-/** Scale the canvas to the stage, up to 4x, keeping whole pixels crisp. */
+/** Size the canvas to the stage at device resolution and tell the camera the viewport. */
 export function fit(app: App): void {
   const r = $('stage').getBoundingClientRect();
-  const s = Math.min(r.width / app.W, (r.height - 8) / app.H, 4);
-  app.cv.style.width = app.W * s + 'px';
-  app.cv.style.height = app.H * s + 'px';
+  const vw = Math.max(1, Math.floor(r.width)), vh = Math.max(1, Math.floor(r.height));
+  app.dpr = Math.max(1, Math.min(3, Math.round(window.devicePixelRatio || 1)));
+  if (app.cv.width !== vw * app.dpr || app.cv.height !== vh * app.dpr) {
+    app.cv.width = vw * app.dpr;
+    app.cv.height = vh * app.dpr;
+    app.cv.style.width = vw + 'px';
+    app.cv.style.height = vh + 'px';
+  }
+  setViewport(app.cam, vw, vh);
+}
+
+/** Zoom to fit: the map width on mobile, the whole map on desktop. */
+export function homeZoom(app: App): void {
+  app.cam.zoom = fitZoom(app.cam, app.layout === 'mobile' ? 'width' : 'both');
+  app.cam.x = 0;
+  app.cam.y = 0;
+  setViewport(app.cam, app.cam.vw, app.cam.vh);
 }
 
 export function loadMap(app: App, map: MapDef): void {
   app.W = map.cols * TILE;
   app.H = map.rows * TILE;
-  app.cv.width = app.W;
-  app.cv.height = app.H;
-  app.ctx.imageSmoothingEnabled = false;
-  app.ctx.lineWidth = 1;
   buildBg(map, app.bg);
   fit(app);
+  setMap(app.cam, app.W, app.H);
+  homeZoom(app);
 }
 
 export function hideOverlay(): void {

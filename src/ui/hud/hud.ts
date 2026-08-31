@@ -9,8 +9,11 @@ import { RACES } from '../../data/races.ts';
 import { drawBldSpr, drawSprite } from '../../render/atlas.ts';
 import { drawTile } from '../../render/terrain.ts';
 import { allied, count } from '../../sim/world.ts';
+import { centerOn, setZoom } from '../../render/camera.ts';
+import { minimapToWorld } from '../../render/minimap.ts';
 import { ctlRace, fit, issueAction, say, selectedUnits, type App } from '../app.ts';
 import { $, on, show } from '../dom.ts';
+import { focusBase } from '../input/hotkeys.ts';
 
 const unitBtns = {} as Record<UnitKey, HTMLButtonElement>;
 let paintedRace = '';
@@ -95,11 +98,31 @@ function paintStrip(app: App): void {
   }
 }
 
+/** Zoom buttons, the base button, and minimap taps and drags. */
+export function wireViewButtons(app: App): void {
+  on($('bZoomIn'), 'click', () => setZoom(app.cam, app.cam.zoom + 1));
+  on($('bZoomOut'), 'click', () => setZoom(app.cam, app.cam.zoom - 1));
+  on($('bHome'), 'click', () => focusBase(app));
+  const mini = $<HTMLCanvasElement>('mini');
+  let down = false;
+  const go = (e: PointerEvent): void => {
+    const m = app.world?.map ?? app.editor?.map;
+    if (!m) return;
+    const r = mini.getBoundingClientRect();
+    const p = minimapToWorld(m, r.width, e.clientX - r.left, e.clientY - r.top);
+    centerOn(app.cam, p.x, p.y, false);
+  };
+  mini.addEventListener('pointerdown', (e) => { down = true; mini.setPointerCapture(e.pointerId); go(e); e.preventDefault(); e.stopPropagation(); });
+  mini.addEventListener('pointermove', (e) => { if (down) go(e); });
+  mini.addEventListener('pointerup', () => { down = false; });
+  mini.addEventListener('pointercancel', () => { down = false; });
+}
+
 export function updateUI(app: App): void {
   const w = app.world, B = (id: string): HTMLElement => $(id);
   const sand = w?.mode === 'sand', map = !!app.editor, edit = w?.phase === 'edit';
   const vis: Record<string, boolean> = {
-    bAll: !map && !edit, bCharge: !map && !edit, bHold: !map && !edit, bPause: sand && !edit, bEdit: sand && !edit,
+    bAll: !map && !edit, bCharge: !map && !edit, bHold: !map && !edit, bRetreat: !map && !edit, bPause: !map && !edit, bEdit: sand && !edit,
     bErase: sand && edit, bMirror: sand && edit, bClear: sand && edit, bMap: sand && edit, bPlay: sand && edit,
     bSize: map, bRandom: map, bMirrorMap: map, bClearMap: map, bCode: map, bDone: map,
   };
@@ -108,6 +131,7 @@ export function updateUI(app: App): void {
   bTeam.className = 't' + app.ctl + (sand ? '' : ' hide');
   bTeam.textContent = TNAME[app.ctl];
   const pal = !map;
+  show($('view'), !!w || map);
   show($('strip'), pal && !app.bstrip);
   show($('bstrip'), pal && app.bstrip);
   show($('tstrip'), map);

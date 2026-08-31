@@ -12,31 +12,45 @@
     <span id="tl"></span>
     <span class="wave" id="wave"></span>
     <span id="sel"></span>
+    <span id="view"><button id="bZoomOut" class="mini" title="zoom out">−</button><button id="bZoomIn" class="mini" title="zoom in">+</button><button id="bHome" class="mini" title="jump to base">BASE</button></span>
     <button id="bMenu" class="mini">MENU</button>
   </div>
-  <div id="stage"><canvas id="c"></canvas></div>
-  <div id="msg"></div>
-  <div id="strip" class="strip"></div>
-  <div id="bstrip" class="strip hide"></div>
-  <div id="tstrip" class="strip hide"></div>
-  <div id="cmd">
-    <button id="bTeam">BLUE</button>
-    <button id="bAll" class="cmd">ALL</button>
-    <button id="bCharge" class="cmd">CHARGE</button>
-    <button id="bHold" class="cmd">HOLD</button>
-    <button id="bPause">PAUSE</button>
-    <button id="bEdit">EDIT</button>
-    <button id="bErase">ERASE</button>
-    <button id="bMirror">MIRROR</button>
-    <button id="bClear">CLEAR</button>
-    <button id="bMap">MAP</button>
-    <button id="bPlay">PLAY</button>
-    <button id="bSize">SIZE</button>
-    <button id="bRandom">RANDOM</button>
-    <button id="bMirrorMap">MIRROR</button>
-    <button id="bClearMap">CLEAR</button>
-    <button id="bCode">CODE</button>
-    <button id="bDone">DONE</button>
+  <div id="main">
+    <div id="side">
+      <div id="hints" class="hide"></div>
+    </div>
+    <div id="stage">
+      <canvas id="c"></canvas>
+      <canvas id="mini"></canvas>
+    </div>
+  </div>
+  <div id="bottom">
+    <div id="msg"></div>
+    <div id="strips">
+      <div id="strip" class="strip"></div>
+      <div id="bstrip" class="strip hide"></div>
+      <div id="tstrip" class="strip hide"></div>
+    </div>
+    <div id="cmd">
+      <button id="bTeam">BLUE</button>
+      <button id="bAll" class="cmd">ALL</button>
+      <button id="bCharge" class="cmd">CHARGE</button>
+      <button id="bHold" class="cmd">HOLD</button>
+      <button id="bRetreat" class="cmd">RETREAT</button>
+      <button id="bPause">PAUSE</button>
+      <button id="bEdit">EDIT</button>
+      <button id="bErase">ERASE</button>
+      <button id="bMirror">MIRROR</button>
+      <button id="bClear">CLEAR</button>
+      <button id="bMap">MAP</button>
+      <button id="bPlay">PLAY</button>
+      <button id="bSize">SIZE</button>
+      <button id="bRandom">RANDOM</button>
+      <button id="bMirrorMap">MIRROR</button>
+      <button id="bClearMap">CLEAR</button>
+      <button id="bCode">CODE</button>
+      <button id="bDone">DONE</button>
+    </div>
   </div>
 </div>
 <div id="ov"></div>

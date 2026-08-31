@@ -1,23 +1,42 @@
 import './style.css';
 import { createStorage } from './platform/storage.ts';
+import { updateCam } from './render/camera.ts';
+import { drawMinimap } from './render/minimap.ts';
 import { drawEditor, drawWorld } from './render/scene.ts';
 import { step } from './sim/step.ts';
 import { DT } from './sim/world.ts';
 import { createApp, fit, loadMap } from './ui/app.ts';
+import { $ } from './ui/dom.ts';
 import { wireCommands } from './ui/hud/commands.ts';
-import { buildStrips, renderHud, updateUI } from './ui/hud/hud.ts';
+import { buildHints, updateHints } from './ui/hud/hint.ts';
+import { buildStrips, renderHud, updateUI, wireViewButtons } from './ui/hud/hud.ts';
+import { attachInput } from './ui/input/index.ts';
+import { edgePan } from './ui/input/mouse.ts';
+import { wireHotkeys } from './ui/input/hotkeys.ts';
+import { applyLayout, detectLayout } from './ui/layout.ts';
 import { wireEditor } from './ui/menus/editor.ts';
 import { endScreen, showMenu } from './ui/menus/menu.ts';
-import { wirePointer } from './ui/input/pointer.ts';
 
 const app = createApp(createStorage());
 app.ui = { updateUI: () => updateUI(app), showMenu: () => showMenu(app), endScreen: () => endScreen(app) };
 
+applyLayout(app.layout);
 buildStrips(app);
+buildHints(app);
 wireCommands(app);
+wireViewButtons(app);
 wireEditor(app);
-wirePointer(app);
-window.addEventListener('resize', () => fit(app));
+attachInput(app);
+wireHotkeys(app);
+
+function relayout(): void {
+  const mode = detectLayout();
+  if (mode !== app.layout) { app.layout = mode; applyLayout(mode); updateHints(app); }
+  fit(app);
+}
+window.addEventListener('resize', relayout);
+if (window.visualViewport) window.visualViewport.addEventListener('resize', relayout);
+const MINI = (): number => (app.layout === 'desktop' ? 160 : 72);
 
 let last = 0, acc = 0, overShown = false;
 const MAX_STEPS = 5;
@@ -35,10 +54,15 @@ function loop(ts: number): void {
     } else acc = 0;
     if (w.over && !overShown) { overShown = true; app.running = false; setTimeout(() => app.ui.endScreen(), 700); }
     if (!w.over) overShown = false;
-    drawWorld(app.ctx, app.bg, w, { drag: app.drag, alpha: app.running && !app.paused ? acc / DT : 1, selection: app.selection, paused: app.paused, viewer: app.ctl });
+    updateCam(app.cam, frame);
+    edgePan(app, frame);
+    drawWorld(app.ctx, app.bg, w, { drag: app.drag, alpha: app.running && !app.paused ? acc / DT : 1, selection: app.selection, paused: app.paused, viewer: app.ctl, hover: app.hover, cam: app.cam, dpr: app.dpr });
+    drawMinimap($<HTMLCanvasElement>('mini'), app.minimap, w.map, w, app.cam, MINI(), app.dpr);
   } else if (app.editor) {
     if (app.msgT > 0) app.msgT -= frame;
-    drawEditor(app.ctx, app.bg, app.editor.map);
+    updateCam(app.cam, frame);
+    drawEditor(app.ctx, app.bg, app.editor.map, app.cam, app.dpr);
+    drawMinimap($<HTMLCanvasElement>('mini'), app.minimap, app.editor.map, null, app.cam, MINI(), app.dpr);
   }
   renderHud(app);
   requestAnimationFrame(loop);

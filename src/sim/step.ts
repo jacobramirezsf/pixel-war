@@ -11,14 +11,43 @@ import { attack, damage, dirTo, edist, targetsFor } from './combat.ts';
 import { drainQueue } from './commands.ts';
 import { dominationTick, hasEconomy, incomeTick, mineTick, minesHeld, payRepair } from './economy.ts';
 import { clamp, tileAt } from './map.ts';
-import { computeFlow, flowDir } from './pathing.ts';
+import { computeFlow, computeHome, flowDir } from './pathing.ts';
 import { rand, rnd } from './rng.ts';
 import type { Building, Target, Unit, World } from './types.ts';
 import { allied, count, DT, mapH, mapW, primaryBase } from './world.ts';
 
 type Vec = [number, number] | null;
 
+/** Retreating units head for the base by the shortest terrain path and stop near it. */
+function retreatDir(w: World, u: Unit): Vec {
+  const b = primaryBase(w, u.team);
+  const d = Math.hypot(b.x - u.x, b.y - u.y);
+  if (d < 22) { u.order = null; return null; }
+  const f = w.home ? homeDir(w, u) : null;
+  return f ?? dirTo(u, b);
+}
+
+/** Direction along the slot's home field (distance to own base). */
+function homeDir(w: World, u: Unit): Vec {
+  const m = w.map, D = w.home![u.team];
+  if (!D) return null;
+  const tx = clamp((u.x / 8) | 0, 0, m.cols - 1), ty = clamp((u.y / 8) | 0, 0, m.rows - 1);
+  const here = D[ty * m.cols + tx];
+  let bx = tx, by = ty, bd = here;
+  for (let dy = -1; dy <= 1; dy++)
+    for (let dx = -1; dx <= 1; dx++) {
+      if (!dx && !dy) continue;
+      const nx = tx + dx, ny = ty + dy;
+      if (nx < 0 || ny < 0 || nx >= m.cols || ny >= m.rows) continue;
+      const d = D[ny * m.cols + nx];
+      if (d < bd) { bd = d; bx = nx; by = ny; }
+    }
+  if (bd >= here) return null;
+  return dirTo(u, { x: bx * 8 + 4, y: by * 8 + 4 });
+}
+
 function moveLogic(w: World, u: Unit, T: UnitDef, tgt: Target | null, best: number): Vec {
+  if (u.order && u.order.type === 'retreat') return retreatDir(w, u);
   if (u.order && u.order.type === 'move') {
     const dx = u.order.x - u.x, dy = u.order.y - u.y, d = Math.hypot(dx, dy);
     if (d < 2.5) { u.order = null; return null; }
@@ -91,7 +120,7 @@ export function step(w: World): void {
   drainQueue(w);
   if (w.over || w.phase !== 'play') { w.tick++; return; }
   const dt = DT;
-  if (w.flowDirty) { computeFlow(w); w.flowDirty = false; }
+  if (w.flowDirty) { computeFlow(w); computeHome(w); w.flowDirty = false; }
   w.tick++;
   w.t += dt;
   for (const u of w.units) { u.ox = u.x; u.oy = u.y; }
@@ -223,7 +252,8 @@ export function step(w: World): void {
       }
     } else {
       mv = moveLogic(w, u, T, tgt, best);
-      if (u.cd <= 0) {
+      const fleeing = !!u.order && u.order.type === 'retreat';
+      if (u.cd <= 0 && !fleeing) {
         let at: Target | null = null;
         if (u.order && u.order.type === 'attack' && u.order.tgt && u.order.tgt.hp > 0) {
           const d = edist(u, u.order.tgt);
@@ -256,8 +286,8 @@ export function step(w: World): void {
       u.run += Math.hypot(u.x - bx, u.y - by);
       u.walk += dt;
     }
-    // Bump-attack whatever stopped the move.
-    if (u.blk && u.blk.hp > 0 && u.cd <= 0 && !T.heal) {
+    // Bump-attack whatever stopped the move. Retreating units keep walking.
+    if (u.blk && u.blk.hp > 0 && u.cd <= 0 && !T.heal && !(u.order && u.order.type === 'retreat')) {
       const d = edist(u, u.blk);
       if (d <= Math.max(T.range, 8)) { u.cd = T.cd; attack(w, u, u.blk, T); }
     }

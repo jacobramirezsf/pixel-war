@@ -92,6 +92,26 @@ export function computeFlow(w: World): void {
   }
 }
 
+/** Per-slot distance field to the slot's own settlements over terrain the slot can walk. */
+export function computeHome(w: World): void {
+  const m = w.map;
+  const costFor = (team: number) => (i: number): number => {
+    const t = m.tiles[i];
+    if (blocked(t)) return Infinity;
+    const c = t === 2 ? 2 : 1;
+    const b = w.bmap.get(i);
+    if (!b || b.kind === 'trap') return c;
+    if (b.kind === 'gate') return allied(w, b.team, team) || !b.locked ? c : Infinity;
+    return Infinity;
+  };
+  w.home = [];
+  for (let i = 0; i < w.nP; i++) {
+    const starts: number[] = [];
+    for (const b of w.slots[i].settlements) if (b.hp > 0) starts.push(((b.y / TILE) | 0) * m.cols + ((b.x / TILE) | 0));
+    w.home.push(starts.length ? dijk(m.cols, m.rows, starts, costFor(i)) : null);
+  }
+}
+
 /** Unit direction along its slot's flow field, or null at a local minimum. */
 export function flowDir(w: World, u: Unit): [number, number] | null {
   const m = w.map, cols = m.cols, D = w.flow ? w.flow[u.team] : null;
