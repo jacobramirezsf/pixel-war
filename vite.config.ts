@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { defineConfig, type Plugin } from 'vite';
+import { VitePWA } from 'vite-plugin-pwa';
 
 // Chrome refuses module scripts and crossorigin stylesheets on file:// pages.
 // After the build, fold the one JS chunk and the one CSS file into index.html so the
@@ -11,7 +12,8 @@ function inlineBuild(): Plugin {
     name: 'pixel-war-inline',
     apply: 'build',
     configResolved(c) { outDir = c.build.outDir; },
-    closeBundle() {
+    // writeBundle runs before the PWA plugin builds its precache list in closeBundle.
+    writeBundle() {
       const htmlPath = join(outDir, 'index.html');
       let html = readFileSync(htmlPath, 'utf8');
       const assets = join(outDir, 'assets');
@@ -42,5 +44,33 @@ export default defineConfig({
     assetsInlineLimit: 24 * 1024,
     modulePreload: { polyfill: false },
   },
-  plugins: [inlineBuild()],
+  plugins: [
+    inlineBuild(),
+    // Offline caching is a convenience. The game never depends on the service worker.
+    VitePWA({
+      registerType: 'autoUpdate',
+      injectRegister: 'inline',
+      includeAssets: ['icons/*.png'],
+      manifest: {
+        name: 'Pixel War',
+        short_name: 'Pixel War',
+        description: 'A pixel-art real-time strategy game.',
+        start_url: './',
+        scope: './',
+        display: 'fullscreen',
+        orientation: 'any',
+        background_color: '#0a0b10',
+        theme_color: '#0a0b10',
+        icons: [
+          { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+          { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png' },
+          { src: 'icons/maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+        ],
+      },
+      workbox: {
+        globPatterns: ['**/*.{html,png,webmanifest}'],
+        navigateFallback: 'index.html',
+      },
+    }),
+  ],
 });
