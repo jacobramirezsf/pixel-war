@@ -35,7 +35,7 @@ function loop(ts: number): void {
     } else acc = 0;
     if (w.over && !overShown) { overShown = true; app.running = false; setTimeout(() => app.ui.endScreen(), 700); }
     if (!w.over) overShown = false;
-    drawWorld(app.ctx, app.bg, w, { drag: app.drag, alpha: app.running && !app.paused ? acc / DT : 1, selection: app.selection, paused: app.paused });
+    drawWorld(app.ctx, app.bg, w, { drag: app.drag, alpha: app.running && !app.paused ? acc / DT : 1, selection: app.selection, paused: app.paused, viewer: app.ctl });
   } else if (app.editor) {
     if (app.msgT > 0) app.msgT -= frame;
     drawEditor(app.ctx, app.bg, app.editor.map);

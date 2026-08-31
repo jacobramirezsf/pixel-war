@@ -1,7 +1,7 @@
 // Draws a world, or a map in the editor, onto the game canvas at 1 world pixel per canvas pixel.
 
 import { TEAM } from '../data/teams.ts';
-import { TYPES } from '../data/units.ts';
+import { TYPES, unitVisible } from '../data/units.ts';
 import { TILE, type MapDef } from '../sim/map.ts';
 import type { Building, Mine, Settlement, World } from '../sim/types.ts';
 import { BASE_HP, mapH } from '../sim/world.ts';
@@ -97,6 +97,8 @@ export interface ViewState {
   alpha: number;
   selection: ReadonlySet<number>;
   paused: boolean;
+  /** Slot whose point of view this is. Hidden enemy shades are not drawn. */
+  viewer: number;
 }
 
 export function drawWorld(ctx: CanvasRenderingContext2D, bg: HTMLCanvasElement, w: World, v: ViewState): void {
@@ -110,6 +112,9 @@ export function drawWorld(ctx: CanvasRenderingContext2D, bg: HTMLCanvasElement, 
   const us = [...w.units].sort((a, b) => a.y - b.y);
   for (const u of us) {
     const T = TYPES[u.type], sz = T.sz, h = sz / 2;
+    const hidden = !unitVisible(u);
+    if (hidden && !(w.slots[u.team].ally === w.slots[v.viewer].ally)) continue;
+    if (hidden) ctx.globalAlpha = 0.45;
     const ux = u.ox + (u.x - u.ox) * alpha, uy = u.oy + (u.y - u.oy) * alpha;
     const x = Math.round(ux) - h, y = Math.round(uy) - h + (u.moving ? Math.floor(u.walk * 8) % 2 : 0);
     if (T.aura && w.phase === 'play') {
@@ -123,6 +128,9 @@ export function drawWorld(ctx: CanvasRenderingContext2D, bg: HTMLCanvasElement, 
       ctx.fillStyle = '#111'; ctx.fillRect(x, y - 3, sz, 2);
       ctx.fillStyle = TEAM[u.team]; ctx.fillRect(x, y - 3, Math.max(1, Math.round((sz * u.hp) / T.hp)), 2);
     }
+    if (u.rootT > 0) { ctx.fillStyle = '#4caf50'; ctx.fillRect(x, y + sz - 1, sz, 1); }
+    else if (u.slowT > 0) { ctx.fillStyle = '#dde2ec'; ctx.fillRect(x, y + sz - 1, sz, 1); }
+    if (hidden) ctx.globalAlpha = 1;
   }
   drawFx(ctx, w.fx);
   if (drag) {

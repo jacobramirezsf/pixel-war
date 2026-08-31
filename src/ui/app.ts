@@ -3,8 +3,9 @@
 
 import type { BldKey } from '../data/buildings.ts';
 import type { DiffKey } from '../data/difficulty.ts';
+import { RACE_KEYS, type RaceKey } from '../data/races.ts';
 import { BUILTIN, type EditorTool } from '../data/maps.ts';
-import type { UnitKey } from '../data/units.ts';
+import { roster, type UnitKey } from '../data/units.ts';
 import type { Storage } from '../platform/storage.ts';
 import { buildBg } from '../render/terrain.ts';
 import type { DragRect } from '../render/scene.ts';
@@ -26,6 +27,8 @@ export interface EditorState {
 export interface SlotRow {
   on: boolean;
   team: number;
+  /** null means pick at random when the game starts. */
+  race: RaceKey | null;
 }
 
 /** Callbacks the flow needs from modules that import this one. Assigned in main. */
@@ -43,6 +46,10 @@ export interface App {
   curMap: MapDef;
   custom: MapDef | null;
   diff: DiffKey;
+  /** The player's race. */
+  race: RaceKey;
+  /** Opponent race for 1v1 modes. null picks at random. */
+  foeRace: RaceKey | null;
   mset: SlotRow[];
   ctl: number;
   brush: UnitKey;
@@ -70,8 +77,8 @@ export function createApp(storage: Storage): App {
   const cv = $<HTMLCanvasElement>('c');
   const ctx = cv.getContext('2d')!;
   return {
-    world: null, setup: null, editor: null, curMap: BUILTIN[0], custom: null, diff: 'std',
-    mset: [{ on: true, team: 0 }, { on: true, team: 1 }, { on: true, team: 2 }, { on: false, team: 3 }, { on: false, team: 4 }],
+    world: null, setup: null, editor: null, curMap: BUILTIN[0], custom: null, diff: 'std', race: 'kingdom', foeRace: null,
+    mset: [{ on: true, team: 0, race: null }, { on: true, team: 1, race: null }, { on: true, team: 2, race: null }, { on: false, team: 3, race: null }, { on: false, team: 4, race: null }],
     ctl: 0, brush: 'inf', bbrush: 'stk', tool: 'cmd', bstrip: false, running: false, paused: false, selection: new Set(), drag: null, msg: '', msgT: 0,
     cv, ctx, bg: document.createElement('canvas'), W: 160, H: 224, storage,
     ui: { updateUI: () => {}, showMenu: () => {}, endScreen: () => {} },
@@ -119,9 +126,22 @@ export function selectedUnits(app: App): import('../sim/types.ts').Unit[] {
   return w.units.filter((u) => u.team === app.ctl && u.hp > 0 && app.selection.has(u.id));
 }
 
-export function startGame(app: App, mode: Mode, allies?: number[]): void {
+export function randomRace(): RaceKey {
+  return RACE_KEYS[(Math.random() * RACE_KEYS.length) | 0];
+}
+
+/** Race the controlled slot plays. Sandbox lets you place either side. */
+export function ctlRace(app: App): RaceKey {
+  return app.world ? app.world.slots[app.ctl].race : app.race;
+}
+
+export function startGame(app: App, mode: Mode, allies?: number[], races?: (RaceKey | null)[]): void {
   const al = allies ?? [0, 1];
-  const setup: GameSetup = { seed: (Math.random() * 2 ** 31) | 0, mode, map: app.curMap, allies: al, diff: app.diff, ai: al.map((_, i) => i !== 0) };
+  const rc: RaceKey[] = al.map((_, i) => {
+    const pick = races ? races[i] : i === 0 ? app.race : app.foeRace;
+    return pick ?? randomRace();
+  });
+  const setup: GameSetup = { seed: (Math.random() * 2 ** 31) | 0, mode, map: app.curMap, allies: al, diff: app.diff, ai: al.map((_, i) => i !== 0), races: rc };
   const w = setupWorld(setup);
   app.world = w;
   app.setup = setup;
@@ -130,7 +150,7 @@ export function startGame(app: App, mode: Mode, allies?: number[]): void {
   app.paused = false;
   app.selection.clear();
   app.ctl = 0;
-  app.brush = 'inf';
+  app.brush = roster(rc[0])[1];
   app.bbrush = 'stk';
   app.tool = mode === 'sand' ? 'place' : 'cmd';
   app.bstrip = false;

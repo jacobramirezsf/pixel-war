@@ -4,6 +4,7 @@
 import type { UnitKey } from '../data/units.ts';
 import type { BldKey, BldKind } from '../data/buildings.ts';
 import type { DiffKey } from '../data/difficulty.ts';
+import type { RaceKey } from '../data/races.ts';
 import type { MapDef } from './map.ts';
 import type { Rng } from './rng.ts';
 
@@ -70,6 +71,18 @@ export interface Unit {
   /** Position at the start of the tick, for render interpolation. */
   ox: number;
   oy: number;
+  /** Seconds of half speed left. */
+  slowT: number;
+  /** Seconds of no movement left. */
+  rootT: number;
+  /** Seconds a stealth unit stays visible. */
+  reveal: number;
+  /** Distance run since the last attack, for charge bonuses. */
+  run: number;
+  /** Cooldown left before the next blink. */
+  blinkT: number;
+  /** Time until the next trap drop. */
+  dropT: number;
 }
 
 export interface Mine {
@@ -82,6 +95,7 @@ export interface Mine {
 export interface Slot {
   /** Alliance id. Slots with the same value are allies. */
   ally: number;
+  race: RaceKey;
   alive: boolean;
   gold: number;
   /** A faction owns a collection of settlements. Skirmish puts one here. */
@@ -177,4 +191,6 @@ export interface WorldConfig {
   seed?: number;
   /** Which slots the built-in AI drives. Default: every slot but 0. */
   ai?: boolean[];
+  /** Race per slot. Default: kingdom. */
+  races?: RaceKey[];
 }

@@ -1,6 +1,7 @@
 // Starting a game in any mode.
 
 import type { DiffKey } from '../data/difficulty.ts';
+import type { RaceKey } from '../data/races.ts';
 import { buildFort } from './buildings.ts';
 import { cloneMap, type MapDef } from './map.ts';
 import { mkBases } from './mapgen.ts';
@@ -13,6 +14,7 @@ export interface GameConfig {
   seed?: number;
   /** Which slots the built-in AI drives. Default: all but slot 0. AI slots start with a fort. */
   ai?: boolean[];
+  races?: RaceKey[];
 }
 
 /** Copy of the chosen map, with extra bases placed for 3 to 5 players. */
@@ -23,7 +25,7 @@ export function prepareMap(map: MapDef, nP: number): MapDef {
 
 export function newGame(map: MapDef, mode: Mode, cfg?: GameConfig): World {
   const allies = cfg?.allies ?? [0, 1];
-  const w = reset(prepareMap(map, allies.length), { allies, diff: cfg?.diff ?? 'std', seed: cfg?.seed, ai: cfg?.ai });
+  const w = reset(prepareMap(map, allies.length), { allies, diff: cfg?.diff ?? 'std', seed: cfg?.seed, ai: cfg?.ai, races: cfg?.races });
   w.mode = mode;
   if (mode === 'sand') {
     w.phase = 'edit';

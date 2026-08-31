@@ -3,6 +3,7 @@
 import { BUILTIN } from '../../data/maps.ts';
 import { DIFF, DIFF_KEYS, type DiffKey } from '../../data/difficulty.ts';
 import { TEAM } from '../../data/teams.ts';
+import { RACE_KEYS, RACES, type RaceKey } from '../../data/races.ts';
 import { decodeMap, encodeMap } from '../../sim/map.ts';
 import type { Mode } from '../../sim/types.ts';
 import { allied, count } from '../../sim/world.ts';
@@ -16,6 +17,13 @@ function diffRowHtml(app: App): string {
   return '<div class="row">' + DIFF_KEYS.map((k) => '<button class="sm' + (k === app.diff ? ' on' : '') + '" data-diff="' + k + '">' + DIFF[k].name + '</button>').join('') + '</div>';
 }
 
+const nextRace = (r: RaceKey | null, allowRandom: boolean): RaceKey | null => {
+  const i = r ? RACE_KEYS.indexOf(r) : -1;
+  if (i + 1 >= RACE_KEYS.length) return allowRandom ? null : RACE_KEYS[0];
+  return RACE_KEYS[i + 1];
+};
+const raceName = (r: RaceKey | null): string => (r ? RACES[r].name : 'RANDOM');
+
 function wireDiff(app: App, rerender: () => void): void {
   for (const b of ov().querySelectorAll<HTMLButtonElement>('button[data-diff]')) on(b, 'click', () => { app.diff = b.dataset.diff as DiffKey; rerender(); });
 }
@@ -27,6 +35,8 @@ export function showMenu(app: App): void {
     <h1>PIXEL <span>WAR</span></h1>
     <p class="ver">v3</p>
     <button class="pick cur" id="mMap">MAP: ${m.name.toUpperCase()}<span>${m.cols}×${m.rows} · change</span></button>
+    <div class="row"><button class="pick" id="mRace">YOU: ${RACES[app.race].name}<span>change</span></button><button class="pick" id="mFoe">FOE: ${raceName(app.foeRace)}<span>change</span></button></div>
+    <p class="blurb">${RACES[app.race].blurb}</p>
     ${diffRowHtml(app)}
     <button class="gold" data-mode="skirmish">SKIRMISH<small>1v1. Destroy the enemy base. It sits behind a fort, so bring siege.</small></button>
     <button data-mode="multi">MULTI WAR<small>Up to 5 armies. Teams or free for all. Last alliance standing.</small></button>
@@ -44,6 +54,8 @@ export function showMenu(app: App): void {
       startGame(app, mode);
     });
   on($('mMap'), 'click', () => showMaps(app));
+  on($('mRace'), 'click', () => { app.race = nextRace(app.race, false)!; showMenu(app); });
+  on($('mFoe'), 'click', () => { app.foeRace = nextRace(app.foeRace, true); showMenu(app); });
   wireDiff(app, () => showMenu(app));
   ov().classList.remove('hide');
 }
@@ -54,9 +66,11 @@ export function showSetup(app: App): void {
     const r = app.mset[i];
     const col = r.on ? TEAM[app.mset.slice(0, i + 1).filter((q) => q.on).length - 1] : '#5a5d6a';
     const name = i === 0 ? 'YOU' : r.on ? 'AI ' + i : 'OFF';
+    const race = i === 0 ? app.race : r.race;
     rows += '<div class="slotrow">'
       + '<button class="name" data-slot="' + i + '" ' + (i === 0 ? 'disabled' : '') + ' style="color:' + col + ';border-color:' + (r.on ? col : '#3a3d4a') + '">' + name + '</button>'
       + '<button data-team="' + i + '" ' + (r.on ? '' : 'disabled class="dis"') + '>TEAM ' + (r.team + 1) + '</button>'
+      + '<button data-race="' + i + '" ' + (r.on ? '' : 'disabled class="dis"') + '>' + raceName(race) + '</button>'
       + '</div>';
   }
   ov().innerHTML = '<div><h2>MULTI WAR</h2>'
@@ -67,13 +81,20 @@ export function showSetup(app: App): void {
     on(b, 'click', () => { const i = +b.dataset.slot!; if (i === 0) return; app.mset[i].on = !app.mset[i].on; showSetup(app); });
   for (const b of ov().querySelectorAll<HTMLButtonElement>('button[data-team]'))
     on(b, 'click', () => { const i = +b.dataset.team!; app.mset[i].team = (app.mset[i].team + 1) % 5; showSetup(app); });
+  for (const b of ov().querySelectorAll<HTMLButtonElement>('button[data-race]'))
+    on(b, 'click', () => {
+      const i = +b.dataset.race!;
+      if (i === 0) app.race = nextRace(app.race, false)!;
+      else app.mset[i].race = nextRace(app.mset[i].race, true);
+      showSetup(app);
+    });
   wireDiff(app, () => showSetup(app));
   on($('msBack'), 'click', () => showMenu(app));
   on($('msStart'), 'click', () => {
     const actv = app.mset.filter((r) => r.on);
     if (actv.length < 2) { $('msStart').textContent = 'TURN ON AN AI'; return; }
     if (!actv.some((r, idx) => idx > 0 && r.team !== actv[0].team)) { $('msStart').textContent = 'NEED AN ENEMY TEAM'; return; }
-    startGame(app, 'multi', actv.map((r) => r.team));
+    startGame(app, 'multi', actv.map((r) => r.team), actv.map((r, idx) => (idx === 0 ? app.race : r.race)));
   });
   ov().classList.remove('hide');
 }
@@ -118,6 +139,7 @@ export function endScreen(app: App): void {
   } else {
     h1 = win ? '<span>VICTORY</span>' : 'DEFEAT';
     body = (w.mode === 'dom' ? 'Final control ' + Math.floor(w.score[0]) + ':' + Math.floor(w.score[1]) + '. ' : '') + (win ? 'Won in ' + Math.floor(w.t) + 's on ' + w.map.name + '.' : 'Lost at ' + Math.floor(w.t) + 's on ' + w.map.name + '.');
+    body += ' You played ' + RACES[w.slots[0].race].name + ' against ' + w.slots.filter((_, i) => i > 0 && !allied(w, 0, i)).map((s) => RACES[s.race].name).join(', ') + '.';
     if (w.mode === 'multi') {
       let r = 0;
       for (let i = 1; i < w.nP; i++) if (w.slots[i].alive && !allied(w, 0, i)) r++;
@@ -128,7 +150,7 @@ export function endScreen(app: App): void {
   }
   ov().innerHTML = '<div><h1>' + h1 + '</h1><p>' + body + '</p><p>' + tip + '</p>' + btns + '</div>';
   const a = document.getElementById('eAgain'), e = document.getElementById('eEdit'), r = document.getElementById('eReplay');
-  if (a) on(a, 'click', () => { if (w.mode === 'multi') startGame(app, 'multi', w.slots.map((s) => s.ally)); else startGame(app, w.mode); });
+  if (a) on(a, 'click', () => startGame(app, w.mode, w.slots.map((s) => s.ally), w.slots.map((s) => s.race)));
   if (e) on(e, 'click', () => toEdit(app));
   if (r) on(r, 'click', () => startBattle(app));
   on($('eMenu'), 'click', () => showMenu(app));

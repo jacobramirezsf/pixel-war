@@ -2,6 +2,7 @@
 
 import { DIFF, type DiffDef, type DiffKey } from '../data/difficulty.ts';
 import type { UnitKey } from '../data/units.ts';
+import type { RaceKey } from '../data/races.ts';
 import type { BldKey, BldKind } from '../data/buildings.ts';
 import { TILE, type MapDef, type TilePos } from './map.ts';
 import { makeRng, type Rng } from './rng.ts';
@@ -22,7 +23,8 @@ export function reset(map: MapDef, cfg?: Partial<WorldConfig>): World {
     const b = map.bases[i];
     const base: Settlement = { ent: 'base', id: nextId++, team: i, x: b.tx * TILE + 4, y: b.ty * TILE + 4, hp: BASE_HP, max: BASE_HP, cd: 0 };
     const ai = cfg?.ai ? !!cfg.ai[i] : i !== 0;
-    return { ally, alive: true, gold: i === 0 ? 60 : 40, settlements: [base], ai, aiT: 1.5, aiWant: null };
+    const race: RaceKey = cfg?.races?.[i] ?? 'kingdom';
+    return { ally, race, alive: true, gold: i === 0 ? 60 : 40, settlements: [base], ai, aiT: 1.5, aiWant: null };
   });
   return {
     map,
@@ -101,6 +103,7 @@ interface SnapUnit {
   id: number; team: number; type: UnitKey; x: number; y: number; hp: number; cd: number;
   order: SnapOrder | null; flash: number; walk: number; moving: boolean; held: boolean;
   blk: number | null; px: number; py: number; ox: number; oy: number;
+  slowT: number; rootT: number; reveal: number; run: number; blinkT: number; dropT: number;
 }
 
 interface SnapBld {
@@ -109,7 +112,7 @@ interface SnapBld {
 }
 
 interface SnapSlot {
-  ally: number; alive: boolean; gold: number; settlements: Settlement[]; ai: boolean; aiT: number; aiWant: UnitKey | null;
+  ally: number; race: RaceKey; alive: boolean; gold: number; settlements: Settlement[]; ai: boolean; aiT: number; aiWant: UnitKey | null;
 }
 
 export interface Snapshot {
@@ -145,11 +148,12 @@ export function snapshot(w: World): Snapshot {
       bases: w.map.bases.map((b) => ({ tx: b.tx, ty: b.ty })), mines: w.map.mines.map((q) => ({ tx: q.tx, ty: q.ty })),
     },
     mode: w.mode, phase: w.phase, nP: w.nP,
-    slots: w.slots.map((s) => ({ ally: s.ally, alive: s.alive, gold: s.gold, settlements: s.settlements.map((b) => ({ ...b })), ai: s.ai, aiT: s.aiT, aiWant: s.aiWant })),
+    slots: w.slots.map((s) => ({ ally: s.ally, race: s.race, alive: s.alive, gold: s.gold, settlements: s.settlements.map((b) => ({ ...b })), ai: s.ai, aiT: s.aiT, aiWant: s.aiWant })),
     diff: w.diff, cap: w.cap, tick: w.tick, t: w.t, income: w.income, incFlash: w.incFlash,
     units: w.units.map((u) => ({
       id: u.id, team: u.team, type: u.type, x: u.x, y: u.y, hp: u.hp, cd: u.cd, order: snapOrder(u.order),
       flash: u.flash, walk: u.walk, moving: u.moving, held: u.held, blk: u.blk ? u.blk.id : null, px: u.px, py: u.py, ox: u.ox, oy: u.oy,
+      slowT: u.slowT, rootT: u.rootT, reveal: u.reveal, run: u.run, blinkT: u.blinkT, dropT: u.dropT,
     })),
     blds: w.blds.map((b) => ({
       id: b.id, team: b.team, type: b.type, kind: b.kind, tx: b.tx, ty: b.ty, x: b.x, y: b.y, hp: b.hp, max: b.max, cd: b.cd,
@@ -171,7 +175,7 @@ export function restore(s: Snapshot): World {
     name: s.map.name, cols: s.map.cols, rows: s.map.rows, tiles: Uint8Array.from(s.map.tiles),
     bases: s.map.bases.map((b) => ({ tx: b.tx, ty: b.ty })), mines: s.map.mines.map((q) => ({ tx: q.tx, ty: q.ty })),
   };
-  const slots: Slot[] = s.slots.map((x) => ({ ally: x.ally, alive: x.alive, gold: x.gold, settlements: x.settlements.map((b) => ({ ...b })), ai: x.ai, aiT: x.aiT, aiWant: x.aiWant }));
+  const slots: Slot[] = s.slots.map((x) => ({ ally: x.ally, race: x.race, alive: x.alive, gold: x.gold, settlements: x.settlements.map((b) => ({ ...b })), ai: x.ai, aiT: x.aiT, aiWant: x.aiWant }));
   const blds: Building[] = s.blds.map((b) => ({ ent: 'bld', ...b, tiles: b.tiles.map((q) => [q[0], q[1]] as [number, number]) }));
   const bmap = new Map<number, Building>();
   for (const b of blds) for (const q of b.tiles) bmap.set(q[1] * map.cols + q[0], b);
@@ -182,6 +186,7 @@ export function restore(s: Snapshot): World {
   const units: Unit[] = s.units.map((u) => ({
     ent: 'unit', id: u.id, team: u.team, type: u.type, x: u.x, y: u.y, hp: u.hp, cd: u.cd, order: null,
     flash: u.flash, walk: u.walk, moving: u.moving, held: u.held, blk: u.blk != null ? bldById.get(u.blk) ?? null : null, px: u.px, py: u.py, ox: u.ox, oy: u.oy,
+    slowT: u.slowT, rootT: u.rootT, reveal: u.reveal, run: u.run, blinkT: u.blinkT, dropT: u.dropT,
   }));
   const unitById = new Map<number, Unit>();
   for (const u of units) unitById.set(u.id, u);

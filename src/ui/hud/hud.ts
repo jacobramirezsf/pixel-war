@@ -4,14 +4,16 @@ import { BLD, BORDER } from '../../data/buildings.ts';
 import { DIFF } from '../../data/difficulty.ts';
 import { TOOLS, type EditorTool } from '../../data/maps.ts';
 import { TNAME } from '../../data/teams.ts';
-import { ORDER, TYPES, type UnitKey } from '../../data/units.ts';
+import { ALL_UNITS, roster, TYPES, type UnitKey } from '../../data/units.ts';
+import { RACES } from '../../data/races.ts';
 import { drawBldSpr, drawSprite } from '../../render/atlas.ts';
 import { drawTile } from '../../render/terrain.ts';
 import { allied, count } from '../../sim/world.ts';
-import { fit, issueAction, say, selectedUnits, type App } from '../app.ts';
+import { ctlRace, fit, issueAction, say, selectedUnits, type App } from '../app.ts';
 import { $, on, show } from '../dom.ts';
 
 const unitBtns = {} as Record<UnitKey, HTMLButtonElement>;
+let paintedRace = '';
 const bldBtns = {} as Record<string, HTMLButtonElement>;
 const toolBtns = new Map<EditorTool, HTMLButtonElement>();
 let sellBtn: HTMLButtonElement;
@@ -50,7 +52,7 @@ export function buildStrips(app: App): void {
   toBuild.textContent = 'BUILD ▸';
   on(toBuild, 'click', () => { app.bstrip = true; app.tool = 'build'; updateUI(app); say(app, 'Pick a structure, then tap or drag on the map', 2); });
   strip.appendChild(toBuild);
-  for (const k of ORDER) unitBtns[k] = mkStripBtn(strip, TYPES[k].name, TYPES[k].cost, () => unitTap(app, k));
+  for (const k of ALL_UNITS) { unitBtns[k] = mkStripBtn(strip, TYPES[k].name, TYPES[k].cost, () => unitTap(app, k)); unitBtns[k].title = TYPES[k].name; }
   const toUnits = document.createElement('button');
   toUnits.className = 'tab';
   toUnits.textContent = '◂ UNITS';
@@ -79,11 +81,13 @@ export function buildStrips(app: App): void {
 }
 
 function paintStrip(app: App): void {
-  for (const k of ORDER) {
+  const race = ctlRace(app);
+  for (const k of roster(race)) {
     const c = unitBtns[k].firstChild as HTMLCanvasElement, cc = c.getContext('2d')!, sz = TYPES[k].sz, sc = Math.max(1, Math.floor(30 / sz));
     cc.clearRect(0, 0, 30, 30);
     drawSprite(cc, k, app.ctl, Math.floor((30 - sz * sc) / 2), Math.floor((30 - sz * sc) / 2), sc, false);
   }
+  paintedRace = race + app.ctl;
   for (const k of BORDER) {
     const c = bldBtns[k].firstChild as HTMLCanvasElement, cc = c.getContext('2d')!;
     cc.clearRect(0, 0, 30, 30);
@@ -111,10 +115,15 @@ export function updateUI(app: App): void {
   B('bPause').classList.toggle('on', app.paused);
   B('bPause').textContent = app.paused ? 'RESUME' : 'PAUSE';
   sellBtn.classList.toggle('on', app.tool === 'sell');
-  for (const k of ORDER) { unitBtns[k].classList.toggle('on', sand && edit && app.tool === 'place' && app.brush === k); if (sand) unitBtns[k].classList.remove('dis'); }
+  const race = ctlRace(app), list = new Set(roster(race));
+  for (const k of ALL_UNITS) {
+    show(unitBtns[k], list.has(k));
+    unitBtns[k].classList.toggle('on', sand && edit && app.tool === 'place' && app.brush === k);
+    if (sand) unitBtns[k].classList.remove('dis');
+  }
   for (const k of BORDER) { bldBtns[k].classList.toggle('on', app.tool === 'build' && app.bbrush === k); if (sand) bldBtns[k].classList.remove('dis'); }
   for (const t of TOOLS) toolBtns.get(t.k)!.classList.toggle('on', map && app.editor?.tool === t.k);
-  paintStrip(app);
+  if (paintedRace !== race + app.ctl) paintStrip(app);
   fit(app);
 }
 
@@ -137,14 +146,14 @@ export function renderHud(app: App): void {
     sel.textContent = 'Sel ' + selectedUnits(app).length;
   } else {
     const gold = w.slots[0].gold;
-    tl.innerHTML = 'Gold <b>' + (Number.isFinite(gold) ? Math.floor(gold) : '∞') + '</b> <span class="inc' + (w.incFlash > 0 ? ' flash' : '') + '">+' + w.income.toFixed(1) + '/s</span>';
+    tl.innerHTML = 'Gold <b>' + (Number.isFinite(gold) ? Math.floor(gold) : '∞') + '</b> <span class="inc' + (w.incFlash > 0 ? ' flash' : '') + '">+' + w.income.toFixed(1) + '/s</span> <span class="race">' + RACES[w.slots[0].race].name + '</span>';
     if (w.mode === 'dom') wave.textContent = '⚑ ' + Math.floor(w.score[0]) + ':' + Math.floor(w.score[1]) + ' of 150';
     else if (w.mode === 'multi') {
       let r = 0;
       for (let i = 1; i < w.nP; i++) if (w.slots[i].alive && !allied(w, 0, i)) r++;
       wave.textContent = r + ' rival' + (r === 1 ? '' : 's') + ' left · ' + DIFF[w.diff].name;
     } else wave.textContent = w.waveN ? 'Wave ' + w.waveN + ' · next ' + Math.ceil(w.wave) + 's' : 'First wave ' + Math.ceil(w.wave) + 's';
-    for (const k of ORDER) unitBtns[k].classList.toggle('dis', gold < TYPES[k].cost);
+    for (const k of roster(ctlRace(app))) unitBtns[k].classList.toggle('dis', gold < TYPES[k].cost);
     for (const k of BORDER) bldBtns[k].classList.toggle('dis', gold < BLD[k].cost);
     sel.textContent = 'Sel ' + selectedUnits(app).length;
   }

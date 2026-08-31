@@ -22,7 +22,7 @@ test('different seeds produce different hashes', () => {
 });
 
 test('replay from seed plus log reproduces the game', () => {
-  const setup: GameSetup = { seed: 42, mode: 'skirmish', map: BUILTIN[1], allies: [0, 1], diff: 'hard', ai: [false, true] };
+  const setup: GameSetup = { seed: 42, mode: 'skirmish', map: BUILTIN[1], allies: [0, 1], diff: 'hard', ai: [false, true], races: ['forge', 'horde'] };
   const w = setupWorld(setup);
   runBots(w, [BOTS.econ, BOTS.ai], 60 * 120);
   const r = recordReplay(w, setup);
