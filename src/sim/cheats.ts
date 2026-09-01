@@ -61,7 +61,7 @@ export function runCheat(w: World, c: Payload, say: (t: string, d: number) => vo
   switch (c.op) {
     case 'gold': s.gold = Number.isFinite(s.gold) ? s.gold + (c.n ?? 1000) : s.gold; say('+' + (c.n ?? 1000) + ' gold', 1); return true;
     case 'mat': s.mat += c.n ?? 500; say('+' + (c.n ?? 500) + ' materials', 1); return true;
-    case 'research': s.tech = { melee: 2, ranged: 2, armor: 2 }; say('Every research done', 1.5); return true;
+    case 'research': s.tech = { melee: 3, ranged: 3, armor: 3, vehicle: 2, naval: 2, farming: 2, masonry: 2 }; say('Every research done', 1.5); return true;
     case 'heal':
       for (const u of w.units) if (u.team === 0 && u.hp > 0) u.hp = TYPES[u.type].hp;
       for (const b of w.blds) if (b.team === 0) b.hp = b.max;

@@ -17,7 +17,7 @@ import { allied, cheat, chronicle, count, mapH, mapW, say as worldSay } from './
 import { runCheat } from './cheats.ts';
 import { startWork, unroad } from './works.ts';
 import { castPower } from './powers.ts';
-import { canResearch, canTrain, pickTrainer, queuedCount, RESEARCH_COST, TECH_NAMES } from './town.ts';
+import { canResearch, canTrain, pickTrainer, queuedCount, RESEARCH_COST, TECH_NAMES, canUpgradeBld, connectedSegments, nextType, upgradeCost, levelQueue } from './town.ts';
 
 /** Queued and in-production units count toward the army cap. */
 export function committed(w: World, slot: number): number {
@@ -84,7 +84,7 @@ export function applyCommand(w: World, c: Command, quiet = false): boolean {
       if (why) { say(T.name + ' ' + why, 1.5); return false; }
       const trainer = pickTrainer(w, slot, c.payload.unit, c.payload.building, c.payload.near);
       const queue = trainer ? trainer.queue : s.queue;
-      if (queue.length >= 12) { say('Queue is full', 1.2); return false; }
+      if (queue.length >= (trainer ? levelQueue(trainer.level) : 12)) { say('Queue is full', 1.2); return false; }
       if (!cheat(w, slot, 'noPop') && w.mode === 'conquest' && w.rules.population && popUsed(w, slot) + popOf(c.payload.unit) > popCap(w, slot)) { say('No room. Houses and settlements add population.', 1.5); return false; }
       if (w.mode === 'conquest' && !w.rules.town && T.cost >= ADVANCED_COST && !hasCity(w, slot)) { say('Needs a city', 1.5); return false; }
       if (!freeUnit) s.gold -= T.cost;
@@ -106,7 +106,7 @@ export function applyCommand(w: World, c: Command, quiet = false): boolean {
       const why = canResearch(w, slot, c.payload.tech);
       if (why) { say('Cannot research: ' + why, 1.5); return false; }
       const lvl = s.tech[c.payload.tech];
-      s.gold -= RESEARCH_COST[lvl];
+      if (!cheat(w, slot, 'gold')) s.gold -= RESEARCH_COST[lvl];
       s.tech[c.payload.tech] = lvl + 1;
       say(TECH_NAMES[c.payload.tech] + ' ' + (lvl + 1) + ' researched', 2);
       return true;
@@ -383,6 +383,33 @@ export function applyCommand(w: World, c: Command, quiet = false): boolean {
       if (editing) return false;
       const tx = clamp((c.payload.x / TILE) | 0, 0, mapW(w) / TILE - 1), ty = clamp((c.payload.y / TILE) | 0, 0, mapH(w) / TILE - 1);
       return startWork(w, slot, tx, ty, c.payload.kind);
+    }
+    case 'upgradeBld': {
+      const b = w.blds.find((x) => x.id === c.payload.id && x.team === slot);
+      if (!b) return false;
+      const why = canUpgradeBld(w, slot, b);
+      if (why) { say('Cannot upgrade: ' + why, 1.5); return false; }
+      const targets = c.payload.connected && nextType(b.type) ? connectedSegments(w, b) : [b];
+      let gold = 0, mat = 0;
+      for (const t of targets) { const cst = upgradeCost(t); gold += cst.gold; mat += w.rules.materials && w.mode === 'conquest' ? cst.mat : 0; }
+      if (!w.rules.materials || w.mode !== 'conquest') { gold += mat; mat = 0; }
+      const free = cheat(w, slot, 'freeBuild');
+      if (!free && s.gold < gold) { say('Need ' + gold + ' gold', 1.2); return false; }
+      if (!free && s.mat < mat) { say('Need ' + mat + ' materials', 1.2); return false; }
+      if (!free) { s.gold -= gold; s.mat -= mat; }
+      const next = nextType(b.type);
+      for (const t of targets) {
+        if (next) {
+          // The segment becomes the stronger kind in place, at the same fraction of health.
+          const frac = t.hp / t.max, D = BLD[next];
+          t.type = next; t.kind = D.kind;
+          t.max = Math.round(D.hp * (1 + 0.25 * (w.slots[slot].tech.masonry ?? 0)));
+          t.hp = Math.max(1, Math.round(t.max * frac));
+        } else t.level++;
+      }
+      w.flowDirty = true;
+      say(next ? targets.length + ' upgraded to ' + BLD[next].name.toLowerCase() : BLD[b.type].name + ' is level ' + b.level, 1.5);
+      return true;
     }
     case 'unbuild': {
       // Undo of the last placement: full refund in what was paid, building gone.

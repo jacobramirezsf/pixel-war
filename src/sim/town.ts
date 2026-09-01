@@ -13,8 +13,23 @@ import { allied, cheat, inZone, say } from './world.ts';
 import { mkUnit } from './units.ts';
 import { wonderDone } from './wonder.ts';
 
-export const RESEARCH_COST = [120, 240];
-export const TECH_NAMES: Record<Tech, string> = { melee: 'BLADES', ranged: 'BOWS', armor: 'ARMOR' };
+export const RESEARCH_COST = [120, 240, 420];
+export const TECH_NAMES: Record<Tech, string> = { melee: 'BLADES', ranged: 'BOWS', armor: 'ARMOR', vehicle: 'ENGINES', naval: 'HULLS', farming: 'FARMING', masonry: 'MASONRY' };
+/** What each research does, in plain words, and where it is bought. */
+export const TECH_INFO: Record<Tech, { levels: number; at: BldKey; text: string; age?: number }> = {
+  melee:   { levels: 3, at: 'smith',  text: 'melee damage +1 a level' },
+  ranged:  { levels: 3, at: 'smith',  text: 'ranged damage +1 a level' },
+  armor:   { levels: 3, at: 'smith',  text: 'every unit takes 1 less a level' },
+  vehicle: { levels: 2, at: 'factory', text: 'vehicles and aircraft +15% damage a level', age: 2 },
+  naval:   { levels: 2, at: 'dock',   text: 'boats +20% damage a level', age: 1 },
+  farming: { levels: 2, at: 'market', text: 'farm and market jobs pay 25% more a level', age: 1 },
+  masonry: { levels: 2, at: 'market', text: 'new walls and towers +25% health, builds 20% faster a level', age: 1 },
+};
+export const TECH_KEYS = Object.keys(TECH_INFO) as Tech[];
+/** Building levels: cost is the base times the level, training speeds up, queues lengthen. */
+export const LEVEL_MAX = 3;
+export const levelSpeed = (level: number): number => 1 + 0.25 * (level - 1);
+export const levelQueue = (level: number): number => 12 + 4 * (level - 1);
 
 /** The age a faction plays at: its best finished settlement. Without the ages rule, everything is open. */
 export function ageOf(w: World, slot: number): number {
@@ -69,9 +84,12 @@ export function pickTrainer(w: World, slot: number, unit: UnitKey, building?: nu
 
 export function canResearch(w: World, slot: number, tech: Tech): string | null {
   if (!w.rules.town) return 'not in this mode';
-  if (!ownBlds(w, slot, 'smith').length) return 'needs a blacksmith';
+  const I = TECH_INFO[tech];
+  if (!ownBlds(w, slot, I.at).length) return 'needs a ' + BLD[I.at].name.toLowerCase();
+  if ((I.age ?? 0) > ageOf(w, slot)) return 'needs the ' + ['village', 'town', 'city'][I.age ?? 0] + ' age';
   const lvl = w.slots[slot].tech[tech];
-  if (lvl >= RESEARCH_COST.length) return 'already at the top';
+  if (lvl >= I.levels) return 'already at the top';
+  if (lvl >= 2 && ageOf(w, slot) < 2) return 'level 3 needs a city';
   if (w.slots[slot].gold < RESEARCH_COST[lvl]) return 'need ' + RESEARCH_COST[lvl] + ' gold';
   return null;
 }
@@ -151,10 +169,14 @@ export function townTick(w: World, dt: number): void {
   for (const b of w.blds) {
     if (b.buildT > 0) {
       // Workers within reach double the pace.
+      // Workers double the pace; villagers who came to help count half each. A raid at the door halves it.
       let helpers = 0;
-      for (const u of w.units) if (u.team === b.team && u.hp > 0 && TYPES[u.type].repair && Math.hypot(u.x - b.x, u.y - b.y) < 28) helpers++;
+      for (const u of w.units) if (u.team === b.team && u.hp > 0 && Math.hypot(u.x - b.x, u.y - b.y) < 28) { if (TYPES[u.type].repair) helpers += 1; else if (TYPES[u.type].role === 'civ' && u.job === -2) helpers += 0.5; }
       const total = BLD[b.type].buildT ?? 1;
-      const rate = (cheat(w, b.team, 'build') ? 1e9 : 1) * (1 + Math.min(2, helpers)) * (inZone(w, b.team, 'golden', b.x, b.y) ? 1.5 : 1);
+      const D = BLD[b.type];
+      const mason = (D.kind === 'wall' || D.kind === 'tower' || D.kind === 'gate') ? 1 + 0.2 * (w.slots[b.team].tech.masonry ?? 0) : 1;
+      const raided = w.slots[b.team].settlements.some((st) => st.hp > 0 && st.civ.state === 'attacked' && Math.hypot(st.x - b.x, st.y - b.y) < 110);
+      const rate = (cheat(w, b.team, 'build') ? 1e9 : 1) * (1 + Math.min(2, helpers)) * mason * (raided ? 0.5 : 1) * (inZone(w, b.team, 'golden', b.x, b.y) ? 1.5 : 1);
       b.buildT = Math.max(0, b.buildT - dt * rate);
       b.hp = Math.min(b.max, Math.max(b.hp, Math.round(b.max * (0.1 + 0.9 * (1 - b.buildT / total)))));
       if (b.buildT <= 0) { if (b.team === 0) say(w, BLD[b.type].name + ' finished', 1.5); wonderDone(w, b); }
@@ -163,7 +185,7 @@ export function townTick(w: World, dt: number): void {
     if (!b.queue.length || b.hp <= 0) continue;
     const s = w.slots[b.team];
     const q = b.queue[0];
-    const rate = (s.ai ? PROFILES[s.diff].build : 1) * (w.instant || cheat(w, b.team, 'instant') ? 1e9 : 1);
+    const rate = (s.ai ? PROFILES[s.diff].build : 1) * levelSpeed(b.level) * (w.instant || cheat(w, b.team, 'instant') ? 1e9 : 1);
     q.t -= dt * rate;
     if (q.t > 0) continue;
     const u = spawnAt(w, b, q.unit);
@@ -212,3 +234,47 @@ export function queuedCount(w: World, slot: number): number {
   return n;
 }
 
+
+/** Why this building cannot go up a level, or null. Walls and towers step to the next material instead. */
+export function canUpgradeBld(w: World, slot: number, b: Building): string | null {
+  if (b.team !== slot) return 'not yours';
+  if (b.buildT > 0) return 'still building';
+  const next = nextType(b.type);
+  if (next) {
+    const D = BLD[next];
+    if ((D.age ?? 0) > ageOf(w, slot)) return 'needs the ' + ['village', 'town', 'city'][D.age ?? 0] + ' age';
+    return null;
+  }
+  if (!BLD[b.type].trains) return 'nothing to upgrade';
+  if (b.level >= LEVEL_MAX) return 'already level ' + LEVEL_MAX;
+  if (b.level >= 2 && ageOf(w, slot) < 2) return 'level 3 needs a city';
+  return null;
+}
+
+/** Palisade to stone to steel; wood tower to stone tower to turret. */
+export function nextType(type: BldKey): BldKey | null {
+  const chain: Partial<Record<BldKey, BldKey>> = { stk: 'wal', wal: 'stw', twr: 'stt', stt: 'trt' };
+  return chain[type] ?? null;
+}
+
+export function upgradeCost(b: Building): { gold: number; mat: number } {
+  const next = nextType(b.type);
+  if (next) { const D = BLD[next], O = BLD[b.type]; return { gold: 0, mat: Math.max(5, (D.cost - O.cost)) }; }
+  const D = BLD[b.type];
+  return { gold: D.cost * b.level, mat: Math.round((D.mat ?? 0) * 0.5 * b.level) };
+}
+
+/** Wall or tower segments of the same type touching this one, this one included. */
+export function connectedSegments(w: World, b: Building): Building[] {
+  const out: Building[] = [b];
+  const seen = new Set([b.id]);
+  const stack = [b];
+  while (stack.length) {
+    const cur = stack.pop()!;
+    for (const [tx, ty] of cur.tiles) for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const o = w.bmap.get((ty + dy) * w.map.cols + tx + dx);
+      if (o && !seen.has(o.id) && o.team === b.team && o.type === b.type) { seen.add(o.id); out.push(o); stack.push(o); }
+    }
+  }
+  return out;
+}

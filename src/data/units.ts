@@ -5,7 +5,7 @@
 import { RACES, RACE_KEYS, type RaceKey } from './races.ts';
 
 export type UnitKey = string;
-export type Role = 'scout' | 'line' | 'ranged' | 'fast' | 'siege' | 'support' | 'heavy' | 'air' | 'special' | 'civ' | 'naval' | 'vehicle';
+export type Role = 'scout' | 'line' | 'ranged' | 'fast' | 'siege' | 'support' | 'heavy' | 'air' | 'special' | 'civ' | 'naval' | 'vehicle' | 'darpa' | 'robot';
 
 export interface UnitDef {
   key: UnitKey;

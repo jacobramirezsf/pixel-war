@@ -92,7 +92,7 @@ export function reset(map: MapDef, cfg?: Partial<WorldConfig>): World {
     const base: Settlement = { ent: 'base', id: nextId++, team: i, x: b.tx * TILE + 4, y: b.ty * TILE + 4, hp: BASE_HP, max: BASE_HP, cd: 0, tier: 'village', region: -1, buildT: 0, hitBy: -1, nT: 0, civ: emptyTown() };
     const ai = cfg?.ai ? !!cfg.ai[i] : i !== 0;
     const race: RaceKey = cfg?.races?.[i] ?? 'kingdom';
-    return { ally, race, diff: cfg?.diffs?.[i] ?? diff, alive: true, gold: i === 0 ? 60 : 40, settlements: [base], ai, aiT: 1.5, aiWant: null, aiLast: 0, queue: [], rally: null, prefer: {}, mat: 0, neutral: false, attitude: allies.map(() => 0), truce: allies.map(() => false), truceT: allies.map(() => 0), pact: allies.map(() => false), raidT: 0, powerCd: {}, age: 0, tech: { melee: 0, ranged: 0, armor: 0 } };
+    return { ally, race, diff: cfg?.diffs?.[i] ?? diff, alive: true, gold: i === 0 ? 60 : 40, settlements: [base], ai, aiT: 1.5, aiWant: null, aiLast: 0, queue: [], rally: null, prefer: {}, mat: 0, neutral: false, attitude: allies.map(() => 0), truce: allies.map(() => false), truceT: allies.map(() => 0), pact: allies.map(() => false), raidT: 0, powerCd: {}, age: 0, tech: { melee: 0, ranged: 0, armor: 0, vehicle: 0, naval: 0, farming: 0, masonry: 0 } };
   });
   return {
     map,
@@ -225,7 +225,7 @@ interface SnapUnit {
 interface SnapBld {
   id: number; team: number; type: BldKey; kind: BldKind; tx: number; ty: number; x: number; y: number;
   hp: number; max: number; cd: number; dir: 'h' | 'v' | null; locked: boolean | null; tiles: [number, number][];
-  buildT: number; queue: QueueItem[]; rally: { x: number; y: number } | null;
+  buildT: number; queue: QueueItem[]; rally: { x: number; y: number } | null; level?: number;
 }
 
 interface SnapSlot {
@@ -288,7 +288,7 @@ export function snapshot(w: World): Snapshot {
     blds: w.blds.map((b) => ({
       id: b.id, team: b.team, type: b.type, kind: b.kind, tx: b.tx, ty: b.ty, x: b.x, y: b.y, hp: b.hp, max: b.max, cd: b.cd,
       dir: b.dir, locked: b.locked, tiles: b.tiles.map((q) => [q[0], q[1]] as [number, number]),
-      buildT: b.buildT, queue: b.queue.map((q) => ({ ...q })), rally: b.rally ? { ...b.rally } : null,
+      buildT: b.buildT, queue: b.queue.map((q) => ({ ...q })), rally: b.rally ? { ...b.rally } : null, level: b.level,
     })),
     fx: w.fx.map((f) => ({ ...f })),
     score: w.score.slice(), barbT: w.barbT, over: w.over,
@@ -314,8 +314,8 @@ export function restore(s: Snapshot): World {
     name: s.map.name, cols: s.map.cols, rows: s.map.rows, tiles: Uint8Array.from(s.map.tiles),
     bases: s.map.bases.map((b) => ({ tx: b.tx, ty: b.ty })), mines: s.map.mines.map((q) => ({ tx: q.tx, ty: q.ty })),
   };
-  const slots: Slot[] = s.slots.map((x) => ({ ally: x.ally, race: x.race, diff: x.diff, alive: x.alive, gold: x.gold, settlements: x.settlements.map((b) => ({ ...b, civ: Object.assign(emptyTown(), b.civ ?? {}) })), ai: x.ai, aiT: x.aiT, aiWant: x.aiWant, aiLast: x.aiLast ?? 0, queue: (x.queue ?? []).map((q) => ({ ...q })), rally: x.rally ? { ...x.rally } : null, prefer: { ...(x.prefer ?? {}) }, mat: x.mat ?? 0, neutral: !!x.neutral, attitude: (x.attitude ?? s.slots.map(() => 0)).slice(), truce: (x.truce ?? s.slots.map(() => false)).slice(), truceT: (x.truceT ?? s.slots.map(() => 0)).slice(), pact: (x.pact ?? s.slots.map(() => false)).slice(), raidT: x.raidT ?? 0, powerCd: { ...(x.powerCd ?? {}) }, age: x.age ?? 0, tech: Object.assign({ melee: 0, ranged: 0, armor: 0 }, x.tech ?? {}) }));
-  const blds: Building[] = s.blds.map((b) => ({ ent: 'bld', ...b, tiles: b.tiles.map((q) => [q[0], q[1]] as [number, number]), buildT: b.buildT ?? 0, queue: (b.queue ?? []).map((q) => ({ ...q })), rally: b.rally ? { ...b.rally } : null }));
+  const slots: Slot[] = s.slots.map((x) => ({ ally: x.ally, race: x.race, diff: x.diff, alive: x.alive, gold: x.gold, settlements: x.settlements.map((b) => ({ ...b, civ: Object.assign(emptyTown(), b.civ ?? {}) })), ai: x.ai, aiT: x.aiT, aiWant: x.aiWant, aiLast: x.aiLast ?? 0, queue: (x.queue ?? []).map((q) => ({ ...q })), rally: x.rally ? { ...x.rally } : null, prefer: { ...(x.prefer ?? {}) }, mat: x.mat ?? 0, neutral: !!x.neutral, attitude: (x.attitude ?? s.slots.map(() => 0)).slice(), truce: (x.truce ?? s.slots.map(() => false)).slice(), truceT: (x.truceT ?? s.slots.map(() => 0)).slice(), pact: (x.pact ?? s.slots.map(() => false)).slice(), raidT: x.raidT ?? 0, powerCd: { ...(x.powerCd ?? {}) }, age: x.age ?? 0, tech: Object.assign({ melee: 0, ranged: 0, armor: 0, vehicle: 0, naval: 0, farming: 0, masonry: 0 }, x.tech ?? {}) }));
+  const blds: Building[] = s.blds.map((b) => ({ ent: 'bld', ...b, tiles: b.tiles.map((q) => [q[0], q[1]] as [number, number]), buildT: b.buildT ?? 0, queue: (b.queue ?? []).map((q) => ({ ...q })), rally: b.rally ? { ...b.rally } : null, level: b.level ?? 1 }));
   const bmap = new Map<number, Building>();
   for (const b of blds) for (const q of b.tiles) bmap.set(q[1] * map.cols + q[0], b);
   const bases = new Map<number, Settlement>();

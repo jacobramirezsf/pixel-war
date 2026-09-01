@@ -49,9 +49,10 @@ export function addBld(w: World, team: number, type: BldKey, tx: number, ty: num
   const b: Building = {
     ent: 'bld', id: w.nextId++, team, type, kind: D.kind, tx, ty, x: tx * TILE + (D.w * TILE) / 2, y: ty * TILE + (D.h * TILE) / 2,
     hp: D.hp, max: D.hp, cd: rnd(w.rng, 0, 0.4), dir: null, locked: null, tiles,
-    buildT: construct && !cheat(w, team, 'build') ? (D.buildT ?? 0) : 0, queue: [], rally: null,
+    buildT: construct && !cheat(w, team, 'build') ? (D.buildT ?? 0) : 0, queue: [], rally: null, level: 1,
   };
-  if (b.buildT > 0) b.hp = Math.max(1, Math.round(D.hp * 0.1));
+  if ((D.kind === 'wall' || D.kind === 'tower' || D.kind === 'gate') && w.rules.town) { b.max = Math.round(D.hp * (1 + 0.25 * (w.slots[team].tech.masonry ?? 0))); b.hp = b.max; }
+  if (b.buildT > 0) b.hp = Math.max(1, Math.round(b.max * 0.1));
   if (D.kind === 'gate') {
     b.dir = dir || 'h';
     b.locked = true;
@@ -144,7 +145,7 @@ export function canBuild(w: World, tx: number, ty: number, team: number, type: B
     if (why) return why;
   }
   if (w.rules.town) {
-    const age = w.rules.ages ? w.slots[team].age : 2;
+    const age = cheat(w, team, 'allAges') || !w.rules.ages ? 2 : w.slots[team].age;
     if ((D.age ?? 0) > age) return 'needs the ' + ['village', 'town', 'city'][D.age ?? 0] + ' age';
     if (D.max && w.blds.filter((b) => b.team === team && b.type === type).length >= D.max) return 'you have enough of those';
     if (D.trains && type !== 'barracks' && D.kind === 'town' && !w.blds.some((b) => b.team === team && b.type === 'barracks' && b.buildT <= 0)) return 'build a barracks first';

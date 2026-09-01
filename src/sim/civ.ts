@@ -98,6 +98,7 @@ export function civTick(w: World): void {
       const byId = new Map(slots.map((j) => [j.id, j]));
       // Keep valid assignments, drop the rest.
       for (const u of people) {
+        if (u.job === -2) continue;
         const j = u.job >= 0 ? byId.get(u.job) : undefined;
         if (j && j.filled < j.cap && u.fleeT <= 0) j.filled++; else u.job = -1;
       }
@@ -110,7 +111,25 @@ export function civTick(w: World): void {
       c.jobs = slots.reduce((a, j) => a + j.cap, 0);
       c.employed = slots.reduce((a, j) => a + j.filled, 0);
       const golden = inZone(w, slot, 'golden', s.x, s.y);
-      c.income = Math.round(slots.reduce((a, j) => a + j.filled * j.income, 0) * (golden ? 2 : 1) * 100) / 100;
+      const farming = 1 + 0.25 * (S.tech.farming ?? 0);
+      c.income = Math.round(slots.reduce((a, j) => a + j.filled * j.income * (j.id === 0 ? 1 : farming), 0) * (golden ? 2 : 1) * 100) / 100;
+      // The unemployed lend a hand: a site under construction or a damaged building nearby becomes their errand.
+      const errands = blds.filter((b) => b.hp < b.max).concat(w.blds.filter((b) => b.team === slot && b.buildT > 0 && Math.hypot(b.x - s.x, b.y - s.y) < 110));
+      for (const u of people) {
+        if (u.job === -2 && !errands.some((b) => Math.hypot(b.x - u.x, b.y - u.y) < 30)) u.job = -1;
+        if (u.job !== -1 || u.fleeT > 0 || !errands.length) continue;
+        let best = errands[0], bd = Infinity;
+        for (const b of errands) { const d = Math.hypot(b.x - u.x, b.y - u.y); if (d < bd) { bd = d; best = b; } }
+        u.job = -2; u.civT = 0;
+        u.order = { type: 'move', x: best.x + (rand(w.rng) - 0.5) * 12, y: best.y + 6 };
+      }
+      // Helpers on a damaged building mend it: a hit point a second each, capped.
+      for (const b of blds) {
+        if (b.hp >= b.max || b.buildT > 0) continue;
+        let hands = 0;
+        for (const u of people) if (u.job === -2 && Math.hypot(u.x - b.x, u.y - b.y) < 20) hands++;
+        if (hands) { b.hp = Math.min(b.max, b.hp + Math.min(3, hands) * dt); if (w.tick % 120 === 0) w.fx.push({ k: 'fix', x: b.x, y: b.y - 4, t: 0.3 }); }
+      }
       // Growth: safe, room, and something to do (or a very small town).
       const canGrow = !danger && c.safeT >= CIV.safeAfter && c.residents < c.housing && (c.employed < c.jobs || c.residents < 4);
       c.growT = canGrow ? c.growT + dt * (golden ? 2 : 1) * (cheat(w, slot, 'fastEcon') ? 5 : 1) : 0;
@@ -126,6 +145,7 @@ export function civTick(w: World): void {
       c.state = danger ? 'attacked' : c.safeT < CIV.recoverAfter || c.residents < c.peak * 0.7 ? 'recovering' : canGrow ? 'growing' : 'stable';
       // Behavior: flee, or drift between work, home, and the square.
       const castles = blds.filter((b) => b.type === 'castle');
+      const houses = blds.filter((b) => b.type === 'house'), markets = blds.filter((b) => b.type === 'market' || b.type === 'port');
       const safe = refuge(s, castles);
       for (const u of people) {
         let threat = false;
@@ -135,9 +155,14 @@ export function civTick(w: World): void {
         u.civT -= dt;
         if (u.civT > 0) continue;
         u.civT = CIV.wanderMin + rand(w.rng) * (CIV.wanderMax - CIV.wanderMin);
+        if (u.job === -2) { if (!u.order) { const b = errands[0]; if (b) u.order = { type: 'move', x: b.x + (rand(w.rng) - 0.5) * 12, y: b.y + 6 }; } continue; }
+        // A day in town: mostly the workplace, sometimes the market, sometimes home, sometimes the square.
         const j = u.job >= 0 ? byId.get(u.job) : undefined;
-        const at = j && rand(w.rng) < 0.7 ? { x: j.x, y: j.y } : { x: s.x, y: s.y + 8 };
-        const a = rand(w.rng) * Math.PI * 2, r = 4 + rand(w.rng) * CIV.wanderRadius;
+        const roll = rand(w.rng);
+        const house = houses.length ? houses[u.id % houses.length] : null;
+        const market = markets.length ? markets[u.id % markets.length] : null;
+        const at = j && roll < 0.55 ? { x: j.x, y: j.y } : market && roll < 0.7 ? { x: market.x, y: market.y + 4 } : house && roll < 0.85 ? { x: house.x, y: house.y + 6 } : { x: s.x, y: s.y + 8 };
+        const a = rand(w.rng) * Math.PI * 2, r = 3 + rand(w.rng) * CIV.wanderRadius;
         u.order = { type: 'move', x: at.x + Math.cos(a) * r, y: at.y + Math.sin(a) * r };
       }
     }

@@ -1,7 +1,7 @@
 // Top bar, toast, tabbed panel (units, build, powers, more), context command row, view controls.
 
 import { AGE_NAMES, BLD, BORDER } from '../../data/buildings.ts';
-import { canTrain, RESEARCH_COST, TECH_NAMES } from '../../sim/town.ts';
+import { canTrain, RESEARCH_COST, TECH_NAMES, canResearch, canUpgradeBld, nextType, TECH_INFO, TECH_KEYS, upgradeCost } from '../../sim/town.ts';
 import { canGrow, NEXT_TIER, TIERS, canCapture, CAPTURE_COST, relation } from '../../sim/conquest.ts';
 import { DIFF } from '../../data/difficulty.ts';
 import { TOOLS, type EditorTool } from '../../data/maps.ts';
@@ -274,7 +274,7 @@ export function updateUI(app: App): void {
   show(B('gh-economy'), town); show(B('gh-military'), town); show(B('gh-defense'), town);
   for (const gk of ['road', 'clear'] as const) groundBtns[gk]?.classList.toggle('on', app.tool === 'terrain' && app.tbrush === gk);
   if (undoBtn) show(undoBtn, app.lastBuilt.length > 0 && !!w && w.blds.some((b) => app.lastBuilt.includes(b.id)));
-  show(B('bGrow'), conq); show(B('bTech1'), town); show(B('bTech2'), town); show(B('bTech3'), town);
+  show(B('bGrow'), conq); show(B('bTech1'), false); show(B('bTech2'), false); show(B('bTech3'), false);
   if (w && conq) {
     const towns = w.slots[app.ctl].settlements;
     const cap = towns.find((b) => b.id === app.town && b.hp > 0) ?? towns.find((b) => b.hp > 0 && b.buildT <= 0 && NEXT_TIER[b.tier]);
@@ -284,8 +284,7 @@ export function updateUI(app: App): void {
     B('bGrow').textContent = to ? 'GROW ' + name + ' TO ' + to.toUpperCase() + ' · ' + TIERS[to].gold + 'g' : cap && cap.buildT > 0 ? name + ' IS GROWING' : name + ' IS A CITY';
     B('bGrow').title = why ?? '';
     B('bGrow').classList.toggle('dis', !to || !!why);
-    const techs = ['melee', 'ranged', 'armor'] as const;
-    techs.forEach((t, i) => { const lvl = w.slots[app.ctl].tech[t]; const b = B('bTech' + (i + 1)); b.textContent = TECH_NAMES[t] + ' ' + (lvl >= RESEARCH_COST.length ? 'MAX' : (lvl + 1) + ' · ' + RESEARCH_COST[lvl] + 'g'); b.classList.toggle('dis', lvl >= RESEARCH_COST.length); });
+
   }
   for (const k of POWER_KEYS) {
     const P = POWERS[k];
@@ -396,10 +395,20 @@ function renderSelCard(app: App): void {
     const D = BLD[b.type];
     const role = D.trains?.[0];
     const isDefault = role !== undefined && w.slots[app.ctl].prefer[role] === b.id;
-    const lines = [D.name + (b.buildT > 0 ? ' · building' : '') + ' · ' + Math.round(b.hp) + '/' + b.max + ' hp' + (b.queue.length ? ' · ' + b.queue.length + ' in queue' : '')];
+    const lines = [D.name + (b.level > 1 ? ' ' + 'I'.repeat(b.level).replace('III', 'III') : '') + (b.buildT > 0 ? ' · building' : '') + ' · ' + Math.round(b.hp) + '/' + b.max + ' hp' + (b.queue.length ? ' · ' + b.queue.length + ' in queue' : '')];
     if (D.trains) lines.push('trains ' + D.trains.join(', ') + (isDefault ? ' · DEFAULT' : '') + '. UNITS tab trains here.');
     if (b.rally) lines.push('rally point set');
-    el.innerHTML = '<span class="town"><b>' + lines[0] + '</b>' + (lines.length > 1 ? '<br><span class="civ">' + lines.slice(1).join(' · ') + '</span>' : '') + '</span>';
+    // Research sold here, and the upgrade for this building.
+    const techs = w.rules.town ? TECH_KEYS.filter((t) => TECH_INFO[t].at === b.type || (b.type === 'port' && TECH_INFO[t].at === 'dock')) : [];
+    const tech = w.slots[app.ctl].tech;
+    const rows = techs.map((t) => { const lvl = tech[t], I = TECH_INFO[t], why = canResearch(w, app.ctl, t); return '<button class="mini' + (why ? ' dis' : '') + '" data-tech="' + t + '" title="' + I.text + (why ? '. ' + why : '') + '">' + TECH_NAMES[t] + ' ' + (lvl >= I.levels ? 'MAX' : (lvl + 1) + ' · ' + RESEARCH_COST[lvl] + 'g') + '</button>'; });
+    const upWhy = canUpgradeBld(w, app.ctl, b), nt = nextType(b.type), cost = upgradeCost(b);
+    if (!upWhy) rows.push('<button class="mini gold" data-up="' + b.id + '">' + (nt ? 'UPGRADE TO ' + BLD[nt].name + ' · ' + cost.mat + 'm' : 'LEVEL ' + (b.level + 1) + ' · ' + cost.gold + 'g') + '</button>' + (nt ? '<button class="mini" data-upall="' + b.id + '">ALL CONNECTED</button>' : ''));
+    else if (D.trains || nt) rows.push('<span class="civ">upgrade: ' + upWhy + '</span>');
+    el.innerHTML = '<span class="town"><b>' + lines[0] + '</b>' + (lines.length > 1 ? '<br><span class="civ">' + lines.slice(1).join(' · ') + '</span>' : '') + (rows.length ? '<br><span class="acts">' + rows.join(' ') + '</span>' : '') + '</span>';
+    for (const btn of el.querySelectorAll<HTMLButtonElement>('button[data-tech]')) btn.onclick = () => { issueAction(app, { type: 'research', payload: { tech: btn.dataset.tech as import('../../sim/types.ts').Tech } }); app.ui.updateUI(); };
+    for (const btn of el.querySelectorAll<HTMLButtonElement>('button[data-up]')) btn.onclick = () => { issueAction(app, { type: 'upgradeBld', payload: { id: +btn.dataset.up! } }); app.ui.updateUI(); };
+    for (const btn of el.querySelectorAll<HTMLButtonElement>('button[data-upall]')) btn.onclick = () => { issueAction(app, { type: 'upgradeBld', payload: { id: +btn.dataset.upall!, connected: true } }); app.ui.updateUI(); };
     return;
   }
   if (!sel.length && w && app.foreign) {

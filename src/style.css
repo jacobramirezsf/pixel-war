@@ -76,6 +76,7 @@ canvas{image-rendering:pixelated;image-rendering:crisp-edges;display:block}
 body.armed #c{outline:3px solid rgba(125,255,125,.55);outline-offset:-3px}
 body.armed #bAttack.on ~ #c{outline-color:rgba(255,154,154,.6)}
 #selcard .rename{cursor:pointer;border-bottom:1px dotted #5a5d6a}
+#selcard .acts{display:inline-flex;flex-wrap:wrap;gap:4px;margin-top:3px}#selcard .acts .mini{min-height:30px}#selcard .acts .mini.gold{border-color:#f2d34a;color:#f2d34a}#selcard .acts .mini.dis{opacity:.5}
 #selcard .town{white-space:normal;line-height:1.35;display:block}
 #selcard .civ{color:#b9bccb}
 #selcard .st-growing{color:#7dff7d}#selcard .st-stable{color:#b9bccb}#selcard .st-attacked{color:#ff6b6b}#selcard .st-recovering{color:#ffb02a}

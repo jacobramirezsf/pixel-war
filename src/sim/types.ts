@@ -11,7 +11,7 @@ import type { Rng } from './rng.ts';
 
 export type Mode = 'skirmish' | 'multi' | 'dom' | 'rich' | 'sand' | 'conquest';
 export type Tier = 'outpost' | 'village' | 'town' | 'fortress' | 'city' | 'camp' | 'ruin';
-export type Tech = 'melee' | 'ranged' | 'armor';
+export type Tech = 'melee' | 'ranged' | 'armor' | 'vehicle' | 'naval' | 'farming' | 'masonry';
 
 /** An event waiting on the player's answer. */
 export interface Pending {
@@ -192,6 +192,8 @@ export interface Building {
   /** Production queue for buildings that train. */
   queue: QueueItem[];
   rally: { x: number; y: number } | null;
+  /** 1 to 3. Higher trains faster and holds a longer queue. */
+  level: number;
 }
 
 export type Target = Unit | Building | Settlement;
@@ -472,6 +474,7 @@ export type Action =
   | { type: 'sell'; payload: { x: number; y: number; id?: number } }
   | { type: 'terrain'; payload: { x: number; y: number; kind: import('../data/buildings.ts').GroundKey } }
   | { type: 'unbuild'; payload: { ids: number[] } }
+  | { type: 'upgradeBld'; payload: { id: number; connected?: boolean } }
   | { type: 'place'; payload: { unit: UnitKey; x: number; y: number } }
   | { type: 'erase'; payload: { x: number; y: number } }
   | { type: 'clear'; payload: null }

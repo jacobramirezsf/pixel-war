@@ -159,6 +159,8 @@ function drawBld(ctx: CanvasRenderingContext2D, b: Building): void {
     ctx.fillStyle = TEAM[b.team]; ctx.fillRect(x, by, Math.max(1, Math.round((W * b.hp) / b.max)), 2);
   }
   if (b.queue.length) { ctx.fillStyle = '#7dff7d'; ctx.fillRect(x + W - 3, y - 3, 3, 2); }
+  // Level chevrons on the left shoulder.
+  if (b.level > 1) { ctx.fillStyle = '#f2d34a'; for (let i = 1; i < b.level; i++) { ctx.fillRect(x + 1, y - 2 - i * 2, 3, 1); ctx.fillRect(x + 2, y - 3 - i * 2, 1, 1); } }
 }
 
 /** Set the world transform and clear the viewport. Returns the visible world rect. */

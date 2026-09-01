@@ -224,7 +224,12 @@ function afflict(t: Target, T: UnitDef): void {
 
 export function attack(w: World, u: Unit, t: Target, T: UnitDef): void {
   let dmg = T.dmg;
-  if (w.rules.town) { const tech = w.slots[u.team].tech; dmg += T.range > 12 ? tech.ranged : tech.melee; }
+  if (w.rules.town) {
+    const tech = w.slots[u.team].tech;
+    dmg += T.range > 12 ? tech.ranged : tech.melee;
+    if (T.naval) dmg = Math.round(dmg * (1 + 0.2 * tech.naval));
+    else if (T.role === 'vehicle' || T.role === 'darpa' || T.role === 'robot' || T.fly) dmg = Math.round(dmg * (1 + 0.15 * tech.vehicle));
+  }
   if (w.rules.veterancy && u.kills) dmg = Math.round(dmg * (1 + 0.1 * rank(u)));
   if (hasBanner(w, u)) dmg = Math.round(dmg * 1.3);
   if (T.vsBld && t.ent !== 'unit') dmg = Math.round(dmg * T.vsBld);
