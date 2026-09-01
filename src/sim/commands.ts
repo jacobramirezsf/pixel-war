@@ -3,15 +3,17 @@
 
 import { BLD, BUILD_CAP } from '../data/buildings.ts';
 import { TNAME } from '../data/teams.ts';
+import { cleanName } from '../data/names.ts';
 import { TYPES } from '../data/units.ts';
 import { addBld, bldAtPx, canBuild, gateDir, passableFor, removeBld } from './buildings.ts';
 import { clamp, TILE } from './map.ts';
 import type { Action, Command, Target, TargetRef, Unit, World } from './types.ts';
 import { buildTime, mkUnit } from './units.ts';
-import { absorb, ADVANCED_COST, allyAccepted, canGrow, choose, setPact, truceAccepted, canAbsorb, canSettle, hasCity, NEXT_TIER, placeSettlement, popCap, popUsed, setTruce, startUpgrade, TIERS } from './conquest.ts';
+import { absorb, ADVANCED_COST, allyAccepted, canGrow, choose, setPact, truceAccepted, canAbsorb, canSettle, hasCity, NEXT_TIER, placeSettlement, popCap, popUsed, setTruce, startUpgrade, TIERS, nameRegionFor, regionAt, settlementsIn } from './conquest.ts';
 import { popOf } from './units.ts';
 import { seedResidents } from './civ.ts';
 import { wonderBegun, wonderDone } from './wonder.ts';
+import { chronicle } from './world.ts';
 import { castPower } from './powers.ts';
 import { canResearch, canTrain, pickTrainer, queuedCount, RESEARCH_COST, TECH_NAMES } from './town.ts';
 import { allied, count, mapH, mapW, say as worldSay } from './world.ts';
@@ -121,6 +123,15 @@ export function applyCommand(w: World, c: Command, quiet = false): boolean {
       say('Rally point set for the ' + BLD[b.type].name.toLowerCase(), 1);
       return true;
     }
+    case 'rename': {
+      if (slot !== 0) return false;
+      const r = w.regions[c.payload.region];
+      const name = cleanName(c.payload.name);
+      if (!r || !name || !settlementsIn(w, r.id).some((b) => b.team === slot)) return false;
+      r.name = name;
+      say('Renamed to ' + name, 1.5);
+      return true;
+    }
     case 'diplomacy': {
       if (slot !== 0 || w.mode !== 'conquest' || !w.rules.diplomacy) return false;
       const j = c.payload.slot, R = w.slots[j];
@@ -173,8 +184,11 @@ export function applyCommand(w: World, c: Command, quiet = false): boolean {
       if (s.mat < mat) { say('Need ' + mat + ' materials', 1.2); return false; }
       s.gold -= T.gold;
       s.mat -= mat;
+      const firstHere = !settlementsIn(w, regionAt(w, c.payload.x, c.payload.y)).some((q) => !w.slots[q.team].neutral);
       const b = placeSettlement(w, slot, c.payload.x, c.payload.y, tier);
+      if (firstHere && tier !== 'outpost') nameRegionFor(w, w.regions[b.region], s.race);
       if (tier !== 'outpost' && w.rules.civilians) seedResidents(w, b, 2);
+      if (tier !== 'outpost') chronicle(w, (slot === 0 ? 'Founded ' : TNAME[slot] + ' founded ') + w.regions[b.region].name);
       say((tier === 'outpost' ? 'Outpost' : 'Village') + ' founded in ' + w.regions[b.region].name + '. Hold it 30s to claim.', 2.5);
       return true;
     }
@@ -191,6 +205,7 @@ export function applyCommand(w: World, c: Command, quiet = false): boolean {
       s.gold -= T.gold;
       s.mat -= mat;
       startUpgrade(b, to);
+      chronicle(w, (slot === 0 ? '' : TNAME[slot] + ': ') + w.regions[b.region].name + ' began growing into a ' + to);
       say('Upgrading to a ' + to + '. It is weak until done.', 2.5);
       return true;
     }

@@ -9,7 +9,7 @@ import { onSettlementDeath } from './conquest.ts';
 import { maxHp, rank } from './units.ts';
 import { forNear, gridOf, nearestHostileWithin } from './spatial.ts';
 import type { Settlement, Target, Unit, World, Building } from './types.ts';
-import { allied, hasLivingSettlement, say } from './world.ts';
+import { allied, hasLivingSettlement, say, chronicle } from './world.ts';
 
 /** Everything a team may attack: hostile units, hostile towers, hostile bases. Full scan. */
 export function targetsFor(w: World, team: number): Target[] {
@@ -146,6 +146,7 @@ export function elim(w: World, slot: number): void {
   for (const u of w.units) if (u.team === slot) u.hp = 0;
   for (const q of w.blds.slice()) if (q.team === slot) removeBld(w, q);
   say(w, TNAME[slot] + ' IS ELIMINATED', 2.5);
+  chronicle(w, TNAME[slot] + ' fell');
   let foes = 0;
   for (let i = 0; i < w.nP; i++) if (w.slots[i].alive && !w.slots[i].neutral && !allied(w, 0, i)) foes++;
   if (!foes && w.mode !== 'conquest') w.over = 'win';

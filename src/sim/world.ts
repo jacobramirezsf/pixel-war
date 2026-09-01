@@ -100,6 +100,7 @@ export function reset(map: MapDef, cfg?: Partial<WorldConfig>): World {
     instant: !!cfg?.instant,
     cheats: Object.assign({ gold: false, resources: false, instant: false, build: false, powers: false, reveal: false }, cfg?.cheats ?? {}),
     seen: null,
+    history: [],
     feats: [],
     eventT: 180,
     pending: null,
@@ -127,6 +128,13 @@ export function allied(w: World, a: number, b: number): boolean {
 export function sworn(w: World, a: number, b: number): boolean {
   const A = w.slots[a], B = w.slots[b];
   return A.ally === B.ally || !!A.pact[b];
+}
+
+/** One line in the realm's story. Kept short and bounded. */
+export function chronicle(w: World, text: string): void {
+  if (w.mode !== 'conquest') return;
+  w.history.push({ day: w.day, text });
+  if (w.history.length > 40) w.history.shift();
 }
 
 export function pushEvent(w: World, kind: import('./types.ts').GameEvent['kind'], text: string, x: number, y: number, region = -1): void {
@@ -193,7 +201,7 @@ export interface Snapshot {
   queue: Command[]; log: Command[]; fxRng: Rng;
   regions: Region[]; regionOf: number[] | null; rules: Rules; net: number[]; broke: number[]; capitals: number[];
   events: GameEvent[]; neutral: number; strikes: Strike[]; instant: boolean; cheats: Cheats;
-  seen?: string; feats: import('../data/realm.ts').FeatKey[]; eventT: number; pending: Pending | null; day: number;
+  seen?: string; history?: { day: number; text: string }[]; feats: import('../data/realm.ts').FeatKey[]; eventT: number; pending: Pending | null; day: number;
 }
 
 const copyCmd = (c: Command): Command => JSON.parse(JSON.stringify(c)) as Command;
@@ -246,7 +254,7 @@ export function snapshot(w: World): Snapshot {
     rules: { ...w.rules }, net: w.net.slice(), broke: w.broke.slice(), capitals: w.capitals.slice(),
     events: w.events.map((e) => ({ ...e })), neutral: w.neutral, strikes: w.strikes.map((k) => ({ ...k })), instant: w.instant,
     cheats: { ...w.cheats },
-    ...(w.seen ? { seen: packSeen(w.seen) } : {}), feats: w.feats.slice(), eventT: w.eventT, pending: w.pending ? { ...w.pending } : null, day: w.day,
+    ...(w.seen ? { seen: packSeen(w.seen) } : {}), history: w.history.map((h) => ({ ...h })), feats: w.feats.slice(), eventT: w.eventT, pending: w.pending ? { ...w.pending } : null, day: w.day,
   };
 }
 
@@ -301,7 +309,7 @@ export function restore(s: Snapshot): World {
     net: (s.net ?? slots.map(() => 0)).slice(), broke: (s.broke ?? slots.map(() => 0)).slice(), capitals: (s.capitals ?? slots.map(() => -1)).slice(),
     events: (s.events ?? []).map((e) => ({ ...e })), neutral: s.neutral ?? -1, mapDirty: false, strikes: (s.strikes ?? []).map((k) => ({ ...k })), instant: !!s.instant,
     cheats: Object.assign({ gold: false, resources: false, instant: false, build: false, powers: false, reveal: false }, s.cheats ?? {}),
-    seen: s.seen ? unpackSeen(s.seen) : null, feats: (s.feats ?? []).slice(), eventT: s.eventT ?? 180, pending: s.pending ? { ...s.pending } : null, day: s.day ?? 0,
+    seen: s.seen ? unpackSeen(s.seen) : null, history: (s.history ?? []).map((h) => ({ ...h })), feats: (s.feats ?? []).slice(), eventT: s.eventT ?? 180, pending: s.pending ? { ...s.pending } : null, day: s.day ?? 0,
   };
 }
 

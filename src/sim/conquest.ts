@@ -12,10 +12,11 @@ import { castleNear, townIncome, townPop } from './town.ts';
 import { civIncome, seedResidents } from './civ.ts';
 import { PERSONAS } from '../data/personas.ts';
 import { TNAME } from '../data/teams.ts';
+import { NAMES } from '../data/names.ts';
 import { DAY, FEAT_RULES, FEATS, GROW, type FeatKey } from '../data/realm.ts';
 import { buildingsOf } from './civ.ts';
 import { canPlaceSettlement as placeOk } from './buildings.ts';
-import { allied, emptyTown, pushEvent, say } from './world.ts';
+import { allied, chronicle, emptyTown, pushEvent, say } from './world.ts';
 
 export const REGION_NAMES = ['Ashford', 'Brine', 'Coldwater', 'Dunmere', 'Elsmoor', 'Fallow', 'Greyholm', 'Hollin', 'Ironmark', 'Kestrel', 'Larkspur', 'Marrow', 'Northam', 'Oakhurst', 'Pale Reach', 'Quarry Hill', 'Rook', 'Saltmere', 'Thornby', 'Umber', 'Vale', 'Wendle', 'Yarrow', 'Zell', 'Ambry'];
 
@@ -143,6 +144,16 @@ function clearFootprint(w: World, tx: number, ty: number, rx = 2, ry = 1): void 
       if (m.tiles[i] === 2) { m.tiles[i] = 0; changed = true; }
     }
   if (changed) { w.flowDirty = true; w.mapDirty = true; }
+}
+
+/** A founder names the land after their own fashion. Deterministic by region id. */
+export function nameRegionFor(w: World, r: Region, race: import('../data/races.ts').RaceKey): void {
+  const pool = NAMES[race];
+  const used = new Set(w.regions.map((q) => q.name));
+  for (let k = 0; k < pool.length; k++) {
+    const n = pool[(r.id * 7 + k) % pool.length];
+    if (!used.has(n)) { r.name = n; return; }
+  }
 }
 
 export function placeSettlement(w: World, slot: number, x: number, y: number, tier: Tier, instant = false): Settlement {
@@ -282,7 +293,7 @@ function revolt(w: World, r: Region): void {
       w.units.push(u);
     }
   }
-  if (owner === 0) { say(w, r.name + ' has revolted', 3); pushEvent(w, 'revolt', r.name + ' revolted', r.cx, r.cy, r.id); }
+  if (owner === 0) { say(w, r.name + ' has revolted', 3); pushEvent(w, 'revolt', r.name + ' revolted', r.cx, r.cy, r.id); chronicle(w, r.name + ' revolted'); }
 }
 
 /** Neutral camps raid, ruins reward the units that hold them, loot drops from cleared camps. */
@@ -350,7 +361,8 @@ export function onSettlementDeath(w: World, b: Settlement): void {
     const heir = w.slots[b.team].settlements.filter((x) => x.hp > 0 && x !== b && x.tier !== 'outpost').sort((p, q) => TIER_RANK[q.tier] - TIER_RANK[p.tier] || q.hp - p.hp)[0];
     if (heir) {
       w.capitals[b.team] = heir.region;
-      if (b.team === 0) { say(w, 'The capital has fallen. ' + w.regions[heir.region].name + ' is the capital now.', 4); pushEvent(w, 'lost', 'Capital moved to ' + w.regions[heir.region].name, heir.x, heir.y, heir.region); }
+      if (b.team === 0) { say(w, 'The capital has fallen. ' + w.regions[heir.region].name + ' is the capital now.', 4); pushEvent(w, 'lost', 'Capital moved to ' + w.regions[heir.region].name, heir.x, heir.y, heir.region); chronicle(w, 'The capital fell. ' + w.regions[heir.region].name + ' became the capital'); }
+      else chronicle(w, TNAME[b.team] + ' lost its capital');
       w.flowDirty = true;
     }
   }
@@ -428,8 +440,9 @@ export function setTruce(w: World, a: number, b: number, on: boolean): void {
   if (other >= 0) {
     const name = ['BLUE', 'RED', 'GREEN', 'ORANGE', 'VIOLET'][other];
     const cap = w.regions[w.capitals[other]];
-    say(w, on ? 'Truce with ' + name : name + ' is at war with you', 3);
-    pushEvent(w, on ? 'truce' : 'war', on ? 'Truce with ' + name : name + ' declared war', cap?.cx ?? 0, cap?.cy ?? 0, cap?.id ?? -1);
+    say(w, on ? 'Peace with ' + name : name + ' is at war with you', 3);
+    pushEvent(w, on ? 'truce' : 'war', on ? 'Peace with ' + name : name + ' declared war', cap?.cx ?? 0, cap?.cy ?? 0, cap?.id ?? -1);
+    chronicle(w, on ? 'Peace with ' + name : 'War with ' + name);
   }
 }
 
@@ -446,6 +459,7 @@ export function setPact(w: World, a: number, b: number, on: boolean): void {
     const cap = w.regions[w.capitals[other]];
     say(w, on ? 'Alliance with ' + name : 'The alliance with ' + name + ' is over', 3);
     pushEvent(w, on ? 'truce' : 'war', on ? 'Alliance with ' + name : 'Alliance with ' + name + ' ended', cap?.cx ?? 0, cap?.cy ?? 0, cap?.id ?? -1);
+    chronicle(w, on ? 'Alliance with ' + name : 'The alliance with ' + name + ' ended');
   }
 }
 
@@ -624,6 +638,7 @@ function checkFeats(w: World, dt: number): void {
     w.feats.push(k);
     say(w, FEATS[k].name + '. ' + FEATS[k].text, 4);
     pushEvent(w, 'feat', FEATS[k].name, cap.x, cap.y, cap.region);
+    chronicle(w, FEATS[k].name + ': ' + FEATS[k].text);
   };
   if (!has('kingdom') && s.settlements.filter((b) => b.hp > 0 && b.tier !== 'outpost' && b.buildT <= 0).length >= FEAT_RULES.kingdomTowns) earn('kingdom');
   if (!has('greatCity') && s.settlements.some((b) => b.hp > 0 && b.tier === 'city' && b.buildT <= 0)) earn('greatCity');
@@ -666,6 +681,7 @@ function regroup(w: World): void {
         s.alive = true;
         say(w, 'Your last settlement fell. The people regroup in ' + r.name + '.', 4);
         pushEvent(w, 'lost', 'Regrouped in ' + r.name, b.x, b.y, r.id);
+        chronicle(w, 'The last settlement fell. The people regrouped in ' + r.name);
         w.flowDirty = true;
         return;
       }

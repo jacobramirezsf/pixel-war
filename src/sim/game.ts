@@ -7,7 +7,7 @@ import { prebuildTown } from './town.ts';
 import { seedResidents } from './civ.ts';
 import { WORLD_SIZES } from '../data/realm.ts';
 import { realmMap, shapeRealm } from './realmgen.ts';
-import { makeRegions, mkNeutralSlot, populateWorld, regionAt, TIERS } from './conquest.ts';
+import { makeRegions, mkNeutralSlot, populateWorld, regionAt, TIERS, nameRegionFor } from './conquest.ts';
 import { cloneMap, finishMap, type MapDef } from './map.ts';
 import { gen, mkBases } from './mapgen.ts';
 import { makeRng } from './rng.ts';
@@ -112,6 +112,7 @@ export function newConquest(cfg?: GameConfig): World {
     b.hp = b.max;
     b.region = regionAt(w, b.x, b.y);
     w.capitals[i] = b.region;
+    nameRegionFor(w, regions[b.region], w.slots[i].race);
     regions[b.region].owner = i;
     regions[b.region].claimant = i;
     w.slots[i].gold = 200;

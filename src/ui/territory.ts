@@ -80,7 +80,7 @@ export function renderTerritory(app: App): void {
   if (!w || w.mode !== 'conquest' || !app.terrOpen) { if (lastKey) { el.innerHTML = ''; lastKey = ''; } return; }
   const held = w.regions.filter((r) => r.owner === 0).sort((a, b) => trouble(app, b) - trouble(app, a));
   const towns = w.slots[0].settlements.filter((b) => b.hp > 0 && b.tier !== 'outpost').sort((a, b) => (b.civ.state === 'attacked' ? 1 : 0) - (a.civ.state === 'attacked' ? 1 : 0) || (w.capitals[0] === b.region ? 1 : 0) - (w.capitals[0] === a.region ? 1 : 0));
-  const key = held.map((r) => r.id + ':' + Math.round(r.unrest) + ':' + Math.round(r.garrison) + '/' + Math.round(r.need) + (r.connected ? '' : '!') + (r.contested ? '?' : '')).join('|') + '#' + towns.map((b) => b.id + b.tier + b.civ.residents + b.civ.state + b.civ.income.toFixed(1)).join('|') + '#' + w.events.length + '#' + w.slots.map((s) => s.truce.join('')).join(',') + '#' + Math.floor(w.t / 10);
+  const key = held.map((r) => r.id + ':' + Math.round(r.unrest) + ':' + Math.round(r.garrison) + '/' + Math.round(r.need) + (r.connected ? '' : '!') + (r.contested ? '?' : '')).join('|') + '#' + towns.map((b) => b.id + b.tier + b.civ.residents + b.civ.state + b.civ.income.toFixed(1)).join('|') + '#' + w.events.length + '#' + w.history.length + '#' + w.slots.map((s) => s.truce.join('') + s.pact.join('')).join(',') + '#' + Math.floor(w.t / 10);
   if (key === lastKey) return;
   lastKey = key;
   const events = w.events.slice(-8).reverse();
@@ -89,7 +89,8 @@ export function renderTerritory(app: App): void {
     + '<h3>LAND</h3>'
     + (held.length ? held.map((r) => regionCard(app, r)).join('') : '<p>You hold nothing. Settle a region.</p>')
     + (events.length ? '<h3>EVENTS</h3>' + events.map((e) => eventLine(app, e)).join('') : '')
-    + diplomacy(app);
+    + diplomacy(app)
+    + (w.history.length ? '<h3>HISTORY</h3>' + w.history.slice(-8).reverse().map((h) => '<div class="hist"><span>Day ' + h.day + '</span> ' + h.text + '</div>').join('') : '');
   on($('tClose'), 'click', () => { app.terrOpen = false; app.ui.updateUI(); });
   for (const b of el.querySelectorAll<HTMLButtonElement>('button.card[data-r]')) on(b, 'click', () => { const r = w.regions[+b.dataset.r!]; centerOn(app.cam, r.cx, r.cy); if (app.layout === 'mobile') { app.terrOpen = false; app.ui.updateUI(); } });
   for (const b of el.querySelectorAll<HTMLButtonElement>('button.card[data-town]')) on(b, 'click', () => { const t = w.slots[0].settlements.find((x) => x.id === +b.dataset.town!); if (!t) return; centerOn(app.cam, t.x, t.y); app.selection.clear(); app.town = t.id; if (app.layout === 'mobile') app.terrOpen = false; app.ui.updateUI(); });

@@ -368,6 +368,8 @@ export interface World {
   cheats: Cheats;
   /** Explored tiles for the player, or null without fog. */
   seen: Uint8Array | null;
+  /** The realm's story: major moments, bounded. */
+  history: { day: number; text: string }[];
   /** Realm accomplishments earned so far, in order. */
   feats: import('../data/realm.ts').FeatKey[];
   /** Seconds until the next clocked event. */
@@ -395,6 +397,7 @@ export type Action =
   | { type: 'cheats'; payload: Cheats }
   | { type: 'choose'; payload: { yes: boolean } }
   | { type: 'diplomacy'; payload: { slot: number; act: 'war' | 'peace' | 'ally' | 'gift'; gold?: number } }
+  | { type: 'rename'; payload: { region: number; name: string } }
   | { type: 'upgrade'; payload: { id: number } }
   | { type: 'rally'; payload: { x: number; y: number } | null }
   | { type: 'move'; payload: { ids: number[]; x: number; y: number } }
