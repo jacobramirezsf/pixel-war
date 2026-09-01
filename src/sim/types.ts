@@ -15,7 +15,7 @@ export type Tech = 'melee' | 'ranged' | 'armor';
 
 /** An event waiting on the player's answer. */
 export interface Pending {
-  kind: 'tribute' | 'truce' | 'caravan';
+  kind: 'tribute' | 'truce' | 'caravan' | 'ally';
   slot: number;
   text: string;
   yes: string;
@@ -247,6 +247,10 @@ export interface Slot {
   truce: boolean[];
   /** Sim time each truce began, for peace. */
   truceT: number[];
+  /** Alliance: shared sight, free passage, fights shared enemies. */
+  pact: boolean[];
+  /** Last time this slot's march on the player was announced. */
+  raidT: number;
   /** Cooldown left per power, in seconds. */
   powerCd: Partial<Record<PowerKey, number>>;
   /** Age of the faction: 0 village, 1 town, 2 city. Follows the best settlement tier. */
@@ -390,6 +394,7 @@ export type Action =
   | { type: 'bldRally'; payload: { id: number; x: number; y: number } }
   | { type: 'cheats'; payload: Cheats }
   | { type: 'choose'; payload: { yes: boolean } }
+  | { type: 'diplomacy'; payload: { slot: number; act: 'war' | 'peace' | 'ally' | 'gift'; gold?: number } }
   | { type: 'upgrade'; payload: { id: number } }
   | { type: 'rally'; payload: { x: number; y: number } | null }
   | { type: 'move'; payload: { ids: number[]; x: number; y: number } }

@@ -123,7 +123,7 @@ export function newConquest(cfg?: GameConfig): World {
   w.slots.push(neutral);
   w.nP = w.slots.length;
   w.neutral = w.nP - 1;
-  for (const s of w.slots) { s.attitude.push(-100); s.truce.push(false); s.truceT.push(0); }
+  for (const s of w.slots) { s.attitude.push(-100); s.truce.push(false); s.truceT.push(0); s.pact.push(false); }
   w.net.push(0); w.broke.push(0); w.capitals.push(-1);
   w.score = w.slots.map(() => 0);
   populateWorld(w, rng);

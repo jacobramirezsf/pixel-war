@@ -65,7 +65,7 @@ export function civTick(w: World): void {
   const grid = gridOf(w);
   // Villagers by home, once.
   const byHome = new Map<number, Unit[]>();
-  for (const u of w.units) if (u.hp > 0 && isCiv(u)) { const l = byHome.get(u.home); if (l) l.push(u); else byHome.set(u.home, [u]); }
+  for (const u of w.units) if (u.hp > 0 && isCiv(u) && u.type !== 'caravan') { const l = byHome.get(u.home); if (l) l.push(u); else byHome.set(u.home, [u]); }
   for (let slot = 0; slot < w.nP; slot++) {
     const S = w.slots[slot];
     if (S.neutral) continue;

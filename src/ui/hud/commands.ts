@@ -1,5 +1,6 @@
 // The command grid under the build strip.
 
+import { centerOn } from '../../render/camera.ts';
 import { TNAME } from '../../data/teams.ts';
 import { TYPES } from '../../data/units.ts';
 import { unitsOf } from '../../sim/queries.ts';
@@ -89,14 +90,20 @@ export function wireCommands(app: App): void {
   // Mobile groups: tap recalls, tap with a selection and an empty slot saves, hold saves over.
   for (const n of [1, 2, 3]) {
     const b = $('bG' + n);
-    let downAt = 0;
+    let downAt = 0, lastTap = 0;
     on(b, 'pointerdown', () => { downAt = performance.now(); });
     on(b, 'click', () => {
       if (!live()) return;
-      const long = performance.now() - downAt > 450;
+      const now = performance.now();
+      const long = now - downAt > 450, again = now - lastTap < 450;
+      lastTap = now;
       const has = app.groups.has(n);
       if (long || (!has && selectedUnits(app).length)) setGroup(app, n);
-      else if (has) recallGroup(app, n);
+      else if (has) {
+        recallGroup(app, n);
+        // A second tap looks at the group.
+        if (again) { const sel = selectedUnits(app); if (sel.length) { let cx = 0, cy = 0; for (const u of sel) { cx += u.x; cy += u.y; } centerOn(app.cam, cx / sel.length, cy / sel.length); } }
+      }
       else say(app, 'Select units, then tap G' + n + ' to save them', 1.5);
       app.ui.updateUI();
     });

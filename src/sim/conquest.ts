@@ -9,7 +9,9 @@ import { rand, randInt, type Rng } from './rng.ts';
 import type { Region, Settlement, Slot, Tier, Unit, World } from './types.ts';
 import { mkUnit } from './units.ts';
 import { castleNear, townIncome, townPop } from './town.ts';
-import { civIncome } from './civ.ts';
+import { civIncome, seedResidents } from './civ.ts';
+import { PERSONAS } from '../data/personas.ts';
+import { TNAME } from '../data/teams.ts';
 import { DAY, FEAT_RULES, FEATS, GROW, type FeatKey } from '../data/realm.ts';
 import { buildingsOf } from './civ.ts';
 import { canPlaceSettlement as placeOk } from './buildings.ts';
@@ -388,11 +390,12 @@ function diplomacyTick(w: World, dt: number, value: number[]): void {
     if (A.neutral) continue;
     for (let j = 0; j < w.nP; j++) {
       if (i === j || w.slots[j].neutral || A.ally === w.slots[j].ally) continue;
-      let d = 0.05;
+      let d = 0.05 + PERSONAS[A.race].temper;
       const border = w.regions.some((r) => r.owner === i && r.adj.some((a) => w.regions[a].owner === j));
       if (border) d -= 0.25;
       if (value[j] > value[i] * 1.5) d -= 0.15;
       for (let k = 0; k < w.nP; k++) if (k !== i && k !== j && !w.slots[k].neutral && !w.slots[i].truce[k] && !w.slots[j].truce[k] && w.slots[k].ally !== A.ally && w.slots[k].ally !== w.slots[j].ally) d += 0.1;
+      if (A.pact[j]) d += 0.08;
       A.attitude[j] = Math.max(-100, Math.min(100, A.attitude[j] + d * dt + (A.attitude[j] > 0 ? -0.02 : 0.02) * dt));
     }
   }
@@ -403,6 +406,8 @@ function diplomacyTick(w: World, dt: number, value: number[]): void {
     if (!A.ai || A.neutral) continue;
     for (let j = 0; j < w.nP; j++) {
       if (i === j || w.slots[j].neutral || A.ally === w.slots[j].ally) continue;
+      // A soured alliance ends before a war can start.
+      if (A.pact[j] && A.attitude[j] < -20) setPact(w, i, j, false);
       const truce = A.truce[j];
       const peace = truce && w.t - A.truceT[j] > PEACE_AFTER;
       if (!truce && A.attitude[j] > 20 && value[i] < value[j] * 0.8) setTruce(w, i, j, true);
@@ -417,7 +422,7 @@ export function setTruce(w: World, a: number, b: number, on: boolean): void {
   if (A.truce[b] === on) return;
   A.truce[b] = on; B.truce[a] = on;
   A.truceT[b] = w.t; B.truceT[a] = w.t;
-  if (!on) { A.attitude[b] = Math.min(A.attitude[b], -30); B.attitude[a] = Math.min(B.attitude[a], -30); }
+  if (!on) { A.attitude[b] = Math.min(A.attitude[b], -30); B.attitude[a] = Math.min(B.attitude[a], -30); if (A.pact[b]) { A.pact[b] = false; B.pact[a] = false; } }
   w.flowDirty = true;
   const other = a === 0 ? b : b === 0 ? a : -1;
   if (other >= 0) {
@@ -429,6 +434,36 @@ export function setTruce(w: World, a: number, b: number, on: boolean): void {
 }
 
 /** Can this pair sign a truce now? Rivals accept when not hostile or when they are weaker. */
+export function setPact(w: World, a: number, b: number, on: boolean): void {
+  const A = w.slots[a], B = w.slots[b];
+  if (!!A.pact[b] === on) return;
+  A.pact[b] = on; B.pact[a] = on;
+  if (on) { setTruce(w, a, b, true); A.attitude[b] = Math.max(A.attitude[b], 40); B.attitude[a] = Math.max(B.attitude[a], 40); }
+  w.flowDirty = true;
+  const other = a === 0 ? b : b === 0 ? a : -1;
+  if (other >= 0) {
+    const name = TNAME[other];
+    const cap = w.regions[w.capitals[other]];
+    say(w, on ? 'Alliance with ' + name : 'The alliance with ' + name + ' is over', 3);
+    pushEvent(w, on ? 'truce' : 'war', on ? 'Alliance with ' + name : 'Alliance with ' + name + ' ended', cap?.cx ?? 0, cap?.cy ?? 0, cap?.id ?? -1);
+  }
+}
+
+/** Would `to` swear an alliance with `from`? Warm enough, or a shared enemy at the door. */
+export function allyAccepted(w: World, from: number, to: number): boolean {
+  const T = w.slots[to];
+  if (!T.ai) return true;
+  if (!T.truce[from]) return false;
+  const shared = w.slots.some((x, k) => k !== from && k !== to && !x.neutral && x.alive && !T.truce[k] && !w.slots[from].truce[k]);
+  return T.attitude[from] >= PERSONAS[T.race].allyAt || (shared && T.attitude[from] > 0);
+}
+
+/** Plain words for how two sides stand. */
+export function relation(w: World, a: number, b: number): 'allied' | 'peace' | 'war' {
+  if (w.slots[a].pact[b] || w.slots[a].ally === w.slots[b].ally) return 'allied';
+  return w.slots[a].truce[b] ? 'peace' : 'war';
+}
+
 export function truceAccepted(w: World, from: number, to: number, value: number[]): boolean {
   const T = w.slots[to];
   if (!T.ai) return true;
@@ -647,6 +682,17 @@ function nearestRival(w: World, r: Region): number {
 
 /** Something happens every few minutes. Some events ask a question and wait for the answer. */
 function realmEvents(w: World, dt: number): void {
+  // Caravans on the road: pay out on arrival.
+  for (const u of w.units) {
+    if (u.type !== 'caravan' || u.hp <= 0 || u.home !== -2) continue;
+    const t = w.slots[u.team].settlements.find((b) => b.id === u.job);
+    if (!t || t.hp <= 0) { u.hp = -1; continue; }
+    if (Math.hypot(u.x - t.x, u.y - t.y) < 18) {
+      u.hp = -1;
+      w.slots[u.team].gold += 100;
+      if (u.team === 0) { say(w, 'The caravan reached ' + (w.regions[t.region]?.name ?? 'town') + ': 100 gold', 3); pushEvent(w, 'loot', 'Caravan arrived: 100 gold', t.x, t.y, t.region); }
+    }
+  }
   if (w.pending) return;
   w.eventT -= dt;
   if (w.eventT > 0) return;
@@ -656,36 +702,70 @@ function realmEvents(w: World, dt: number): void {
   const cap = w.slots[0].settlements.find((b) => b.hp > 0);
   if (!own.length || !cap) return;
   const roll = rand(w.rng);
-  if (roll < 0.28 && w.neutral >= 0) {
-    // A raid: bandits appear at the edge of one of your regions and head for its center.
+  if (roll < 0.26 && w.neutral >= 0) {
+    // A raid: bandits come from the nearest camp, or from the map's edge, and march on a region.
     const r = own[randInt(w.rng, own.length)];
     const n = w.neutral, list = roster(w.slots[n].race).filter((k) => TYPES[k].cost <= 45 && !TYPES[k].repair);
-    const ang = rand(w.rng) * Math.PI * 2, count = 3 + Math.min(4, Math.floor(w.day / 4));
+    const camps = w.slots[n].settlements.filter((b) => b.hp > 0 && b.tier === 'camp');
+    let ox: number, oy: number;
+    if (camps.length) {
+      const c = camps.sort((p, q) => Math.hypot(p.x - r.cx, p.y - r.cy) - Math.hypot(q.x - r.cx, q.y - r.cy))[0];
+      ox = c.x; oy = c.y + 12;
+    } else {
+      const W = w.map.cols * TILE, H = w.map.rows * TILE;
+      const edges: [number, number][] = [[r.cx, 12], [r.cx, H - 12], [12, r.cy], [W - 12, r.cy]];
+      [ox, oy] = edges.sort((p, q) => Math.hypot(p[0] - r.cx, p[1] - r.cy) - Math.hypot(q[0] - r.cx, q[1] - r.cy))[0];
+    }
+    const count = 3 + Math.min(4, Math.floor(w.day / 4));
     for (let i = 0; i < count; i++) {
-      const u = mkUnit(w, n, list[randInt(w.rng, list.length)], r.cx + Math.cos(ang) * 60 + (i % 3) * 6, r.cy + Math.sin(ang) * 60 + Math.floor(i / 3) * 6);
+      const u = mkUnit(w, n, list[randInt(w.rng, list.length)], ox + (i % 3) * 6 - 6, oy + Math.floor(i / 3) * 6);
       u.order = { type: 'attack', tgt: null, x: r.cx, y: r.cy };
       w.units.push(u);
     }
-    say(w, 'Raiders on ' + r.name, 3);
-    pushEvent(w, 'raid', 'Raiders on ' + r.name, r.cx, r.cy, r.id);
-  } else if (roll < 0.45 && rivals.length) {
-    const i = rivals[randInt(w.rng, rivals.length)], name = ['BLUE', 'RED', 'GREEN', 'ORANGE', 'VIOLET'][i];
-    if (!w.slots[0].truce[i]) {
-      w.pending = { kind: 'truce', slot: i, text: name + ' sends an envoy offering a truce.', yes: 'Accept the truce', no: 'Send them away' };
+    say(w, 'Raiders marching on ' + r.name, 3);
+    pushEvent(w, 'raid', 'Raiders marching on ' + r.name, ox, oy, r.id);
+  } else if (roll < 0.44 && rivals.length) {
+    const i = rivals[randInt(w.rng, rivals.length)], name = TNAME[i];
+    const S = w.slots[0];
+    if (!S.truce[i]) {
+      w.pending = { kind: 'truce', slot: i, text: name + ' sends an envoy offering peace.', yes: 'Accept peace', no: 'Send them away' };
+    } else if (!S.pact[i] && w.slots[i].attitude[0] >= PERSONAS[w.slots[i].race].allyAt - 10) {
+      w.pending = { kind: 'ally', slot: i, text: name + ' proposes an alliance: shared sight, open borders, common enemies.', yes: 'Swear the alliance', no: 'Decline' };
     } else {
       const ask = 60 + w.day * 10;
       w.pending = { kind: 'tribute', slot: i, text: name + ' demands ' + ask + ' gold as tribute.', yes: 'Pay ' + ask + ' gold', no: 'Refuse' };
     }
     pushEvent(w, 'war', 'An envoy from ' + name + ' waits', cap.x, cap.y, cap.region);
-  } else if (roll < 0.6) {
-    w.pending = { kind: 'caravan', slot: -1, text: 'Traders ask to cross your land. Escort them for a fee?', yes: 'Take 80 gold', no: 'Turn them away' };
-    pushEvent(w, 'loot', 'Traders at the gate', cap.x, cap.y, cap.region);
-  } else if (roll < 0.72 && w.rules.unrest) {
+  } else if (roll < 0.56) {
+    // A caravan sets out from the nearest edge for one of your towns. It pays when it arrives, if it arrives.
+    const towns = w.slots[0].settlements.filter((b) => b.hp > 0 && b.tier !== 'outpost');
+    const t = towns[randInt(w.rng, towns.length)];
+    const W = w.map.cols * TILE, H = w.map.rows * TILE;
+    const edges: [number, number][] = [[t.x, 10], [t.x, H - 10], [10, t.y], [W - 10, t.y]];
+    const far = edges.sort((p, q) => Math.hypot(q[0] - t.x, q[1] - t.y) - Math.hypot(p[0] - t.x, p[1] - t.y))[0];
+    const u = mkUnit(w, 0, 'caravan', far[0], far[1]);
+    u.home = -2;
+    u.job = t.id;
+    u.order = { type: 'move', x: t.x, y: t.y + 12 };
+    w.units.push(u);
+    say(w, 'A caravan is on the road to ' + (w.regions[t.region]?.name ?? 'your town') + '. Keep it safe.', 3);
+    pushEvent(w, 'loot', 'Caravan bound for ' + (w.regions[t.region]?.name ?? 'town'), u.x, u.y, t.region);
+  } else if (roll < 0.66) {
+    // Migrants: a safe town with room and work draws people.
+    const draw = w.slots[0].settlements.filter((b) => b.hp > 0 && b.tier !== 'outpost' && b.civ.state !== 'attacked' && b.civ.residents + 2 <= b.civ.housing && b.civ.employed < b.civ.jobs);
+    if (draw.length) {
+      const t = draw[randInt(w.rng, draw.length)];
+      seedResidents(w, t, 2);
+      t.civ.residents += 2;
+      say(w, 'Migrants settle in ' + (w.regions[t.region]?.name ?? 'your town'), 3);
+      pushEvent(w, 'claim', 'Migrants settle in ' + (w.regions[t.region]?.name ?? 'town'), t.x, t.y, t.region);
+    }
+  } else if (roll < 0.76 && w.rules.unrest) {
     const r = own[randInt(w.rng, own.length)];
     r.unrest = Math.min(95, r.unrest + 30);
     say(w, 'Sickness in ' + r.name + '. Unrest is up.', 3);
     pushEvent(w, 'unrest', 'Sickness in ' + r.name, r.cx, r.cy, r.id);
-  } else if (roll < 0.84) {
+  } else if (roll < 0.86) {
     for (const r of own) r.unrest = Math.max(0, r.unrest - 20);
     w.slots[0].gold += 40;
     say(w, 'A good harvest. Unrest falls and the treasury gains 40.', 3);
@@ -704,7 +784,10 @@ export function choose(w: World, yes: boolean): boolean {
   if (!p) return false;
   w.pending = null;
   const s = w.slots[0];
-  if (p.kind === 'truce') {
+  if (p.kind === 'ally') {
+    if (yes) setPact(w, 0, p.slot, true);
+    else { w.slots[p.slot].attitude[0] -= 10; say(w, 'The envoy leaves without an answer they liked.', 3); }
+  } else if (p.kind === 'truce') {
     if (yes) setTruce(w, 0, p.slot, true);
     else { w.slots[p.slot].attitude[0] -= 15; say(w, 'The envoy leaves. They will remember.', 3); }
   } else if (p.kind === 'tribute') {
@@ -760,6 +843,6 @@ export function populateWorld(w: World, rng: Rng): void {
 export function mkNeutralSlot(w: World): Slot {
   return {
     ally: 99, race: 'horde', diff: w.diff, alive: true, gold: 0, settlements: [], ai: false, aiT: 0, aiWant: null, aiLast: 0, queue: [], rally: null, mat: 0, neutral: true,
-    attitude: w.slots.map(() => -100), truce: w.slots.map(() => false), truceT: w.slots.map(() => 0), powerCd: {}, age: 0, tech: { melee: 0, ranged: 0, armor: 0 },
+    attitude: w.slots.map(() => -100), truce: w.slots.map(() => false), truceT: w.slots.map(() => 0), pact: w.slots.map(() => false), raidT: 0, powerCd: {}, age: 0, tech: { melee: 0, ranged: 0, armor: 0 },
   };
 }

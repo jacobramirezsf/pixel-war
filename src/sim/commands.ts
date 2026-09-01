@@ -8,7 +8,7 @@ import { addBld, bldAtPx, canBuild, gateDir, passableFor, removeBld } from './bu
 import { clamp, TILE } from './map.ts';
 import type { Action, Command, Target, TargetRef, Unit, World } from './types.ts';
 import { buildTime, mkUnit } from './units.ts';
-import { absorb, ADVANCED_COST, canGrow, choose, canAbsorb, canSettle, hasCity, NEXT_TIER, placeSettlement, popCap, popUsed, setTruce, startUpgrade, TIERS, truceAccepted } from './conquest.ts';
+import { absorb, ADVANCED_COST, allyAccepted, canGrow, choose, setPact, truceAccepted, canAbsorb, canSettle, hasCity, NEXT_TIER, placeSettlement, popCap, popUsed, setTruce, startUpgrade, TIERS } from './conquest.ts';
 import { popOf } from './units.ts';
 import { seedResidents } from './civ.ts';
 import { wonderBegun, wonderDone } from './wonder.ts';
@@ -121,6 +121,38 @@ export function applyCommand(w: World, c: Command, quiet = false): boolean {
       say('Rally point set for the ' + BLD[b.type].name.toLowerCase(), 1);
       return true;
     }
+    case 'diplomacy': {
+      if (slot !== 0 || w.mode !== 'conquest' || !w.rules.diplomacy) return false;
+      const j = c.payload.slot, R = w.slots[j];
+      if (!R || R.neutral || !R.alive || j === slot) return false;
+      const name = TNAME[j];
+      switch (c.payload.act) {
+        case 'war': setTruce(w, slot, j, false); return true;
+        case 'peace': {
+          if (s.truce[j]) return false;
+          const value = w.slots.map(() => 0);
+          for (const u of w.units) if (u.hp > 0) value[u.team] += TYPES[u.type].cost;
+          if (!truceAccepted(w, slot, j, value)) { say(name + ' refuses peace', 2); R.attitude[slot] -= 5; return false; }
+          setTruce(w, slot, j, true);
+          return true;
+        }
+        case 'ally': {
+          if (s.pact[j]) return false;
+          if (!allyAccepted(w, slot, j)) { say(name + ' is not ready for an alliance. Warm them up first.', 2.5); return false; }
+          setPact(w, slot, j, true);
+          return true;
+        }
+        case 'gift': {
+          const g = Math.max(0, Math.min(c.payload.gold ?? 100, 1000));
+          if (s.gold < g) { say('Need ' + g + ' gold', 1.2); return false; }
+          s.gold -= g;
+          R.attitude[slot] = Math.min(100, R.attitude[slot] + Math.min(25, g / 8));
+          say(name + ' accepts ' + g + ' gold. Relations warm.', 2);
+          return true;
+        }
+      }
+      return false;
+    }
     case 'choose': {
       if (slot !== 0) return false;
       return choose(w, c.payload.yes);
@@ -223,6 +255,8 @@ export function applyCommand(w: World, c: Command, quiet = false): boolean {
         u.order = o;
       });
       if (dest && !tgt) w.fx.push({ k: 'mark', x: dest.x, y: dest.y, r: 6, t: 0.5, c: '#ff9a9a' });
+      // The exact target flashes so the order visibly landed on it.
+      if (tgt) w.fx.push({ k: 'mark', x: tgt.x, y: tgt.y, r: tgt.ent === 'unit' ? 6 : 10, t: 0.6, c: '#ff6b6b' });
       say(tgt ? 'Attacking' : dest ? 'Attack-moving' : 'Charge!', 1);
       return true;
     }
@@ -245,7 +279,11 @@ export function applyCommand(w: World, c: Command, quiet = false): boolean {
     }
     case 'hold': {
       // Hold: stay here, fight what comes into reach, never wander off after it.
-      for (const u of ownUnits(w, slot, c.payload.ids)) u.order = { type: 'guard', x: u.x, y: u.y, hold: true };
+      const hs = ownUnits(w, slot, c.payload.ids);
+      if (!hs.length) return false;
+      let hx = 0, hy = 0;
+      for (const u of hs) { u.order = { type: 'guard', x: u.x, y: u.y, hold: true }; hx += u.x; hy += u.y; }
+      w.fx.push({ k: 'mark', x: hx / hs.length, y: hy / hs.length, r: 4, t: 0.5, c: '#dde2ec' });
       say('Holding position', 1);
       return true;
     }

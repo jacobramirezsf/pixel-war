@@ -275,6 +275,12 @@ TYPES.civ = {
   sprite: ['........', '...DD...', '...SS...', '..TTTT..', '..TTTT..', '...DD...', '...D.D..', '...D.D..'],
 };
 
+// A trader's cart. Yours while it is on your land; worth gold when it reaches a town.
+TYPES.caravan = {
+  key: 'caravan', name: 'CARAVAN', race: 'kingdom', role: 'civ', cost: 0, hp: 80, dmg: 0, range: 0, speed: 13, cd: 1, aggro: 0, sz: 8, r: 3,
+  sprite: ['........', '..DDDD..', '.DBBBBD.', '.DBBBBD.', 'DDDDDDDD', '.O....O.', 'OOO..OOO', '.O....O.'],
+};
+
 /** Kingdom build order, kept for the prototype's tests and tools. */
 export const ORDER: readonly UnitKey[] = ROSTER.kingdom;
 /** Every unit key across all races. */

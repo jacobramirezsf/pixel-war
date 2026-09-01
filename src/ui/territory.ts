@@ -2,7 +2,8 @@
 
 import { TEAM, TNAME } from '../data/teams.ts';
 import { centerOn } from '../render/camera.ts';
-import { TIERS, settlementsIn } from '../sim/conquest.ts';
+import { relation, TIERS, settlementsIn } from '../sim/conquest.ts';
+import { moodOf, PERSONAS } from '../data/personas.ts';
 import type { GameEvent, Region } from '../sim/types.ts';
 import { issueAction, say, type App } from './app.ts';
 import { $, on, show } from './dom.ts';
@@ -61,12 +62,11 @@ function diplomacy(app: App): string {
   for (let i = 1; i < w.nP; i++) {
     const s = w.slots[i];
     if (s.neutral || !s.alive) continue;
-    const truce = w.slots[0].truce[i];
-    const peace = truce && w.t - w.slots[0].truceT[i] > 300;
-    const att = s.attitude[0];
-    const mood = att > 30 ? 'friendly' : att > -30 ? 'wary' : 'hostile';
-    rows.push('<div class="dip"><span style="color:' + TEAM[i] + '">' + TNAME[i] + '</span> <span>' + (peace ? 'peace' : truce ? 'truce' : 'war') + ' · ' + mood + '</span>'
-      + '<button data-truce="' + i + '" data-on="' + (truce ? 0 : 1) + '" class="mini">' + (truce ? 'BREAK' : 'OFFER TRUCE') + '</button></div>');
+    const rel = relation(w, 0, i);
+    const mood = moodOf(s.attitude[0]);
+    const btn = (act: string, label: string): string => '<button data-dip="' + i + '" data-act="' + act + '" class="mini">' + label + '</button>';
+    const acts = rel === 'war' ? btn('peace', 'OFFER PEACE') : rel === 'peace' ? btn('ally', 'ALLY') + btn('war', 'WAR') : btn('war', 'BREAK');
+    rows.push('<div class="dip"><span style="color:' + TEAM[i] + '">' + TNAME[i] + '</span> <span>' + rel + ' · ' + mood + ' · ' + PERSONAS[s.race].name + '</span><span class="acts">' + acts + btn('gift', 'GIFT 100') + '</span></div>');
   }
   return rows.length ? '<h3>RIVALS</h3>' + rows.join('') : '';
 }
@@ -94,7 +94,12 @@ export function renderTerritory(app: App): void {
   for (const b of el.querySelectorAll<HTMLButtonElement>('button.card[data-r]')) on(b, 'click', () => { const r = w.regions[+b.dataset.r!]; centerOn(app.cam, r.cx, r.cy); if (app.layout === 'mobile') { app.terrOpen = false; app.ui.updateUI(); } });
   for (const b of el.querySelectorAll<HTMLButtonElement>('button.card[data-town]')) on(b, 'click', () => { const t = w.slots[0].settlements.find((x) => x.id === +b.dataset.town!); if (!t) return; centerOn(app.cam, t.x, t.y); app.selection.clear(); app.town = t.id; if (app.layout === 'mobile') app.terrOpen = false; app.ui.updateUI(); });
   for (const b of el.querySelectorAll<HTMLButtonElement>('button.ev')) on(b, 'click', () => { centerOn(app.cam, +b.dataset.ex!, +b.dataset.ey!); if (app.layout === 'mobile') { app.terrOpen = false; app.ui.updateUI(); } });
-  for (const b of el.querySelectorAll<HTMLButtonElement>('button[data-truce]')) on(b, 'click', () => { issueAction(app, { type: 'truce', payload: { slot: +b.dataset.truce!, offer: b.dataset.on === '1' } }); lastKey = ''; });
+  for (const b of el.querySelectorAll<HTMLButtonElement>('button[data-dip]')) on(b, 'click', () => {
+    const slot = +b.dataset.dip!, act = b.dataset.act as 'war' | 'peace' | 'ally' | 'gift';
+    if (act === 'war' && !confirm('Declare war on ' + TNAME[slot] + '?')) return;
+    issueAction(app, { type: 'diplomacy', payload: { slot, act, gold: act === 'gift' ? 100 : undefined } });
+    lastKey = '';
+  });
 }
 
 /** Auto-pause on new events. On by default, and the phone cannot turn it off. */

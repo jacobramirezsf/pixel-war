@@ -9,8 +9,11 @@ import { applyCommand, cmd } from '../commands.ts';
 import { rand } from '../rng.ts';
 import type { Settlement, Target, Unit, World } from '../types.ts';
 import { enemyWonder } from '../wonder.ts';
-import { allied, slotDiff } from '../world.ts';
-import { canAbsorb, canGrow, canSettle, NEXT_TIER, popCap, popUsed, TIERS } from '../conquest.ts';
+import { allied, pushEvent, say, slotDiff } from '../world.ts';
+import { canAbsorb, canGrow, canSettle, NEXT_TIER, popCap, popUsed, regionAt, TIERS } from '../conquest.ts';
+import { PERSONAS } from '../../data/personas.ts';
+import { TNAME } from '../../data/teams.ts';
+import { seenAt } from '../vision.ts';
 import { GROW } from '../../data/realm.ts';
 import { buildingsOf } from '../civ.ts';
 import { ageOf, canResearch, canTrain, findSpot, ownBlds, queuedCount } from '../town.ts';
@@ -223,8 +226,29 @@ function buildTown(w: World, slot: number, a: Assessment): boolean {
 }
 
 /** One decision for one faction. Runs every `react` seconds. */
+/** The difficulty profile bent by the kingdom's personality. */
+export function profileFor(w: World, slot: number): AiProfile {
+  const s = w.slots[slot], base = PROFILES[s.diff];
+  if (w.mode !== 'conquest') return base;
+  const K = PERSONAS[s.race];
+  return { ...base, expands: base.expands * K.expands, harass: base.harass * K.harass, massRatio: base.massRatio * K.massRatio };
+}
+
+/** Tell the player a march is coming when they have scouted where it comes from. */
+function announceMarch(w: World, slot: number, target: Target): void {
+  const s = w.slots[slot];
+  if (w.mode !== 'conquest' || target.team !== 0 || w.t - s.raidT < 120) return;
+  const home = s.settlements.find((b) => b.hp > 0);
+  if (!home || !seenAt(w, home.x, home.y)) return;
+  s.raidT = w.t;
+  const r = w.regions[regionAt(w, target.x, target.y)];
+  const text = TNAME[slot] + ' troops are marching on ' + (r?.name ?? 'your land');
+  say(w, text, 3.5);
+  pushEvent(w, 'raid', text, home.x, home.y, r?.id ?? -1);
+}
+
 export function decide(w: World, slot: number): void {
-  const s = w.slots[slot], P = PROFILES[s.diff];
+  const s = w.slots[slot], P = profileFor(w, slot);
   const a = assess(w, slot);
   if (expandTerritory(w, slot, a)) return;
   if (buildTown(w, slot, a)) return;
@@ -331,6 +355,7 @@ export function decide(w: World, slot: number): void {
     const prong = P.multiProng && wave.length >= 8 ? mines.filter((m) => m.guard > 0 && m.guard < heldValue / 3).sort((x, y) => x.guard - y.guard)[0] : undefined;
     // The wave attack-moves onto the target: it fights what it meets on the way and arrives in
     // a loose order, melee first, so it does not string out into a column of exact-target chasers.
+    announceMarch(w, slot, target);
     if (prong) {
       const third = Math.floor(wave.length / 3);
       const flank = wave.slice(0, third);
