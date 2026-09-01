@@ -5,16 +5,17 @@ commit that added this file. Verify against the code when in doubt; the code win
 
 ## What it is
 
-A pixel-art real-time strategy game for one player, built to be played by its owner on a desktop
-browser and installed on a phone as a web app. Vanilla TypeScript, Vite, canvas 2D, no game
-engine, no framework. Sim and render are separate. The sim is deterministic: one seeded PRNG,
-fixed 1/60 tick, every action is a command `{tick, slot, type, payload}`, seed plus command log
-replays a game, snapshot and restore are lossless.
+A pixel-art strategy game for one player, played in a desktop browser and installed on a phone
+as a web app. Mobile is the first platform. Vanilla TypeScript, Vite, canvas 2D, no game engine,
+no framework, four dev dependencies (vite, typescript, @types/node, vite-plugin-pwa). Sim and
+render are separate. The sim is deterministic: one seeded PRNG, fixed 1/60 tick, every action is
+a command `{tick, slot, type, payload}`, seed plus command log replays a game, snapshot and
+restore are lossless. Nothing in `src/sim` or `src/data` touches the DOM, clocks, or Math.random.
 
 - Repo: `/Users/Jacob/Documents/Makery/projects/PixelWar`, GitHub `jacobramirezsf/pixel-war`.
 - Live: https://jacobramirezsf.github.io/pixel-war/ (GitHub Pages, deployed by CI on push to main).
-- Origin: a single-file prototype in `legacy/pixel-war-v3.html`. `BRIEF.md` is the original build
-  brief (milestones M0 to M9, all done). `docs/conquest.md` is the persistent-world design.
+- `BRIEF.md` is the original build brief (M0 to M9, done). `docs/conquest.md` is the first
+  persistent-world design; Realm grew out of it.
 
 ## How to run
 
@@ -22,149 +23,122 @@ replays a game, snapshot and restore are lossless.
 npm install
 npm run dev            # http://localhost:5173  (add --host to reach it from a phone on the LAN)
 npm run check          # typecheck (app and sim, sim with no DOM lib), tests, build
-npm test               # node:test with native TypeScript stripping, no test framework
+npm test               # node:test with native TypeScript stripping
 npm run build          # dist/index.html, one self-contained file that runs from file://
-npm run sim -- --map=crossroads --a=balanced --b=ai --runs=20   # bot vs AI
-npm run sim -- --matrix --runs=3      # every scripted bot pair on five maps
-npm run sim -- --ladder --runs=4      # Extreme vs Hard vs Standard vs Easy
-node tools/bench.ts 10                # headless throughput
+npm run sim -- --ladder             # Extreme vs Hard vs Standard vs Easy on five maps
+npm run sim -- --matrix             # scripted bot pairs
+node tools/bench.ts 20              # headless throughput, 300 units
+node tools/value.ts 300 [minCost]   # equal-gold duel sweep of every unit vs soldiers, archers, knights
+node tools/realm-sim.ts 20 2 standard 11   # all-AI Realm for 20 minutes: towns, armies, wars, history
 node tools/browser-shot.ts <url> <out.png> [w] [h] [script.js]   # headless Chrome over CDP
 ```
 
-Dev dependencies only: vite, typescript, @types/node, vite-plugin-pwa. Add nothing without asking.
-Node 22.6 or newer. `.ts` imports carry the extension and type-only imports use `import type`.
-In the browser, `window.pw` is the app object for scripted checks (`window.pw.world` is the sim).
+In the browser `window.pw` is the app and `window.pwAct(action)` issues an action through the
+same path as the HUD. The QA scripts in this history drive the game that way.
 
 ## Modes
 
-- **Skirmish**: 1v1, destroy the enemy base. The AI starts behind a fort.
-- **Multi War**: up to five armies, teams or free for all.
-- **Domination**: hold mines to 150 points.
-- **Unlimited Gold**: bottomless treasury, AI income doubled.
-- **Sandbox**: place both armies and defenses, then play; replay, mirror.
-- **Conquest**: one world in regions, one to four rivals plus neutrals. Settle regions, hold them
-  30 seconds to claim, pay upkeep, keep regions connected to the capital and garrisoned, watch
-  unrest. Bandit camps raid, independents can be absorbed, ruins reward whoever holds them.
-  Materials from the land pay for walls and towers. Population caps the army. Diplomacy: attitude,
-  truce, peace. Veterancy: three ranks from kills. Save, continue, autosave every two minutes and
-  on backgrounding. Win by holding every rival capital or 60% of regions for five minutes.
-- **Map editor**: paint terrain, move bases, drop mines, resize, random symmetric generation,
-  mirror, JSON map codes.
+- REALM (mode key `conquest`): the main game. A persistent world with 1 to 4 rival kingdoms,
+  world size small, standard, large (48, 64, 90 tiles), optional seed. Three save slots with
+  summary cards, autosave every two minutes and on backgrounding, CONTINUE REALM on the main
+  menu. It never ends on its own: six feats fire once (Kingdom, Great City, Empire, Conqueror,
+  Great Power, Survivor) plus Great Wonder. Losing the last settlement regroups the people in
+  free land; the realm ends only when there is none. Days are 120 seconds.
+- Skirmish, Multi War, Domination, Unlimited Gold, Sandbox, Map Editor: the match modes. Town
+  buildings train units in every mode (barracks line, range ranged, stable fast and air, siege
+  works siege, castle heavy and special; settlement trains scouts and workers).
 
-## Races and units
+## Realm systems
 
-Five races, 101 units. Kingdom is the prototype's 21. Horde, Undead, Forge, and Wild each have 20:
-recolored, trimmed variants of 16 shared archetypes with per-race stat leanings, plus four
-specials whose mechanics no other race has:
+- Worlds: `src/sim/realmgen.ts` makes asymmetric geography (forest belts, rock ridges with
+  passes, one or two rivers with fords, cleared town sites, a mine per region) and carves a route
+  so every region is reachable from the capital. Regions come from `makeRegions` (jittered grid).
+- Fog of war: `w.seen` (explored, saved run-length) plus per-frame sight from units, buildings,
+  settlements, allies (`src/sim/vision.ts`, radii in `src/data/vision.ts`). Enemies show only in
+  sight; the minimap and scene dim explored land and black out the unknown.
+- Civilians (`src/sim/civ.ts`, numbers in `src/data/civ.ts`): villagers live in a settlement,
+  take jobs (settlement, farm, market, smith, castle), pay the treasury through staffed jobs,
+  drift between work and the square, flee to the castle or hall when enemies come, return when
+  safe. Housing from the settlement plus houses. Growth needs safety, room, and work. Each
+  settlement reports residents, jobs, income, state (growing, stable, under attack, recovering).
+- Growth: village to town needs 6 people, a house, a barracks, a farm or market; town to city
+  needs 12 people, 3 houses, market, smith, range or stable (`GROW` in `src/data/realm.ts`,
+  `canGrow` in conquest.ts). Ages follow the best settlement tier. The capital flies a gold
+  standard; the crown passes to the biggest survivor when it falls.
+- Diplomacy: war, peace, allied. Allies share sight, cross land, fight shared enemies. Player
+  actions: war, peace, ally, gift. Rivals propose alliances through envoys, walk away from a
+  soured one, and lean by race (`src/data/personas.ts`): horde aggressive, undead raiders, forge
+  defensive, wild growers, kingdom opportunists.
+- Events (`realmEvents` in conquest.ts): raiders from the nearest camp or the map edge, envoys
+  (peace, alliance, tribute), caravans that pay on arrival, migrants, sickness, harvest, ruins,
+  declarations of war. Some pause and ask. Rival marches are announced when their home is
+  explored. History: `w.history` keeps forty major lines, shown in the KINGDOM panel.
+- Great Wonder: 4x4, 800 gold, 400 materials, four minutes. Announced when begun, a feat when
+  done, warms rivals, calms land, sees far. The AI builds one when rich and marches on an enemy's.
+- Names: regions take a name from the founder's race pool (`src/data/names.ts`) when first
+  settled; the player renames from the town card.
 
-- Horde: Warchief (speed aura), Sapper (x5 vs buildings), Warg Rider (charge), Troll (regen).
-- Undead: Necromancer (raises skeletons from enemy dead), Ghoul (lifesteal), Banshee (slow), Bone Colossus (splits on death).
-- Forge: Bulwark (ranged damage aura), Railgun (pierces), Shocker (chain), Minelayer (drops wire).
-- Wild: Shade (stealth), Druid (root), Treant (tree armor and regen), Sprite (blink). Wild units ignore tree slowdown.
+## Combat and control
 
-Unit data lives in `src/data/units.ts` (archetypes, race variants, specials, sprites as string grids).
-Roles (`line, ranged, fast, siege, heavy, air, support, scout, special`) drive the AI counter matrix
-and which building trains a unit.
-
-## Buildings and the town layer (Conquest)
-
-`src/data/buildings.ts`. The prototype's eight defenses (barbed wire, palisade, stone wall, steel
-wall, gate, wood tower, stone tower, turret) plus town buildings with footprints: House (+5 pop),
-Farm (+0.5 gold/s near a settlement), Market (+1 gold/s), Blacksmith (research blades, bows, armor,
-two levels each), Barracks (line), Range (ranged), Stable (fast, air), Siege Works (siege), Castle
-(3x3, shoots, trains heavy and special, +20 pop, calms and guards its region). Each trainer has its
-own queue and spawns at its door; workers and scouts come from the settlement. Buildings take time
-to construct; workers within reach double the pace. Ages follow the best settlement tier: village
-(0), town (1), city (2), grown with GROW; each age unlocks more. Range and stable need a barracks.
-Town rules are on only in Conquest (`w.rules.town`). Skirmish still trains everything at the base.
-
-## Powers, cheats, settings
-
-Six powers with gold cost and cooldown, cast at a point: Barrage, Smite, Heal, Haste, Freeze,
-Reinforce (`src/data/powers.ts`, `src/sim/powers.ts`). Settings: volume, mute, damage numbers,
-edge pan, key hints, colorblind palette, auto pause, instant production. Cheats, toggleable
-mid-game and carried in saves and replays: unlimited gold, unlimited materials, instant units,
-instant buildings, no cooldowns. The AI never gets cheats.
+- Commands: MOVE, ATTACK (attack-move, or an exact unit or building target), GUARD (a spot, a
+  unit, a building, a settlement; follows the target), HOLD, RETREAT. Modes are one-shot and the
+  canvas shows an outline while one is armed. Tap an enemy to target it, tap ground to move,
+  double-tap a unit to select its type on screen. Groups G1 to G3: tap recalls, second tap
+  centers, hold saves. Mixed groups keep a loose order: ranged and support stop short, siege
+  shorter, so melee arrive first (`lineBack` in commands.ts).
+- Balance: `tierScale` gives dearer units hp k^0.22 and damage k^0.15 on top of listed numbers.
+  `tools/value.ts` is the sweep that drove the last pass. Siege: mortars and bombers deal double
+  to buildings (`bldDmg`); the Sapper's `vsBld` is a race mechanic. Buildings crack and smoke as
+  they lose health.
+- Powers (`src/data/powers.ts`, `src/sim/powers.ts`): battle (barrage, smite, heal, haste,
+  freeze, reinforce, lightning, meteor, quake, fortify, teleport, banish, summon), realm (rebuild,
+  sanctuary, golden age), chaos with cheats on (nuke, invasion, peace, total war). Area buffs are
+  timed `w.zones`.
+- Cheats (`Cheats` in types.ts, `src/sim/cheats.ts`): a master switch, then unlimited gold and
+  materials, instant units and buildings, no cooldowns, reveal, no pop cap, god mode, one hit,
+  super units, fast economy, instant growth, all ages, free build, free units, anywhere. One-shot
+  commands: gold, materials, research, heal, revive, finish builds and queues, clear near or all,
+  destroy, spawn, army, raid, bandits, settle, peace, total war, rebuild, max city. Player only,
+  every one a command. UI: Settings and the CHEATS panel under MORE.
 
 ## AI
 
-`src/sim/ai/`. A strategy layer runs each AI faction at its difficulty's reaction rate: assess,
-defend (sally when strong enough, hold behind towers otherwise), expand to mines, raid, mass to a
-wave size and odds, push, reinforce (Extreme), retreat (Hard, Extreme). Purchases bend toward a
-role counter matrix (`composition.ts`). Difficulty is decision quality first (`profiles.ts`),
-income and build speed as small second levers. In Conquest it also settles regions, absorbs
-independents, builds a town in a fixed order, ages up, researches, and places a castle at its
-border. Scripted harness bots live in `bots.ts`. The ladder test (`test/balance/ladder.test.ts`)
-guards Extreme > Hard > Standard > Easy and keeps the macro bots between 20% and 80% against
-Standard. The owner considers the AI strong and satisfying; do not weaken it.
-
-## Controls
-
-- Phone: one finger drags the map, pinch zooms (continuous, settles on a crisp step), fling
-  coasts. Tap a unit to select, tap ground to move, tap an enemy to attack. DRAG: PAN / DRAG: BOX
-  toggle for box select. Tabs: UNITS, BUILD (grouped: DEFENSE, TOWN, MILITARY), POWERS, MORE
-  (rally, groups G1 to G3, sell, land overlay, territory list, settle, outpost, upgrade, absorb,
-  grow, research, save). Footprint buildings drag into place with a live ghost; walls paint along
-  a drag. PAUSE and speed (0.25x to 4x) in the top bar; the pause overlay resumes on a tap.
-- Laptop and desktop: two-finger scroll pans, pinch or Ctrl+scroll zooms, right drag pans, arrows
-  and WASD pan, + and - zoom. Left drag box selects, right click moves or attacks. Numbers buy,
-  Q W E R T G pick powers, Space pauses, [ and ] change speed, Esc cancels, Y rally, L overlay,
-  B build tab, Ctrl+A all, C charge, H hold, Backspace retreat, Tab cycles types, Ctrl+number
-  saves a group. Same panel as the phone in a left column; key hints panel on the right.
+`src/sim/ai/`: strategy (decide), composition (role counter matrix, saving for better units once
+there is an army and an economy), tactics, profiles (difficulty = decision quality plus small
+income and build levers), bots (scripted opponents for the harness). Realm additions: builds
+toward the next tier and develops every village, tower cap, contests lightly held mines, recalls
+a wave when a force approaches home, no push while under approach, engages anything at the
+gates, attack-moves in formation, announces marches. Ladder guard in `test/balance/ladder.test.ts`:
+ordering strict, scripted bots 10 to 90 percent against Standard (loose on purpose since the
+flow-field fix; see the note there).
 
 ## Code map
 
 ```
-src/sim/          no DOM, runs under Node. step.ts is the tick. commands.ts applies commands.
-                  world.ts: state, snapshot, restore, serialize. conquest.ts: regions and rules.
-                  town.ts: construction, per-building training, ages, research. powers.ts.
-                  combat.ts, pathing.ts (flow fields, throttled), spatial.ts (16px hash),
-                  economy.ts, buildings.ts (footprints, placement rules), replay.ts, ai/.
-src/data/         units, buildings, powers, races, maps, difficulty, teams (palette).
-src/render/       camera (integer zoom at rest, margin past edges), scene, atlas (cached sprites),
-                  terrain, minimap, fx.
-src/ui/           app.ts (UI state), hud/ (tabs, command row, queue, view buttons), input/
-                  (gestures, touch and mouse schemes over actions.ts, hotkeys), menus/,
-                  territory.ts (region list, events, diplomacy), conquest.ts (save, continue),
-                  settings.ts, stats.ts, feedback.ts (sound and shake), bench.ts.
-src/platform/     storage adapter (localStorage behind an interface), service worker.
-src/audio/        WebAudio synth, no files.
-test/sim/         parity, smoke, snapshot, determinism, races, depth, conquest, town, powers.
-test/balance/     ladder test.
-tools/            sim-cli, bench, browser-shot, make-icons.
+src/sim/       world, step, commands, combat, pathing (dijkstra with a float32 fix), spatial,
+               conquest (regions, claims, unrest, neutrals, diplomacy, events, feats, regroup),
+               civ, town, buildings, realmgen, vision, wonder, cheats, powers, ai/
+src/data/      units (101 plus villager and caravan), buildings (with wonder), races, powers,
+               realm (sizes, feats, growth), civ, vision, personas, names, maps, difficulty
+src/render/    scene (fog, damage, silhouettes), atlas, terrain, minimap, camera (half zoom on
+               big maps), fx
+src/ui/        app, conquest (slots, autosave), territory (KINGDOM panel), cheats (panel),
+               hud/, input/, menus/, settings, feedback (sounds), stats
+tools/         sim-cli, bench, value, realm-sim, browser-shot, make-icons
+test/sim/      93 tests incl. civ, modes, realm, realmgen, diplomacy, cheats, tiers, stances
 ```
 
-Invariants: nothing in `src/sim` or `src/data` may reference the DOM, clocks, or `Math.random`
-(a test greps for it). Snapshot and restore must stay lossless (a test runs 600 ticks after a
-restore and compares state strings; key order in `world.ts` restore must match the snapshot).
-Every player and AI action goes through `applyCommand`. Selection and pause are UI state, not sim
-state. Writing style everywhere: plain, short sentences, no em dashes, no inflated words.
+Invariants: snapshot and restore must stay lossless (tests run 600 ticks after a restore and
+compare state strings; key order in world.ts restore must match snapshot). Every player and AI
+action goes through `applyCommand`. Selection, pause, camera, and panels are UI state.
 
-## Known gaps
+## Known gaps and next steps
 
-- Phone install is verified only in headless Chrome, not on a real device.
-- A 300-unit five-way brawl runs about 26x real time headless; Skirmish scale runs far faster.
-- Conquest and town numbers (upkeep, garrison, unrest rates, building costs and times) are first
-  guesses that pass tests, not tuned by play.
-- Unit power scales roughly linearly with cost; a 150 gold unit is worth about four 20 gold units.
-- The two naive harness bots (blind rush, pure turtle) lose outright to Standard.
-
-## Owner's direction (Aug 31 2026)
-
-The owner wants the game to become a persistent world he returns to: build a village, save it,
-come back, grow units and the town, get raided, deal with random events, work with or fight other
-kingdoms. Fun and replayable at the base, not overly complex. Buildings should make mechanical
-sense and be where units come from (barracks for infantry, a factory for tanks, castles and
-wonders as goals). Combat next: a 200 gold special should be much stronger than a soldier, and
-that should hold across tiers. Controls: select one unit and send it at a specific unit, building,
-or spot, while keeping group selection with attack mode and defend mode. Larger maps and a more
-expansive editor and sandbox; some starter maps are too small.
-
-Proposed order: (1) buildings train units in every mode, Skirmish starts with the basics standing;
-(2) combat scaling pass, value grows like cost^1.3, harness watching the ladder; (3) stances
-(MOVE, ATTACK, GUARD, RETREAT) and single-target control on the phone row first; (4) a persistent
-"Realm" mode: endless, three save slots, events on a clock, second towns, a Wonder, optional win
-goals; (5) larger maps, editor upgrades, starter map revamp.
-
-Open decisions the owner has not made: whether Realm replaces Conquest (recommended) and whether
-buildings train units in Skirmish too (recommended).
+- AI kingdoms bank gold late (pop-capped, building caps); they could spend on castles, houses,
+  city upgrades, and wonders more readily. Standard loses most scripted timing pushes on the
+  tiny starter maps.
+- Ranged units lose open-field brawls at equal gold by design; no kiting behavior.
+- Roads, building rotation, a WALL power, and region editing in the editor were skipped.
+- Phone install is unverified on hardware; all mobile checks are 390x844 headless screenshots
+  and scripted taps.
+- Writing style everywhere: plain and direct, no em dashes, no inflated words.
