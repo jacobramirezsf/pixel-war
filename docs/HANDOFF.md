@@ -78,6 +78,37 @@ same path as the HUD. The QA scripts in this history drive the game that way.
 - Names: regions take a name from the founder's race pool (`src/data/names.ts`) when first
   settled; the player renames from the town card.
 
+## Expansion pass (Sep 2026)
+
+- Recovery: the frame loop survives a thrown frame; each slot keeps the previous save and falls
+  back to it; a slot that cannot load shows DAMAGED with CLEAR. The nuke crash was a negative
+  blast radius in `drawFx` (boom effects now carry their own life).
+- Selection: `app.town`, `app.bld`, `app.foreign` are the non-unit cards; `clearSelection` drops
+  all of them; `app.act` is the contextual gold button set by `contextAction` in hud.ts;
+  `app.warAsk` holds an attack on someone at peace until a second tap confirms it (the `attack`
+  command takes `declare: true` and declares war).
+- Capture: `canCapture`/`capture` in conquest.ts. Razed enemy settlements change hands with region
+  and nearby buildings for 100 gold; independents join for 200 (absorb).
+- Training: `buy` takes `building` and `near`; `slot.prefer[role]` is a default trainer
+  (`setDefault`). Building levels 1 to 3 (`upgradeBld`; walls and towers step material instead,
+  `connected: true` sweeps a line). Research is bought on the building that sells it
+  (`TECH_INFO` in town.ts): smith, factory, dock or port, market.
+- Ground: roads (tile 1, speed 1.25x, cheaper in flow fields) and clearing are `terrain` works in
+  `w.works` (`src/sim/works.ts`); bridges are buildings of kind `bridge` painted across water from
+  a bank; `unbuild` undoes the last placement gesture with a full refund.
+- Media: units are ground, sea (`naval`), or air (`fly`); `passableFor(w, team, x, y, medium)`.
+  Transports (`capacity`) hold riders with `u.aboard`; orders `board` and `unload`. Docks and
+  ports need a shore; the factory builds trucks, armored cars, flak, helicopters. DARPA and the
+  Robotics Lab are the late game (`EXTRA_UNITS`, roles `darpa` and `robot`, prerequisites via
+  `needs`). Shared units show in the UNITS tab once their trainer stands.
+- Worlds: sizes up to MASSIVE (200 tiles, 100 regions); a bay with islands on large worlds;
+  offshore regions get no corridor (`offshore()` in realmgen). Flow fields are rebuilt on restore
+  and only saved (packed float32) while a rebuild is pending; the dijkstra uses typed heaps with
+  costs precomputed per node; the rebuild throttle grows with map size. Saves are about 160KB.
+- Civilians also mend damaged buildings and hurry construction (job -2 is an errand), and split
+  their day between work, market, house, and square. A raid at the door halves construction.
+- Layers (territory, borders, names, state) live in `app.layers`, saved under `layers`.
+
 ## Combat and control
 
 - Commands: MOVE, ATTACK (attack-move, or an exact unit or building target), GUARD (a spot, a
@@ -133,6 +164,13 @@ compare state strings; key order in world.ts restore must match snapshot). Every
 action goes through `applyCommand`. Selection, pause, camera, and panels are UI state.
 
 ## Known gaps and next steps
+
+- The AI does not build roads, bridges, DARPA, or the lab, and does not mount amphibious
+  invasions; it builds a dock by a shore and keeps a few boats. Boats have no flow field and
+  steer straight, sliding along coasts.
+- Villagers do not prefer roads when walking; only movement speed and flow fields honor roads.
+- HUGE and MASSIVE run 28x realtime headless; phone performance on them is unverified.
+- No metropolis tier, no settlement priority setting, no sea caravans.
 
 - AI kingdoms bank gold late (pop-capped, building caps); they could spend on castles, houses,
   city upgrades, and wonders more readily. Standard loses most scripted timing pushes on the
