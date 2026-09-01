@@ -9,6 +9,7 @@ import { rand, randInt, type Rng } from './rng.ts';
 import type { Region, Settlement, Slot, Tier, Unit, World } from './types.ts';
 import { mkUnit } from './units.ts';
 import { castleNear, townIncome, townPop } from './town.ts';
+import { canPlaceSettlement as placeOk } from './buildings.ts';
 import { allied, pushEvent, say } from './world.ts';
 
 export const REGION_NAMES = ['Ashford', 'Brine', 'Coldwater', 'Dunmere', 'Elsmoor', 'Fallow', 'Greyholm', 'Hollin', 'Ironmark', 'Kestrel', 'Larkspur', 'Marrow', 'Northam', 'Oakhurst', 'Pale Reach', 'Quarry Hill', 'Rook', 'Saltmere', 'Thornby', 'Umber', 'Vale', 'Wendle', 'Yarrow', 'Zell', 'Ambry'];
@@ -533,11 +534,14 @@ export function conquestTick(w: World, dt: number, mcount: number[]): void {
     (w as unknown as Record<string, number>)[key] = hostile;
   }
   diplomacyTick(w, dt, value);
-  // Win: hold every rival capital, or 60% of the world for five minutes. Loss: no settlements, via elim.
-  if (!w.over) {
+  w.day = Math.floor(w.t / 120);
+  realmEvents(w, dt);
+  regroup(w);
+  // Goals are optional. With none set, a Realm never ends on its own.
+  if (!w.over && w.goal !== 'none') {
     let rivals = 0, taken = 0;
     for (let i = 1; i < w.nP; i++) {
-      if (w.slots[i].neutral || allied(w, 0, i)) continue;
+      if (w.slots[i].neutral || w.slots[i].ally === w.slots[0].ally) continue;
       rivals++;
       const cap = w.capitals[i];
       if (cap >= 0 && w.regions[cap].owner >= 0 && w.slots[w.regions[cap].owner].ally === w.slots[0].ally) taken++;
@@ -545,8 +549,117 @@ export function conquestTick(w: World, dt: number, mcount: number[]): void {
     const share = w.regions.filter((r) => r.owner === 0).length / w.regions.length;
     const hold = (w as unknown as Record<string, number>).holdT ?? 0;
     (w as unknown as Record<string, number>).holdT = share >= 0.6 ? hold + dt : 0;
-    if (rivals && (taken === rivals || (w as unknown as Record<string, number>).holdT >= 300)) { w.over = 'win'; say(w, taken === rivals ? 'Every rival capital is yours' : 'You have held most of the world', 3); }
+    if (w.goal === 'capitals' && rivals && taken === rivals) { w.over = 'win'; say(w, 'Every rival capital is yours', 3); }
+    else if (w.goal === 'land' && (w as unknown as Record<string, number>).holdT >= 300) { w.over = 'win'; say(w, 'You have held most of the world', 3); }
   }
+}
+
+/** Losing the last settlement is a crisis, not the end: the people regroup in free land. */
+function regroup(w: World): void {
+  const s = w.slots[0];
+  if (w.over || s.settlements.some((b) => b.hp > 0)) return;
+  const free = w.regions.filter((r) => r.owner < 0 && !settlementsIn(w, r.id).some((b) => !isNeutral(w, b.team) || b.tier === 'camp'));
+  if (!free.length) { w.over = 'lose'; return; }
+  // Farthest from any rival capital.
+  free.sort((a, b) => nearestRival(w, b) - nearestRival(w, a));
+  for (const r of free) {
+    for (let t = 0; t < 12; t++) {
+      const ang = t * 0.9, rad = t * 6;
+      const x = r.cx + Math.cos(ang) * rad, y = r.cy + Math.sin(ang) * rad;
+      if (placeOk(w, (x / TILE) | 0, (y / TILE) | 0) === null) {
+        const b = placeSettlement(w, 0, x, y, 'village', true);
+        r.owner = 0; r.claimant = 0; r.unrest = 0;
+        w.capitals[0] = r.id;
+        s.gold = Math.max(s.gold, 300);
+        s.alive = true;
+        say(w, 'Your last settlement fell. The people regroup in ' + r.name + '.', 4);
+        pushEvent(w, 'lost', 'Regrouped in ' + r.name, b.x, b.y, r.id);
+        w.flowDirty = true;
+        return;
+      }
+    }
+  }
+  w.over = 'lose';
+}
+
+function nearestRival(w: World, r: Region): number {
+  let d = Infinity;
+  for (let i = 1; i < w.nP; i++) { const c = w.capitals[i]; if (c >= 0 && !w.slots[i].neutral) d = Math.min(d, Math.hypot(w.regions[c].cx - r.cx, w.regions[c].cy - r.cy)); }
+  return d;
+}
+
+/** Something happens every few minutes. Some events ask a question and wait for the answer. */
+function realmEvents(w: World, dt: number): void {
+  if (w.pending) return;
+  w.eventT -= dt;
+  if (w.eventT > 0) return;
+  w.eventT = 150 + rand(w.rng) * 90;
+  const own = w.regions.filter((r) => r.owner === 0);
+  const rivals = w.slots.map((_, i) => i).filter((i) => i > 0 && !w.slots[i].neutral && w.slots[i].alive);
+  const cap = w.slots[0].settlements.find((b) => b.hp > 0);
+  if (!own.length || !cap) return;
+  const roll = rand(w.rng);
+  if (roll < 0.28 && w.neutral >= 0) {
+    // A raid: bandits appear at the edge of one of your regions and head for its center.
+    const r = own[randInt(w.rng, own.length)];
+    const n = w.neutral, list = roster(w.slots[n].race).filter((k) => TYPES[k].cost <= 45 && !TYPES[k].repair);
+    const ang = rand(w.rng) * Math.PI * 2, count = 3 + Math.min(4, Math.floor(w.day / 4));
+    for (let i = 0; i < count; i++) {
+      const u = mkUnit(w, n, list[randInt(w.rng, list.length)], r.cx + Math.cos(ang) * 60 + (i % 3) * 6, r.cy + Math.sin(ang) * 60 + Math.floor(i / 3) * 6);
+      u.order = { type: 'attack', tgt: null, x: r.cx, y: r.cy };
+      w.units.push(u);
+    }
+    say(w, 'Raiders on ' + r.name, 3);
+    pushEvent(w, 'raid', 'Raiders on ' + r.name, r.cx, r.cy, r.id);
+  } else if (roll < 0.45 && rivals.length) {
+    const i = rivals[randInt(w.rng, rivals.length)], name = ['BLUE', 'RED', 'GREEN', 'ORANGE', 'VIOLET'][i];
+    if (!w.slots[0].truce[i]) {
+      w.pending = { kind: 'truce', slot: i, text: name + ' sends an envoy offering a truce.', yes: 'Accept the truce', no: 'Send them away' };
+    } else {
+      const ask = 60 + w.day * 10;
+      w.pending = { kind: 'tribute', slot: i, text: name + ' demands ' + ask + ' gold as tribute.', yes: 'Pay ' + ask + ' gold', no: 'Refuse' };
+    }
+    pushEvent(w, 'war', 'An envoy from ' + name + ' waits', cap.x, cap.y, cap.region);
+  } else if (roll < 0.6) {
+    w.pending = { kind: 'caravan', slot: -1, text: 'Traders ask to cross your land. Escort them for a fee?', yes: 'Take 80 gold', no: 'Turn them away' };
+    pushEvent(w, 'loot', 'Traders at the gate', cap.x, cap.y, cap.region);
+  } else if (roll < 0.72 && w.rules.unrest) {
+    const r = own[randInt(w.rng, own.length)];
+    r.unrest = Math.min(95, r.unrest + 30);
+    say(w, 'Sickness in ' + r.name + '. Unrest is up.', 3);
+    pushEvent(w, 'unrest', 'Sickness in ' + r.name, r.cx, r.cy, r.id);
+  } else if (roll < 0.84) {
+    for (const r of own) r.unrest = Math.max(0, r.unrest - 20);
+    w.slots[0].gold += 40;
+    say(w, 'A good harvest. Unrest falls and the treasury gains 40.', 3);
+    pushEvent(w, 'claim', 'A good harvest', cap.x, cap.y, cap.region);
+  } else if (rivals.length && w.rules.diplomacy) {
+    // A rival at peace with a grudge declares war.
+    const angry = rivals.filter((i) => w.slots[0].truce[i] && w.slots[i].attitude[0] < 0);
+    if (angry.length) setTruce(w, 0, angry[randInt(w.rng, angry.length)], false);
+    else { const r = w.regions.filter((q) => q.owner < 0 && !settlementsIn(w, q.id).length); if (r.length && w.neutral >= 0) { const q = r[randInt(w.rng, r.length)]; placeSettlement(w, w.neutral, q.cx, q.cy, 'ruin', true); pushEvent(w, 'loot', 'Ruins uncovered in ' + q.name, q.cx, q.cy, q.id); } }
+  }
+}
+
+/** Answer the pending event. */
+export function choose(w: World, yes: boolean): boolean {
+  const p = w.pending;
+  if (!p) return false;
+  w.pending = null;
+  const s = w.slots[0];
+  if (p.kind === 'truce') {
+    if (yes) setTruce(w, 0, p.slot, true);
+    else { w.slots[p.slot].attitude[0] -= 15; say(w, 'The envoy leaves. They will remember.', 3); }
+  } else if (p.kind === 'tribute') {
+    const ask = 60 + w.day * 10;
+    if (yes && s.gold >= ask) { s.gold -= ask; w.slots[p.slot].attitude[0] += 25; say(w, 'Tribute paid. Relations warm.', 3); }
+    else if (yes) { say(w, 'You cannot pay. They take it as a refusal.', 3); w.slots[p.slot].attitude[0] -= 25; }
+    else { w.slots[p.slot].attitude[0] -= 25; say(w, 'Refused. Watch the border.', 3); }
+  } else if (p.kind === 'caravan') {
+    if (yes) { s.gold += 80; say(w, 'The traders pay 80 gold', 2.5); }
+    else say(w, 'The traders move on', 2);
+  }
+  return true;
 }
 
 /** Region ownership as a sortable list for the HUD and the territory list. */

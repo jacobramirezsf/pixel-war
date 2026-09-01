@@ -8,7 +8,7 @@ import { addBld, bldAtPx, canBuild, gateDir, passableFor, removeBld } from './bu
 import { clamp, TILE } from './map.ts';
 import type { Action, Command, Target, TargetRef, Unit, World } from './types.ts';
 import { buildTime, mkUnit } from './units.ts';
-import { absorb, ADVANCED_COST, canAbsorb, canSettle, hasCity, NEXT_TIER, placeSettlement, popCap, popUsed, setTruce, startUpgrade, TIERS, truceAccepted } from './conquest.ts';
+import { absorb, ADVANCED_COST, choose, canAbsorb, canSettle, hasCity, NEXT_TIER, placeSettlement, popCap, popUsed, setTruce, startUpgrade, TIERS, truceAccepted } from './conquest.ts';
 import { popOf } from './units.ts';
 import { castPower } from './powers.ts';
 import { canResearch, canTrain, pickTrainer, queuedCount, RESEARCH_COST, TECH_NAMES } from './town.ts';
@@ -99,6 +99,10 @@ export function applyCommand(w: World, c: Command, quiet = false): boolean {
       b.rally = { x: clamp(c.payload.x, 4, mapW(w) - 4), y: clamp(c.payload.y, 4, mapH(w) - 4) };
       say('Rally point set for the ' + BLD[b.type].name.toLowerCase(), 1);
       return true;
+    }
+    case 'choose': {
+      if (slot !== 0) return false;
+      return choose(w, c.payload.yes);
     }
     case 'cheats': {
       w.cheats = { ...c.payload };

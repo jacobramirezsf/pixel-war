@@ -43,7 +43,7 @@ export function showMenu(app: App): void {
     <div class="row"><button class="pick" id="mRace">YOU: ${RACES[app.race].name}<span>change</span></button><button class="pick" id="mFoe">FOE: ${raceName(app.foeRace)}<span>change</span></button></div>
     <p class="blurb">${RACES[app.race].blurb}</p>
     ${diffRowHtml(app)}
-    <button class="gold" data-mode="conquest">CONQUEST<small>One world, nine regions, one rival. Take land, pay to hold it. ${hasSave(app) ? 'A saved game is waiting.' : ''}</small></button>
+    <button class="gold" data-mode="conquest">REALM<small>Your own corner of a living world. Build, hold, grow, come back. ${hasSave(app) ? 'A realm is waiting.' : ''}</small></button>
     <button data-mode="skirmish">SKIRMISH<small>1v1. Destroy the enemy base. It sits behind a fort, so bring siege.</small></button>
     <button data-mode="multi">MULTI WAR<small>Up to 5 armies. Teams or free for all. Last alliance standing.</small></button>
     <button data-mode="dom">DOMINATION<small>Hold the mines to fill your meter. First to 150 points wins.</small></button>
@@ -72,10 +72,12 @@ export function showMenu(app: App): void {
 
 export function showConquest(app: App): void {
   const saved = hasSave(app);
-  ov().innerHTML = '<div><h2>CONQUEST</h2>'
-    + '<p>You start with one village in a corner. Found villages in the regions next to yours and hold them for 30 seconds to claim them. Every unit and building costs gold per second. Regions cut off from your capital pay nothing. Take the rival capital to win.</p>'
+  const goals: [import('../../sim/types.ts').Goal, string][] = [['none', 'NO END'], ['capitals', 'CAPITALS'], ['land', 'LAND']];
+  ov().innerHTML = '<div><h2>REALM</h2>'
+    + '<p>Your own corner of a living world. Found villages next to your land and hold them. Build houses, farms, a barracks, walls. Bandits raid, envoys come, rivals grow beside you. Nothing ends unless you set a goal.</p>'
     + (saved ? '<button class="gold" id="cqCont">CONTINUE<small>Pick up the saved game.</small></button>' : '')
     + '<div class="row">' + [1, 2, 3, 4].map((n) => '<button class="sm' + (app.rivals === n ? ' on' : '') + '" data-rivals="' + n + '">' + n + ' RIVAL' + (n > 1 ? 'S' : '') + '</button>').join('') + '</div>'
+    + '<div class="row">' + goals.map(([g, label]) => '<button class="sm' + (app.goal === g ? ' on' : '') + '" data-goal="' + g + '">' + label + '</button>').join('') + '</div>'
     + diffRowHtml(app)
     + '<button ' + (saved ? '' : 'class="gold"') + ' id="cqNew">NEW WORLD<small>' + (saved ? 'Replaces the saved game.' : 'A fresh world.') + ' ' + (app.rivals === 1 ? '48x48, nine regions.' : app.rivals === 2 ? '64x64, sixteen regions.' : '80x80, twenty-five regions.') + '</small></button>'
     + '<button id="cqBack">BACK</button></div>';
@@ -84,6 +86,7 @@ export function showConquest(app: App): void {
   on($('cqNew'), 'click', () => startConquest(app));
   on($('cqBack'), 'click', () => showMenu(app));
   for (const b of ov().querySelectorAll<HTMLButtonElement>('button[data-rivals]')) on(b, 'click', () => { app.rivals = +b.dataset.rivals!; showConquest(app); });
+  for (const b of ov().querySelectorAll<HTMLButtonElement>('button[data-goal]')) on(b, 'click', () => { app.goal = b.dataset.goal as import('../../sim/types.ts').Goal; showConquest(app); });
   wireDiff(app, () => showConquest(app));
   ov().classList.remove('hide');
 }
@@ -167,9 +170,9 @@ export function endScreen(app: App): void {
     tip = '';
     btns = '<button class="gold" id="eReplay">REPLAY</button><button id="eEdit">EDIT ARMIES</button><button id="eMenu">MENU</button>';
   } else if (w.mode === 'conquest') {
-    h1 = win ? '<span>THE WORLD IS YOURS</span>' : 'YOUR LAST SETTLEMENT FELL';
+    h1 = win ? '<span>THE REALM IS YOURS</span>' : 'THE REALM HAS FALLEN';
     const held = w.regions.filter((r) => r.owner === 0).length;
-    body = (win ? 'The rival capital fell after ' : 'Lost after ') + Math.floor(w.t / 60) + ' minutes, holding ' + held + ' of ' + w.regions.length + ' regions.';
+    body = (win ? 'Won on day ' : 'Lost on day ') + w.day + ', holding ' + held + ' of ' + w.regions.length + ' regions.';
     tip = win ? 'Tip: try a harder rival or a different race.' : 'Tip: claim fewer regions and garrison them. Net income tells you when to stop.';
     btns = '<button class="gold" id="eAgain">NEW WORLD</button><button id="eMenu">MENU</button>';
     app.storage.remove('conquest-save');

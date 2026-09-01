@@ -208,7 +208,10 @@ export function updateUI(app: App): void {
   show(B('bPause'), live && !edit);
   show(B('bSpeed'), live && !edit);
   B('bSpeed').textContent = app.speed + '×';
-  show(B('pauseov'), live && app.paused);
+  show(B('pauseov'), live && app.paused && !w?.pending);
+  const ev = w?.pending ?? null;
+  show(B('eventcard'), live && !!ev);
+  if (ev) { B('evText').textContent = ev.text; B('evYes').textContent = ev.yes; B('evNo').textContent = ev.no; }
   show(B('viewctl'), !!w || map);
   updateTerritoryVisibility(app);
   // Strips.
@@ -309,7 +312,7 @@ export function renderHud(app: App): void {
       const pop = w.rules.population ? ' <span class="pop">' + (narrow ? 'P' : 'Pop ') + popUsed(w, 0) + '/' + popCap(w, 0) + '</span>' : '';
       tl.innerHTML = (narrow ? '<b>' : 'Gold <b>') + (Number.isFinite(gold) ? Math.floor(gold) : '∞') + '</b> <span class="net' + (net < 0 ? ' neg' : '') + '">' + (net >= 0 ? '+' : '') + net.toFixed(1) + (narrow ? '' : '/s') + '</span>' + (secs < 60 ? ' <span class="warn">' + Math.ceil(secs) + 's</span>' : '') + mat + pop;
       const held = w.regions.filter((r) => r.owner === 0), broken = held.filter((r) => !r.connected).length, weak = held.filter((r) => r.garrison < r.need).length, angry = held.filter((r) => r.unrest >= 50).length;
-      wave.textContent = AGE_NAMES[w.slots[0].age] + ' · ' + held.length + '/' + w.regions.length + ' regions' + (broken ? ' · ' + broken + ' cut off' : '') + (weak ? ' · ' + weak + ' undermanned' : '') + (angry ? ' · ' + angry + ' restless' : '');
+      wave.textContent = 'Day ' + w.day + ' · ' + AGE_NAMES[w.slots[0].age] + ' · ' + held.length + '/' + w.regions.length + ' regions' + (broken ? ' · ' + broken + ' cut off' : '') + (weak ? ' · ' + weak + ' undermanned' : '') + (angry ? ' · ' + angry + ' restless' : '');
       renderTerritory(app);
     } else {
       tl.innerHTML = 'Gold <b>' + (Number.isFinite(gold) ? Math.floor(gold) : '∞') + '</b> <span class="inc' + (w.incFlash > 0 ? ' flash' : '') + '">+' + w.income.toFixed(1) + '/s</span> <span class="race">' + RACES[w.slots[0].race].name + '</span>';

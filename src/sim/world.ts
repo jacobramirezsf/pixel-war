@@ -6,7 +6,7 @@ import type { RaceKey } from '../data/races.ts';
 import type { BldKey, BldKind } from '../data/buildings.ts';
 import { TILE, type MapDef, type TilePos } from './map.ts';
 import { makeRng, type Rng } from './rng.ts';
-import type { Building, Cheats, Command, Fx, GameEvent, Mode, Order, Outcome, Phase, QueueItem, Region, Rules, SandSnap, Settlement, Slot, Strike, Target, Tech, Unit, World, WorldConfig } from './types.ts';
+import type { Building, Cheats, Command, Fx, GameEvent, Goal, Mode, Order, Outcome, Pending, Phase, QueueItem, Region, Rules, SandSnap, Settlement, Slot, Strike, Target, Tech, Unit, World, WorldConfig } from './types.ts';
 
 export const BASE_HP = 400;
 export const ARMY_CAP = 40;
@@ -74,6 +74,10 @@ export function reset(map: MapDef, cfg?: Partial<WorldConfig>): World {
     strikes: [],
     instant: !!cfg?.instant,
     cheats: { gold: false, resources: false, instant: false, build: false, powers: false, ...(cfg?.cheats ?? {}) },
+    goal: cfg?.goal ?? 'none',
+    eventT: 180,
+    pending: null,
+    day: 0,
   };
 }
 
@@ -156,6 +160,7 @@ export interface Snapshot {
   queue: Command[]; log: Command[]; fxRng: Rng;
   regions: Region[]; regionOf: number[] | null; rules: Rules; net: number[]; broke: number[]; capitals: number[];
   events: GameEvent[]; neutral: number; strikes: Strike[]; instant: boolean; cheats: Cheats;
+  goal: Goal; eventT: number; pending: Pending | null; day: number;
 }
 
 const copyCmd = (c: Command): Command => JSON.parse(JSON.stringify(c)) as Command;
@@ -207,6 +212,7 @@ export function snapshot(w: World): Snapshot {
     rules: { ...w.rules }, net: w.net.slice(), broke: w.broke.slice(), capitals: w.capitals.slice(),
     events: w.events.map((e) => ({ ...e })), neutral: w.neutral, strikes: w.strikes.map((k) => ({ ...k })), instant: w.instant,
     cheats: { ...w.cheats },
+    goal: w.goal, eventT: w.eventT, pending: w.pending ? { ...w.pending } : null, day: w.day,
   };
 }
 
@@ -260,6 +266,7 @@ export function restore(s: Snapshot): World {
     net: (s.net ?? slots.map(() => 0)).slice(), broke: (s.broke ?? slots.map(() => 0)).slice(), capitals: (s.capitals ?? slots.map(() => -1)).slice(),
     events: (s.events ?? []).map((e) => ({ ...e })), neutral: s.neutral ?? -1, mapDirty: false, strikes: (s.strikes ?? []).map((k) => ({ ...k })), instant: !!s.instant,
     cheats: Object.assign({ gold: false, resources: false, instant: false, build: false, powers: false }, s.cheats ?? {}),
+    goal: s.goal ?? 'none', eventT: s.eventT ?? 180, pending: s.pending ? { ...s.pending } : null, day: s.day ?? 0,
   };
 }
 

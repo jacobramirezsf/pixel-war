@@ -13,6 +13,17 @@ export type Mode = 'skirmish' | 'multi' | 'dom' | 'rich' | 'sand' | 'conquest';
 export type Tier = 'outpost' | 'village' | 'town' | 'fortress' | 'city' | 'camp' | 'ruin';
 export type Tech = 'melee' | 'ranged' | 'armor';
 
+export type Goal = 'none' | 'capitals' | 'land';
+
+/** An event waiting on the player's answer. */
+export interface Pending {
+  kind: 'tribute' | 'truce' | 'caravan';
+  slot: number;
+  text: string;
+  yes: string;
+  no: string;
+}
+
 export interface Cheats {
   gold: boolean;
   resources: boolean;
@@ -319,6 +330,13 @@ export interface World {
   /** Production finishes at once. A game option, set at start. */
   instant: boolean;
   cheats: Cheats;
+  /** Realm: what ends the game, if anything. */
+  goal: Goal;
+  /** Seconds until the next clocked event. */
+  eventT: number;
+  pending: Pending | null;
+  /** Realm days survived, a day every two minutes. */
+  day: number;
 }
 
 export interface TargetRef {
@@ -337,6 +355,7 @@ export type Action =
   | { type: 'ageUp'; payload: null }
   | { type: 'bldRally'; payload: { id: number; x: number; y: number } }
   | { type: 'cheats'; payload: Cheats }
+  | { type: 'choose'; payload: { yes: boolean } }
   | { type: 'upgrade'; payload: { id: number } }
   | { type: 'rally'; payload: { x: number; y: number } | null }
   | { type: 'move'; payload: { ids: number[]; x: number; y: number } }
@@ -368,4 +387,5 @@ export interface WorldConfig {
   diffs?: DiffKey[];
   instant?: boolean;
   cheats?: Partial<Cheats>;
+  goal?: Goal;
 }

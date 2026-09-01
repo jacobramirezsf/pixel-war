@@ -83,6 +83,7 @@ export function renderTerritory(app: App): void {
 export function watchEvents(app: App): void {
   const w = app.world;
   if (!w || w.mode !== 'conquest') return;
+  if (w.pending && !app.paused && app.running) { app.paused = true; app.ui.updateUI(); }
   const n = w.events.length, last = w.events[n - 1];
   if (n > app.seenEvents && last && (app.settings.autoPause || app.layout === 'mobile') && app.running && !app.paused && w.tick - last.tick < 30) {
     const kinds: GameEvent['kind'][] = ['attack', 'unrest', 'built', 'broke', 'war', 'revolt'];

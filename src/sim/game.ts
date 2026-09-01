@@ -26,6 +26,7 @@ export interface GameConfig {
   /** Units finish the moment they are bought. */
   instant?: boolean;
   cheats?: Partial<import('./types.ts').Cheats>;
+  goal?: import('./types.ts').Goal;
 }
 
 /** Copy of the chosen map, with extra bases placed for 3 to 5 players. */
@@ -86,6 +87,7 @@ export function newConquest(cfg?: GameConfig): World {
   const races = allies.map((i) => cfg?.races?.[i] ?? 'kingdom');
   const w = reset(map, { allies, diff: cfg?.diff ?? 'std', seed, ai: allies.map((i) => i !== 0), races, diffs: cfg?.diffs, instant: cfg?.instant, cheats: cfg?.cheats });
   w.mode = 'conquest';
+  w.goal = cfg?.goal ?? 'none';
   w.cap = 80;
   w.rules = { town: true, ages: true, upkeep: true, connection: true, garrison: true, unrest: true, materials: true, population: true, diplomacy: true, veterancy: true, ...(cfg?.rules ?? {}) };
   const rng = makeRng(seed ^ 0x9e3779b9);
@@ -115,8 +117,14 @@ export function newConquest(cfg?: GameConfig): World {
   w.score = w.slots.map(() => 0);
   populateWorld(w, rng);
   for (let i = 0; i < w.nP; i++) if (!w.slots[i].neutral) prebuildTown(w, i, ['barracks']);
+  // Rivals begin at peace with you and each other. War is something that happens, not the default.
+  for (let i = 0; i < w.nP; i++) for (let j = i + 1; j < w.nP; j++) {
+    if (w.slots[i].neutral || w.slots[j].neutral) continue;
+    w.slots[i].truce[j] = w.slots[j].truce[i] = true;
+    w.slots[i].attitude[j] = w.slots[j].attitude[i] = 15;
+  }
   w.flowDirty = true;
-  say(w, 'Settle the region next door, then hold it. Watch your net income.', 4);
+  say(w, 'Your village. Build, settle the region next door, and keep an eye on the net income.', 4);
   return w;
 }
 

@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { TYPES } from '../../src/data/units.ts';
-import { canSettle, grossIncome, TIERS, upkeepRate } from '../../src/sim/conquest.ts';
+import { canSettle, grossIncome, setTruce, TIERS, upkeepRate } from '../../src/sim/conquest.ts';
 import { newGame } from '../../src/sim/game.ts';
 import { minesHeld } from '../../src/sim/economy.ts';
 import { deserialize, restore, serialize, snapshot, stateString } from '../../src/sim/world.ts';
@@ -13,8 +13,9 @@ import { act, run, ticks } from './helpers.ts';
 
 // The slice: later systems off, no neutrals, so these tests read like the M7 document.
 const conquest = (seed = 3) => {
-  const w = newGame({} as never, 'conquest', { seed, rules: { unrest: false, materials: false, population: false, diplomacy: false, veterancy: false } });
+  const w = newGame({} as never, 'conquest', { seed, goal: 'capitals', rules: { unrest: false, materials: false, population: false, diplomacy: false, veterancy: false } });
   if (w.neutral >= 0) w.slots[w.neutral].settlements = [];
+  setTruce(w, 0, 1, false);
   return w;
 };
 

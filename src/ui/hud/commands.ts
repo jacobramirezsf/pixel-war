@@ -77,6 +77,8 @@ export function wireCommands(app: App): void {
   on($('bFort'), 'click', () => toolToggle('upgrade', 'Tap a settlement of yours to grow it: outpost, village, fortress, city. Weak while it builds.'));
   on($('bAbsorb'), 'click', () => toolToggle('absorb', 'Tap an independent village with your units beside it. 200 gold, it joins intact.'));
   on($('bTerr'), 'click', () => { app.terrOpen = !app.terrOpen; app.ui.updateUI(); });
+  on($('evYes'), 'click', () => { issueAction(app, { type: 'choose', payload: { yes: true } }); app.paused = false; app.ui.updateUI(); });
+  on($('evNo'), 'click', () => { issueAction(app, { type: 'choose', payload: { yes: false } }); app.paused = false; app.ui.updateUI(); });
   on($('bGrow'), 'click', () => { if (live()) issueAction(app, { type: 'ageUp', payload: null }); });
   (['melee', 'ranged', 'armor'] as const).forEach((t, i) => on($('bTech' + (i + 1)), 'click', () => { if (live()) issueAction(app, { type: 'research', payload: { tech: t } }); }));
   on($('bSave'), 'click', () => { say(app, saveConquest(app) ? 'Saved' : 'Nothing to save', 1.2); });

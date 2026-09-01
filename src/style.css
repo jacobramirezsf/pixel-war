@@ -40,6 +40,10 @@ canvas{image-rendering:pixelated;image-rendering:crisp-edges;display:block}
 #msg:empty{opacity:0}
 #pauseov{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.35);z-index:4;font-size:26px;letter-spacing:6px;color:#f2d34a;text-align:center;cursor:pointer}
 #pauseov small{display:block;font-size:12px;letter-spacing:1px;color:#e6e6ee;margin-top:8px}
+#eventcard{position:absolute;left:50%;top:40%;transform:translate(-50%,-50%);width:min(320px,90%);background:rgba(10,11,16,.96);border:1px solid #f2d34a;padding:12px;z-index:5;text-align:center}
+#eventcard h3{margin:0 0 6px;color:#f2d34a;letter-spacing:3px;font-size:12px}
+#eventcard p{font-size:13px;line-height:1.5;color:#e6e6ee;margin:0 0 10px}
+#eventcard button{min-height:40px;font-size:12px}
 /* panel */
 #bottom{flex:0 0 auto}
 #panel{display:flex;flex-direction:column;gap:6px;padding:6px 8px 8px}

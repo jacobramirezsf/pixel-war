@@ -4,13 +4,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { TYPES } from '../../src/data/units.ts';
-import { canAbsorb, hasCity, popCap, popUsed, TIERS } from '../../src/sim/conquest.ts';
+import { canAbsorb, hasCity, popCap, popUsed, setTruce, TIERS } from '../../src/sim/conquest.ts';
 import { canBuild } from '../../src/sim/buildings.ts';
 import { newGame } from '../../src/sim/game.ts';
 import { mkUnit, rank } from '../../src/sim/units.ts';
 import { act, run, ticks } from './helpers.ts';
 
-const conquest = (seed = 3, rivals = 1) => newGame({} as never, 'conquest', { seed, rivals });
+// Rivals start at peace in a Realm. These tests want a war.
+const conquest = (seed = 3, rivals = 1) => { const w = newGame({} as never, 'conquest', { seed, rivals }); for (let i = 1; i <= rivals; i++) setTruce(w, 0, i, false); return w; };
 
 test('a neutral faction exists with camps, independents, and ruins', () => {
   const w = conquest();
