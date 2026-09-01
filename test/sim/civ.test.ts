@@ -16,6 +16,7 @@ import { act, run, ticks } from './helpers.ts';
 // A quiet realm: no bandit camps and no clocked events, so the town tests see only what they set up.
 const realm = (seed = 3) => {
   const w = newGame({} as never, 'conquest', { seed, rivals: 1 });
+  w.cheats.on = true;
   w.cheats.build = true;
   w.slots[w.neutral].settlements = w.slots[w.neutral].settlements.filter((b) => b.tier !== 'camp');
   w.eventT = 1e6;

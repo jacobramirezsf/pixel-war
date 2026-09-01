@@ -8,7 +8,7 @@ import { regionAt } from './conquest.ts';
 import { rand } from './rng.ts';
 import { forNear, gridOf } from './spatial.ts';
 import type { Building, Settlement, Unit, World } from './types.ts';
-import { allied } from './world.ts';
+import { allied, cheat, inZone } from './world.ts';
 import { mkUnit } from './units.ts';
 
 export const isCiv = (u: Unit): boolean => TYPES[u.type].role === 'civ';
@@ -109,10 +109,11 @@ export function civTick(w: World): void {
       }
       c.jobs = slots.reduce((a, j) => a + j.cap, 0);
       c.employed = slots.reduce((a, j) => a + j.filled, 0);
-      c.income = Math.round(slots.reduce((a, j) => a + j.filled * j.income, 0) * 100) / 100;
+      const golden = inZone(w, slot, 'golden', s.x, s.y);
+      c.income = Math.round(slots.reduce((a, j) => a + j.filled * j.income, 0) * (golden ? 2 : 1) * 100) / 100;
       // Growth: safe, room, and something to do (or a very small town).
       const canGrow = !danger && c.safeT >= CIV.safeAfter && c.residents < c.housing && (c.employed < c.jobs || c.residents < 4);
-      c.growT = canGrow ? c.growT + dt : 0;
+      c.growT = canGrow ? c.growT + dt * (golden ? 2 : 1) * (cheat(w, slot, 'fastEcon') ? 5 : 1) : 0;
       if (canGrow && c.growT >= CIV.growEvery) {
         c.growT = 0;
         const u = mkUnit(w, slot, 'civ', s.x + (rand(w.rng) - 0.5) * 16, s.y + 12);
@@ -128,7 +129,7 @@ export function civTick(w: World): void {
       const safe = refuge(s, castles);
       for (const u of people) {
         let threat = false;
-        forNear(grid, u.x, u.y, CIV.fleeRadius, (o) => { if (!threat && o.hp > 0 && !allied(w, o.team, slot) && !isCiv(o) && TYPES[o.type].dmg > 0 && Math.hypot(o.x - u.x, o.y - u.y) <= CIV.fleeRadius) threat = true; });
+        if (!inZone(w, slot, 'sanctuary', u.x, u.y)) forNear(grid, u.x, u.y, CIV.fleeRadius, (o) => { if (!threat && o.hp > 0 && !allied(w, o.team, slot) && !isCiv(o) && TYPES[o.type].dmg > 0 && Math.hypot(o.x - u.x, o.y - u.y) <= CIV.fleeRadius) threat = true; });
         if (threat) { u.fleeT = CIV.safeAfter; u.order = { type: 'move', x: safe.x + (rand(w.rng) - 0.5) * 10, y: safe.y + (rand(w.rng) - 0.5) * 6 }; continue; }
         if (u.fleeT > 0) { u.fleeT -= dt; if (!u.order) u.order = { type: 'move', x: safe.x + (rand(w.rng) - 0.5) * 10, y: safe.y }; continue; }
         u.civT -= dt;

@@ -13,10 +13,10 @@ import { absorb, ADVANCED_COST, allyAccepted, canGrow, choose, setPact, truceAcc
 import { popOf } from './units.ts';
 import { seedResidents } from './civ.ts';
 import { wonderBegun, wonderDone } from './wonder.ts';
-import { chronicle } from './world.ts';
+import { allied, cheat, chronicle, count, mapH, mapW, say as worldSay } from './world.ts';
+import { runCheat } from './cheats.ts';
 import { castPower } from './powers.ts';
 import { canResearch, canTrain, pickTrainer, queuedCount, RESEARCH_COST, TECH_NAMES } from './town.ts';
-import { allied, count, mapH, mapW, say as worldSay } from './world.ts';
 
 /** Queued and in-production units count toward the army cap. */
 export function committed(w: World, slot: number): number {
@@ -76,16 +76,17 @@ export function applyCommand(w: World, c: Command, quiet = false): boolean {
     case 'buy': {
       if (editing) return false;
       const T = TYPES[c.payload.unit];
-      if (s.gold < T.cost) { say('Need ' + T.cost + ' gold', 1.2); return false; }
-      if (committed(w, slot) >= w.cap) { say('Army cap reached (' + w.cap + ')', 1.5); return false; }
+      const freeUnit = cheat(w, slot, 'freeUnits');
+      if (!freeUnit && s.gold < T.cost) { say('Need ' + T.cost + ' gold', 1.2); return false; }
+      if (!cheat(w, slot, 'noPop') && committed(w, slot) >= w.cap) { say('Army cap reached (' + w.cap + ')', 1.5); return false; }
       const why = canTrain(w, slot, c.payload.unit);
       if (why) { say(T.name + ' ' + why, 1.5); return false; }
       const trainer = pickTrainer(w, slot, c.payload.unit);
       const queue = trainer ? trainer.queue : s.queue;
       if (queue.length >= 12) { say('Queue is full', 1.2); return false; }
-      if (w.mode === 'conquest' && w.rules.population && popUsed(w, slot) + popOf(c.payload.unit) > popCap(w, slot)) { say('No room. Houses and settlements add population.', 1.5); return false; }
+      if (!cheat(w, slot, 'noPop') && w.mode === 'conquest' && w.rules.population && popUsed(w, slot) + popOf(c.payload.unit) > popCap(w, slot)) { say('No room. Houses and settlements add population.', 1.5); return false; }
       if (w.mode === 'conquest' && !w.rules.town && T.cost >= ADVANCED_COST && !hasCity(w, slot)) { say('Needs a city', 1.5); return false; }
-      s.gold -= T.cost;
+      if (!freeUnit) s.gold -= T.cost;
       queue.push({ unit: c.payload.unit, t: buildTime(c.payload.unit), held: !!c.payload.held });
       say(T.name + ' queued' + (trainer ? ' at the ' + BLD[trainer.type].name.toLowerCase() : ''), 0.8);
       return true;
@@ -122,6 +123,10 @@ export function applyCommand(w: World, c: Command, quiet = false): boolean {
       b.rally = { x: clamp(c.payload.x, 4, mapW(w) - 4), y: clamp(c.payload.y, 4, mapH(w) - 4) };
       say('Rally point set for the ' + BLD[b.type].name.toLowerCase(), 1);
       return true;
+    }
+    case 'cheat': {
+      if (slot !== 0 || !w.cheats.on) return false;
+      return runCheat(w, c.payload, say);
     }
     case 'rename': {
       if (slot !== 0) return false;
@@ -170,7 +175,7 @@ export function applyCommand(w: World, c: Command, quiet = false): boolean {
     }
     case 'cheats': {
       w.cheats = { ...c.payload };
-      if (w.cheats.gold) s.gold = Infinity; else if (!Number.isFinite(s.gold)) s.gold = 500;
+      if (cheat(w, 0, 'gold')) w.slots[0].gold = Infinity; else if (!Number.isFinite(w.slots[0].gold)) w.slots[0].gold = 500;
       say('Cheats ' + (Object.values(w.cheats).some(Boolean) ? 'on' : 'off'), 1.5);
       return true;
     }
@@ -197,14 +202,15 @@ export function applyCommand(w: World, c: Command, quiet = false): boolean {
       const b = s.settlements.find((x) => x.id === c.payload.id);
       const to = b ? NEXT_TIER[b.tier] : undefined;
       if (!b || b.hp <= 0 || !to || b.buildT > 0) { say('Pick a finished settlement of yours that can grow', 1.2); return false; }
-      const why = canGrow(w, b);
+      const growth = cheat(w, slot, 'growth');
+      const why = growth ? null : canGrow(w, b);
       if (why) { say('Cannot grow to a ' + to + ': ' + why, 2.5); return false; }
       const T = TIERS[to], mat = w.rules.materials ? T.mat : 0;
-      if (s.gold < T.gold) { say('Need ' + T.gold + ' gold', 1.2); return false; }
-      if (s.mat < mat) { say('Need ' + mat + ' materials', 1.2); return false; }
-      s.gold -= T.gold;
-      s.mat -= mat;
+      if (!growth && s.gold < T.gold) { say('Need ' + T.gold + ' gold', 1.2); return false; }
+      if (!growth && s.mat < mat) { say('Need ' + mat + ' materials', 1.2); return false; }
+      if (!growth) { s.gold -= T.gold; s.mat -= mat; }
       startUpgrade(b, to);
+      if (growth) { b.buildT = 0; b.hp = b.max; }
       chronicle(w, (slot === 0 ? '' : TNAME[slot] + ': ') + w.regions[b.region].name + ' began growing into a ' + to);
       say('Upgrading to a ' + to + '. It is weak until done.', 2.5);
       return true;
@@ -235,7 +241,7 @@ export function applyCommand(w: World, c: Command, quiet = false): boolean {
     }
     case 'power': {
       if (editing) return false;
-      const why = castPower(w, slot, c.payload.power, c.payload.x, c.payload.y);
+      const why = castPower(w, slot, c.payload.power, c.payload.x, c.payload.y, c.payload.ids ?? []);
       if (why) { say(why, 1.5); return false; }
       return true;
     }
@@ -321,8 +327,10 @@ export function applyCommand(w: World, c: Command, quiet = false): boolean {
       const { x, y, bld } = c.payload, m = w.map;
       const D0 = BLD[bld];
       // Conquest: walls and towers cost materials, town buildings cost gold, the castle both.
-      const matCost = w.mode === 'conquest' && w.rules.materials && !w.cheats.resources ? (D0.town ? D0.mat ?? 0 : D0.cost) : 0;
-      const goldCost = !w.mode.startsWith('conq') ? D0.cost : D0.town ? D0.cost : 0;
+      const freeB = cheat(w, slot, 'freeBuild');
+      // Conquest: walls and towers cost materials, town buildings gold, the castle both.
+      const matCost = !freeB && w.mode === 'conquest' && w.rules.materials && !cheat(w, slot, 'resources') ? (D0.town ? D0.mat ?? 0 : D0.cost) : 0;
+      const goldCost = freeB ? 0 : !w.mode.startsWith('conq') ? D0.cost : D0.town ? D0.cost : 0;
       if (matCost && s.mat < matCost) { say('Need ' + matCost + ' materials', 1); return false; }
       const D = BLD[bld];
       // The tap is the footprint's center.

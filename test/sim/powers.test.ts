@@ -2,7 +2,6 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { POWERS } from '../../src/data/powers.ts';
 import { TYPES } from '../../src/data/units.ts';
 import { mkUnit } from '../../src/sim/units.ts';
 import { newGame } from '../../src/sim/game.ts';
@@ -44,7 +43,7 @@ test('smite, heal, haste, freeze, reinforce', () => {
   assert.ok(act(w, 0, { type: 'power', payload: { power: 'reinforce', x: 120, y: 126 } }));
   assert.equal(w.units.filter((u) => u.team === 0).length, n + 3);
   assert.ok(!act(w, 0, { type: 'power', payload: { power: 'reinforce', x: 20, y: 20 } }), 'cooldown');
-  for (const k of Object.keys(POWERS)) if (k !== 'barrage') assert.ok((w.slots[0].powerCd as Record<string, number>)[k] > 0, k + ' on cooldown');
+  for (const k of ['smite', 'heal', 'haste', 'freeze', 'reinforce']) assert.ok((w.slots[0].powerCd as Record<string, number>)[k] > 0, k + ' on cooldown');
 });
 
 test('instant production skips the queue time', () => {

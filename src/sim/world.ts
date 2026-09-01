@@ -6,7 +6,7 @@ import type { RaceKey } from '../data/races.ts';
 import type { BldKey, BldKind } from '../data/buildings.ts';
 import { TILE, type MapDef, type TilePos } from './map.ts';
 import { makeRng, type Rng } from './rng.ts';
-import type { Building, Cheats, Command, Fx, GameEvent, Mode, Order, Outcome, Pending, Phase, QueueItem, Region, Rules, SandSnap, Settlement, Slot, Strike, Target, Tech, Unit, World, WorldConfig } from './types.ts';
+import type { Building, Cheats, Command, Fx, GameEvent, Mode, Zone, Order, Outcome, Pending, Phase, QueueItem, Region, Rules, SandSnap, Settlement, Slot, Strike, Target, Tech, Unit, World, WorldConfig } from './types.ts';
 
 export const BASE_HP = 400;
 
@@ -28,6 +28,21 @@ export function unpackSeen(s: string): Uint8Array {
   let i = 0, v = 0;
   for (const r of body.split(',')) { const n = +r; if (v) out.fill(1, i, i + n); i += n; v ^= 1; }
   return out;
+}
+
+export function defaultCheats(): Cheats {
+  return { on: false, gold: false, resources: false, instant: false, build: false, powers: false, reveal: false, noPop: false, god: false, oneHit: false, superUnits: false, fastEcon: false, growth: false, allAges: false, freeBuild: false, freeUnits: false, territory: false };
+}
+
+/** Is a cheat live for this slot? Cheats belong to the player and need the master switch. */
+export function cheat(w: World, slot: number, k: Exclude<keyof Cheats, 'on'>): boolean {
+  return slot === 0 && w.cheats.on && w.cheats[k];
+}
+
+/** Zones of a kind that cover a point for a side. */
+export function inZone(w: World, team: number, kind: Zone['kind'], x: number, y: number): boolean {
+  for (const z of w.zones) if (z.kind === kind && z.t > 0 && z.team === team && Math.hypot(z.x - x, z.y - y) <= z.r) return true;
+  return false;
 }
 
 export function emptyTown(): import('./types.ts').TownStats {
@@ -98,7 +113,8 @@ export function reset(map: MapDef, cfg?: Partial<WorldConfig>): World {
     mapDirty: false,
     strikes: [],
     instant: !!cfg?.instant,
-    cheats: Object.assign({ gold: false, resources: false, instant: false, build: false, powers: false, reveal: false }, cfg?.cheats ?? {}),
+    cheats: Object.assign(defaultCheats(), cfg?.cheats ?? {}),
+    zones: [],
     seen: null,
     history: [],
     feats: [],
@@ -201,7 +217,7 @@ export interface Snapshot {
   queue: Command[]; log: Command[]; fxRng: Rng;
   regions: Region[]; regionOf: number[] | null; rules: Rules; net: number[]; broke: number[]; capitals: number[];
   events: GameEvent[]; neutral: number; strikes: Strike[]; instant: boolean; cheats: Cheats;
-  seen?: string; history?: { day: number; text: string }[]; feats: import('../data/realm.ts').FeatKey[]; eventT: number; pending: Pending | null; day: number;
+  zones?: Zone[]; seen?: string; history?: { day: number; text: string }[]; feats: import('../data/realm.ts').FeatKey[]; eventT: number; pending: Pending | null; day: number;
 }
 
 const copyCmd = (c: Command): Command => JSON.parse(JSON.stringify(c)) as Command;
@@ -254,7 +270,7 @@ export function snapshot(w: World): Snapshot {
     rules: { ...w.rules }, net: w.net.slice(), broke: w.broke.slice(), capitals: w.capitals.slice(),
     events: w.events.map((e) => ({ ...e })), neutral: w.neutral, strikes: w.strikes.map((k) => ({ ...k })), instant: w.instant,
     cheats: { ...w.cheats },
-    ...(w.seen ? { seen: packSeen(w.seen) } : {}), history: w.history.map((h) => ({ ...h })), feats: w.feats.slice(), eventT: w.eventT, pending: w.pending ? { ...w.pending } : null, day: w.day,
+    zones: w.zones.map((z) => ({ ...z })), ...(w.seen ? { seen: packSeen(w.seen) } : {}), history: w.history.map((h) => ({ ...h })), feats: w.feats.slice(), eventT: w.eventT, pending: w.pending ? { ...w.pending } : null, day: w.day,
   };
 }
 
@@ -308,8 +324,8 @@ export function restore(s: Snapshot): World {
     rules: Object.assign({ town: false, ages: false, civilians: false, fog: false, upkeep: false, connection: false, garrison: false, unrest: false, materials: false, population: false, diplomacy: false, veterancy: false }, s.rules ?? {}),
     net: (s.net ?? slots.map(() => 0)).slice(), broke: (s.broke ?? slots.map(() => 0)).slice(), capitals: (s.capitals ?? slots.map(() => -1)).slice(),
     events: (s.events ?? []).map((e) => ({ ...e })), neutral: s.neutral ?? -1, mapDirty: false, strikes: (s.strikes ?? []).map((k) => ({ ...k })), instant: !!s.instant,
-    cheats: Object.assign({ gold: false, resources: false, instant: false, build: false, powers: false, reveal: false }, s.cheats ?? {}),
-    seen: s.seen ? unpackSeen(s.seen) : null, history: (s.history ?? []).map((h) => ({ ...h })), feats: (s.feats ?? []).slice(), eventT: s.eventT ?? 180, pending: s.pending ? { ...s.pending } : null, day: s.day ?? 0,
+    cheats: Object.assign(defaultCheats(), s.cheats ?? {}),
+    zones: (s.zones ?? []).map((z) => ({ ...z })), seen: s.seen ? unpackSeen(s.seen) : null, history: (s.history ?? []).map((h) => ({ ...h })), feats: (s.feats ?? []).slice(), eventT: s.eventT ?? 180, pending: s.pending ? { ...s.pending } : null, day: s.day ?? 0,
   };
 }
 

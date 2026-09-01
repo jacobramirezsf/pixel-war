@@ -9,7 +9,7 @@ import { TEAM } from '../data/teams.ts';
 import { addBld, canBuild, passableFor } from './buildings.ts';
 import { rnd } from './rng.ts';
 import type { Building, Tech, Unit, World } from './types.ts';
-import { allied, say } from './world.ts';
+import { allied, cheat, inZone, say } from './world.ts';
 import { mkUnit } from './units.ts';
 import { wonderDone } from './wonder.ts';
 
@@ -18,6 +18,7 @@ export const TECH_NAMES: Record<Tech, string> = { melee: 'BLADES', ranged: 'BOWS
 
 /** The age a faction plays at: its best finished settlement. Without the ages rule, everything is open. */
 export function ageOf(w: World, slot: number): number {
+  if (cheat(w, slot, 'allAges')) return 2;
   if (!w.rules.ages) return 2;
   let a = 0;
   for (const b of w.slots[slot].settlements) if (b.hp > 0 && b.buildT <= 0) a = Math.max(a, TIER_AGE[b.tier]);
@@ -126,7 +127,7 @@ export function townTick(w: World, dt: number): void {
       let helpers = 0;
       for (const u of w.units) if (u.team === b.team && u.hp > 0 && TYPES[u.type].repair && Math.hypot(u.x - b.x, u.y - b.y) < 28) helpers++;
       const total = BLD[b.type].buildT ?? 1;
-      const rate = (w.cheats.build ? 1e9 : 1) * (1 + Math.min(2, helpers));
+      const rate = (cheat(w, b.team, 'build') ? 1e9 : 1) * (1 + Math.min(2, helpers)) * (inZone(w, b.team, 'golden', b.x, b.y) ? 1.5 : 1);
       b.buildT = Math.max(0, b.buildT - dt * rate);
       b.hp = Math.min(b.max, Math.max(b.hp, Math.round(b.max * (0.1 + 0.9 * (1 - b.buildT / total)))));
       if (b.buildT <= 0) { if (b.team === 0) say(w, BLD[b.type].name + ' finished', 1.5); wonderDone(w, b); }
@@ -135,7 +136,7 @@ export function townTick(w: World, dt: number): void {
     if (!b.queue.length || b.hp <= 0) continue;
     const s = w.slots[b.team];
     const q = b.queue[0];
-    const rate = (s.ai ? PROFILES[s.diff].build : 1) * (w.instant || w.cheats.instant ? 1e9 : 1);
+    const rate = (s.ai ? PROFILES[s.diff].build : 1) * (w.instant || cheat(w, b.team, 'instant') ? 1e9 : 1);
     q.t -= dt * rate;
     if (q.t > 0) continue;
     const u = spawnAt(w, b, q.unit);

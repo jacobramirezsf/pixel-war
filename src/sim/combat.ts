@@ -9,7 +9,7 @@ import { onSettlementDeath } from './conquest.ts';
 import { maxHp, rank } from './units.ts';
 import { forNear, gridOf, nearestHostileWithin } from './spatial.ts';
 import type { Settlement, Target, Unit, World, Building } from './types.ts';
-import { allied, hasLivingSettlement, say, chronicle } from './world.ts';
+import { allied, hasLivingSettlement, say, chronicle, cheat, inZone } from './world.ts';
 
 /** Everything a team may attack: hostile units, hostile towers, hostile bases. Full scan. */
 export function targetsFor(w: World, team: number): Target[] {
@@ -60,6 +60,7 @@ export function buildTargetCache(w: World): TargetCache {
     if (u.hp <= 0 || !unitVisible(u)) continue;
     // Armies do not chase villagers. Bandits and rebels do, and anyone can be told to.
     const civ = TYPES[u.type].role === 'civ';
+    if (civ && inZone(w, u.team, 'sanctuary', u.x, u.y)) continue;
     for (let i = 0; i < w.nP; i++) if (hostile[i][u.team] && (!civ || w.slots[i].neutral)) hostiles[i].push(u);
   }
   return { hostile, hostiles, statics };
@@ -163,8 +164,14 @@ export function unitArmor(w: World, u: Unit): number {
 
 /** Apply damage. Returns the amount that landed. `ranged` lets guard auras soften it. */
 export function damage(w: World, t: Target, dmg: number, ranged = false, by: Unit | null = null): number {
+  // Zones and cheats on the receiving side.
+  if (inZone(w, t.team, 'fortify', t.x, t.y)) dmg = Math.round(dmg * 0.6);
+  if (t.ent === 'unit' && TYPES[t.type].role === 'civ' && inZone(w, t.team, 'sanctuary', t.x, t.y)) return 0;
+  if (cheat(w, t.team, 'superUnits')) dmg = Math.max(1, Math.round(dmg / 5));
+  const god = cheat(w, t.team, 'god');
   if (t.ent === 'bld') {
     dmg = Math.max(1, dmg - (BLD[t.type].armor || 0));
+    if (god) dmg = Math.min(dmg, Math.max(0, t.hp - 1));
     t.hp -= dmg;
     if (t.hp <= 0) { removeBld(w, t); w.fx.push({ k: 'die', x: t.x, y: t.y, t: 0.35 }); }
     return dmg;
@@ -174,6 +181,7 @@ export function damage(w: World, t: Target, dmg: number, ranged = false, by: Uni
     if (ranged && guarded(w, t)) dmg = Math.max(1, dmg - 3);
     t.flash = 0.12;
   }
+  if (god) dmg = Math.min(dmg, Math.max(0, t.hp - 1));
   const wasAlive = t.hp > 0;
   t.hp -= dmg;
   w.fx.push({ k: 'dmg', x: t.x, y: t.y - 6, t: 0.6, n: dmg });
@@ -222,6 +230,8 @@ export function attack(w: World, u: Unit, t: Target, T: UnitDef): void {
   if (T.vsBld && t.ent !== 'unit') dmg = Math.round(dmg * T.vsBld);
   if (T.bldDmg && t.ent !== 'unit') dmg = Math.round(dmg * T.bldDmg);
   if (T.charge && u.run >= 20) dmg = Math.round(dmg * T.charge);
+  if (cheat(w, u.team, 'superUnits')) dmg *= 5;
+  if (cheat(w, u.team, 'oneHit')) dmg = 9999;
   u.run = 0;
   if (T.stealth) u.reveal = 3;
   const ranged = T.range > 12;

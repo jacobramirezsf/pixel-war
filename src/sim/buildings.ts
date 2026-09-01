@@ -5,7 +5,7 @@ import { BLD, type BldKey } from '../data/buildings.ts';
 import { blocked, nearBase, passable, TILE } from './map.ts';
 import { rnd } from './rng.ts';
 import type { Building, World } from './types.ts';
-import { allied, mapH, mapW, primaryBase } from './world.ts';
+import { allied, mapH, mapW, primaryBase, cheat } from './world.ts';
 
 export function bldAt(w: World, tx: number, ty: number): Building | null {
   return w.bmap.get(ty * w.map.cols + tx) || null;
@@ -39,7 +39,7 @@ export function addBld(w: World, team: number, type: BldKey, tx: number, ty: num
   const b: Building = {
     ent: 'bld', id: w.nextId++, team, type, kind: D.kind, tx, ty, x: tx * TILE + (D.w * TILE) / 2, y: ty * TILE + (D.h * TILE) / 2,
     hp: D.hp, max: D.hp, cd: rnd(w.rng, 0, 0.4), dir: null, locked: null, tiles,
-    buildT: construct && !w.cheats.build ? (D.buildT ?? 0) : 0, queue: [], rally: null,
+    buildT: construct && !cheat(w, team, 'build') ? (D.buildT ?? 0) : 0, queue: [], rally: null,
   };
   if (b.buildT > 0) b.hp = Math.max(1, Math.round(D.hp * 0.1));
   if (D.kind === 'gate') {
@@ -130,7 +130,7 @@ export function canBuild(w: World, tx: number, ty: number, team: number, type: B
       const r = w.regionOf[Math.min(w.map.rows - 1, (cy / TILE) | 0) * w.map.cols + Math.min(w.map.cols - 1, (cx / TILE) | 0)];
       const reg = w.regions[r];
       const own = reg.owner === team || w.slots[team].settlements.some((s) => s.hp > 0 && s.region === r);
-      if (!own) return 'outside your territory';
+      if (!own && !cheat(w, team, 'territory')) return 'outside your territory';
       if (type === 'farm' && !w.slots[team].settlements.some((s) => s.hp > 0 && Math.hypot(s.x - cx, s.y - cy) < 72)) return 'farms go near a Town Hall';
     }
   }

@@ -6,6 +6,7 @@ import { BLD } from '../../src/data/buildings.ts';
 import { BUILTIN } from '../../src/data/maps.ts';
 import { canBuild } from '../../src/sim/buildings.ts';
 import { popCap, TIERS } from '../../src/sim/conquest.ts';
+import { defaultCheats } from '../../src/sim/world.ts';
 import { newGame } from '../../src/sim/game.ts';
 import { ageOf, canTrain, ownBlds } from '../../src/sim/town.ts';
 import { TILE } from '../../src/sim/map.ts';
@@ -89,7 +90,7 @@ test('blacksmith research needs a smith and adds damage', () => {
 });
 
 test('cheats: unlimited gold, instant production, and no cooldowns', () => {
-  const w = newGame(BUILTIN[0], 'skirmish', { seed: 1, cheats: { gold: true, instant: true, powers: true } });
+  const w = newGame(BUILTIN[0], 'skirmish', { seed: 1, cheats: { on: true, gold: true, instant: true, powers: true } });
   ticks(w, 1);
   assert.equal(w.slots[0].gold, Infinity);
   assert.ok(act(w, 0, { type: 'buy', payload: { unit: 'shd' } }));
@@ -98,7 +99,7 @@ test('cheats: unlimited gold, instant production, and no cooldowns', () => {
   assert.ok(act(w, 0, { type: 'power', payload: { power: 'heal', x: w.units[0].x, y: w.units[0].y } }));
   ticks(w, 1);
   assert.ok(act(w, 0, { type: 'power', payload: { power: 'heal', x: w.units[0].x, y: w.units[0].y } }), 'no cooldown');
-  assert.ok(act(w, 0, { type: 'cheats', payload: { gold: false, resources: false, instant: false, build: false, powers: false, reveal: false } }));
+  assert.ok(act(w, 0, { type: 'cheats', payload: defaultCheats() }));
   assert.ok(Number.isFinite(w.slots[0].gold));
 });
 

@@ -12,14 +12,14 @@ import { dominationTick, hasEconomy, incomeTick, mineTick, minesHeld, payRepair 
 import { clamp, tileAt } from './map.ts';
 import { computeFlow, computeHome, flowDir } from './pathing.ts';
 import { conquestTick, grossIncome } from './conquest.ts';
-import { powersTick } from './powers.ts';
+import { powersTick, zonesTick } from './powers.ts';
 import { townTick } from './town.ts';
 import { civTick, isCiv } from './civ.ts';
 import { visionTick } from './vision.ts';
 import { rand, rnd } from './rng.ts';
 import { fillGrid, forNear, gridOf, nearestHostileWithin } from './spatial.ts';
 import type { Building, Target, Unit, World } from './types.ts';
-import { allied, count, DT, mapH, mapW, primaryBase } from './world.ts';
+import { allied, count, DT, mapH, mapW, primaryBase, cheat } from './world.ts';
 import { maxHp, mkUnit, spawn } from './units.ts';
 
 type Vec = [number, number] | null;
@@ -213,10 +213,11 @@ export function step(w: World): void {
   }
   if (w.phase === 'play') {
     powersTick(w, dt);
+    zonesTick(w, dt);
     townTick(w, dt);
     civTick(w);
     visionTick(w);
-    if (w.cheats.gold) w.slots[0].gold = Infinity;
+    if (cheat(w, 0, 'gold')) w.slots[0].gold = Infinity;
     if (w.cheats.resources) w.slots[0].mat = 99999;
     if (w.cheats.powers) w.slots[0].powerCd = {};
     if (w.mode === 'dom') { dominationTick(w, dt, mcount); if (w.over) return; }
@@ -283,6 +284,7 @@ export function step(w: World): void {
     if (u.rootT > 0) slow = 0;
     if (hasSpeedAura(w, u)) slow *= 1.3;
     if (u.hasteT > 0) slow *= 1.5;
+    if (cheat(w, u.team, 'superUnits')) slow *= 1.5;
     if (!T.fly) {
       const bb = bldAtPx(w, u.x, u.y);
       if (bb && bb.kind === 'trap' && !allied(w, bb.team, u.team)) {

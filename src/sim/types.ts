@@ -23,6 +23,8 @@ export interface Pending {
 }
 
 export interface Cheats {
+  /** Master switch. Nothing below applies while this is off. */
+  on: boolean;
   gold: boolean;
   resources: boolean;
   instant: boolean;
@@ -30,6 +32,38 @@ export interface Cheats {
   powers: boolean;
   /** Whole map explored and in sight. */
   reveal: boolean;
+  /** No army cap. */
+  noPop: boolean;
+  /** Your units and buildings never fall below one hit point. */
+  god: boolean;
+  /** Your attacks kill what they touch. */
+  oneHit: boolean;
+  /** Your units: five times the damage, a fifth of the damage taken, half again the speed. */
+  superUnits: boolean;
+  /** Five times the income and civilian growth. */
+  fastEcon: boolean;
+  /** Settlements grow at once, no requirements. */
+  growth: boolean;
+  /** Every building and unit of every age. */
+  allAges: boolean;
+  /** Buildings cost nothing. */
+  freeBuild: boolean;
+  /** Units cost nothing. */
+  freeUnits: boolean;
+  /** Build and settle anywhere the ground allows. */
+  territory: boolean;
+}
+
+export type CheatOp = 'gold' | 'mat' | 'heal' | 'revive' | 'finish' | 'queues' | 'clearNear' | 'clearAll' | 'destroy' | 'spawn' | 'army' | 'raid' | 'bandits' | 'settle' | 'peace' | 'totalWar' | 'rebuild' | 'maxCity' | 'research';
+
+/** A timed area effect left by a power. */
+export interface Zone {
+  kind: 'fortify' | 'sanctuary' | 'golden';
+  team: number;
+  x: number;
+  y: number;
+  r: number;
+  t: number;
 }
 export type Phase = 'play' | 'edit';
 export type Outcome = 'win' | 'lose' | null;
@@ -267,6 +301,8 @@ export interface Strike {
   r: number;
   dmg: number;
   t: number;
+  /** Plain shells, a meteor, or the bomb. */
+  kind?: 'meteor' | 'nuke';
 }
 
 export interface QueueItem {
@@ -366,6 +402,8 @@ export interface World {
   /** Production finishes at once. A game option, set at start. */
   instant: boolean;
   cheats: Cheats;
+  /** Area effects from powers. */
+  zones: Zone[];
   /** Explored tiles for the player, or null without fog. */
   seen: Uint8Array | null;
   /** The realm's story: major moments, bounded. */
@@ -390,7 +428,8 @@ export type Action =
   | { type: 'settle'; payload: { x: number; y: number; tier?: 'outpost' | 'village' } }
   | { type: 'absorb'; payload: { id: number } }
   | { type: 'truce'; payload: { slot: number; offer: boolean } }
-  | { type: 'power'; payload: { power: PowerKey; x: number; y: number } }
+  | { type: 'power'; payload: { power: PowerKey; x: number; y: number; ids?: number[] } }
+  | { type: 'cheat'; payload: { op: CheatOp; x?: number; y?: number; n?: number; unit?: UnitKey; team?: number; id?: number; size?: 'small' | 'medium' | 'large'; kind?: 'small' | 'large' | 'siege' | 'elite' } }
   | { type: 'research'; payload: { tech: Tech } }
   | { type: 'ageUp'; payload: { id?: number } | null }
   | { type: 'bldRally'; payload: { id: number; x: number; y: number } }

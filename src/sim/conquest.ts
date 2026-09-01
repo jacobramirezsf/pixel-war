@@ -16,7 +16,7 @@ import { NAMES } from '../data/names.ts';
 import { DAY, FEAT_RULES, FEATS, GROW, type FeatKey } from '../data/realm.ts';
 import { buildingsOf } from './civ.ts';
 import { canPlaceSettlement as placeOk } from './buildings.ts';
-import { allied, chronicle, emptyTown, pushEvent, say } from './world.ts';
+import { allied, cheat, chronicle, emptyTown, pushEvent, say } from './world.ts';
 
 export const REGION_NAMES = ['Ashford', 'Brine', 'Coldwater', 'Dunmere', 'Elsmoor', 'Fallow', 'Greyholm', 'Hollin', 'Ironmark', 'Kestrel', 'Larkspur', 'Marrow', 'Northam', 'Oakhurst', 'Pale Reach', 'Quarry Hill', 'Rook', 'Saltmere', 'Thornby', 'Umber', 'Vale', 'Wendle', 'Yarrow', 'Zell', 'Ambry'];
 
@@ -124,7 +124,7 @@ export function canSettle(w: World, slot: number, x: number, y: number): string 
   const reg = w.regions[r];
   if (reg.owner >= 0 && !allied(w, reg.owner, slot)) return 'enemy territory, take it first';
   const ownAdj = reg.owner === slot || reg.adj.some((a) => w.regions[a].owner === slot);
-  if (!ownAdj) return 'not next to your territory';
+  if (!ownAdj && !cheat(w, slot, 'territory')) return 'not next to your territory';
   return null;
 }
 
@@ -223,6 +223,7 @@ export function upkeepRate(w: World, slot: number): number {
 export function grossIncome(w: World, slot: number, mcount: number[]): number {
   // With civilians, towns pay through staffed jobs. Without, buildings pay flat.
   let g = 2 + 1.5 * mcount[slot] + (w.rules.civilians ? civIncome(w, slot) : w.rules.town ? townIncome(w, slot) : 0);
+  if (cheat(w, slot, 'fastEcon')) g *= 5;
   for (const b of w.slots[slot].settlements) {
     if (b.hp <= 0) continue;
     const r = w.regions[b.region];
@@ -723,7 +724,7 @@ function realmEvents(w: World, dt: number): void {
   if (roll < 0.26 && w.neutral >= 0) {
     // A raid: bandits come from the nearest camp, or from the map's edge, and march on a region.
     const r = own[randInt(w.rng, own.length)];
-    const n = w.neutral, list = roster(w.slots[n].race).filter((k) => TYPES[k].cost <= 45 && !TYPES[k].repair);
+    const n = w.neutral;
     const camps = w.slots[n].settlements.filter((b) => b.hp > 0 && b.tier === 'camp');
     let ox: number, oy: number;
     if (camps.length) {
@@ -735,13 +736,7 @@ function realmEvents(w: World, dt: number): void {
       [ox, oy] = edges.sort((p, q) => Math.hypot(p[0] - r.cx, p[1] - r.cy) - Math.hypot(q[0] - r.cx, q[1] - r.cy))[0];
     }
     const count = 3 + Math.min(4, Math.floor(w.day / 4));
-    for (let i = 0; i < count; i++) {
-      const u = mkUnit(w, n, list[randInt(w.rng, list.length)], ox + (i % 3) * 6 - 6, oy + Math.floor(i / 3) * 6);
-      u.order = { type: 'attack', tgt: null, x: r.cx, y: r.cy };
-      w.units.push(u);
-    }
-    say(w, 'Raiders marching on ' + r.name, 3);
-    pushEvent(w, 'raid', 'Raiders marching on ' + r.name, ox, oy, r.id);
+    spawnRaiders(w, r, ox, oy, count);
   } else if (roll < 0.44 && rivals.length) {
     const i = rivals[randInt(w.rng, rivals.length)], name = TNAME[i];
     const S = w.slots[0];
@@ -794,6 +789,30 @@ function realmEvents(w: World, dt: number): void {
     if (angry.length) setTruce(w, 0, angry[randInt(w.rng, angry.length)], false);
     else { const r = w.regions.filter((q) => q.owner < 0 && !settlementsIn(w, q.id).length); if (r.length && w.neutral >= 0) { const q = r[randInt(w.rng, r.length)]; placeSettlement(w, w.neutral, q.cx, q.cy, 'ruin', true); pushEvent(w, 'loot', 'Ruins uncovered in ' + q.name, q.cx, q.cy, q.id); } }
   }
+}
+
+/** Bandits from a point of origin march on a region's center. */
+export function spawnRaiders(w: World, r: Region, ox: number, oy: number, count: number): void {
+  const n = w.neutral;
+  if (n < 0) return;
+  const list = roster(w.slots[n].race).filter((k) => TYPES[k].cost <= 45 && !TYPES[k].repair && TYPES[k].role !== 'civ');
+  for (let i = 0; i < count; i++) {
+    const u = mkUnit(w, n, list[randInt(w.rng, list.length)], ox + (i % 3) * 6 - 6, oy + Math.floor(i / 3) * 6);
+    u.order = { type: 'attack', tgt: null, x: r.cx, y: r.cy };
+    w.units.push(u);
+  }
+  say(w, 'Raiders marching on ' + r.name, 3);
+  pushEvent(w, 'raid', 'Raiders marching on ' + r.name, ox, oy, r.id);
+}
+
+/** Where a raid on a region would set out from: the nearest bandit camp, else the nearest map edge. */
+export function raidOrigin(w: World, r: Region): { x: number; y: number } {
+  const camps = w.neutral >= 0 ? w.slots[w.neutral].settlements.filter((b) => b.hp > 0 && b.tier === 'camp') : [];
+  if (camps.length) { const c = camps.sort((p, q) => Math.hypot(p.x - r.cx, p.y - r.cy) - Math.hypot(q.x - r.cx, q.y - r.cy))[0]; return { x: c.x, y: c.y + 12 }; }
+  const W = w.map.cols * TILE, H = w.map.rows * TILE;
+  const edges: [number, number][] = [[r.cx, 12], [r.cx, H - 12], [12, r.cy], [W - 12, r.cy]];
+  const e = edges.sort((p, q) => Math.hypot(p[0] - r.cx, p[1] - r.cy) - Math.hypot(q[0] - r.cx, q[1] - r.cy))[0];
+  return { x: e[0], y: e[1] };
 }
 
 /** Answer the pending event. */

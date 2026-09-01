@@ -4,7 +4,7 @@ import { TEAM } from '../data/teams.ts';
 import { forNear, gridOf } from './spatial.ts';
 import type { World } from './types.ts';
 import { PROFILES } from './ai/profiles.ts';
-import { allied, say } from './world.ts';
+import { allied, say, cheat } from './world.ts';
 
 /** Sandbox has no economy. */
 export const hasEconomy = (w: World): boolean => w.mode !== 'sand';
@@ -59,7 +59,7 @@ export function incomeRate(w: World, slot: number, mcount: number[]): number {
   const s = w.slots[slot];
   const base = 2 + 1.5 * mcount[slot];
   if (!s.ai) return base;
-  return base * PROFILES[s.diff].income * (w.mode === 'rich' ? 2 : 1);
+  return base * PROFILES[s.diff].income * (w.mode === 'rich' ? 2 : 1) * (cheat(w, slot, 'fastEcon') ? 5 : 1);
 }
 
 export function incomeTick(w: World, dt: number, mcount: number[]): void {

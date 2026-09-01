@@ -1,5 +1,6 @@
 // Player settings, kept through the storage adapter.
 
+import { defaultCheats } from '../sim/world.ts';
 import { getJSON, setJSON, type Storage } from '../platform/storage.ts';
 
 export interface Settings {
@@ -16,7 +17,7 @@ export interface Settings {
   cheats: import('../sim/types.ts').Cheats;
 }
 
-export const DEFAULT_SETTINGS: Settings = { edgePan: false, hints: true, damageNumbers: false, volume: 0.7, muted: false, colorblind: false, autoPause: true, instant: false, cheats: { gold: false, resources: false, instant: false, build: false, powers: false, reveal: false } };
+export const DEFAULT_SETTINGS: Settings = { edgePan: false, hints: true, damageNumbers: false, volume: 0.7, muted: false, colorblind: false, autoPause: true, instant: false, cheats: defaultCheats() };
 
 export function loadSettings(s: Storage): Settings {
   const saved = getJSON<Partial<Settings>>(s, 'settings', {});

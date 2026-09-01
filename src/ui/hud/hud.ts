@@ -141,6 +141,13 @@ export function wireViewButtons(app: App): void {
   on($('bFit'), 'click', () => { setZoom(app.cam, fitZoom(app.cam, 'both')); centerOn(app.cam, app.cam.mapW / 2, app.cam.mapH / 2, false); });
   on($('bHome'), 'click', () => focusBase(app));
   on($('pauseov'), 'click', () => { app.paused = false; updateUI(app); });
+  // The toast is an alert: tapping it looks at the latest event with a place.
+  on($('msg'), 'click', () => {
+    const w = app.world;
+    if (!w) return;
+    const e = [...w.events].reverse().find((q) => q.x || q.y);
+    if (e) centerOn(app.cam, e.x, e.y);
+  });
   const mini = $<HTMLCanvasElement>('mini');
   let down = false;
   const go = (e: PointerEvent): void => {
