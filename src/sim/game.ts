@@ -5,6 +5,7 @@ import type { RaceKey } from '../data/races.ts';
 import { buildFort } from './buildings.ts';
 import { prebuildTown } from './town.ts';
 import { seedResidents } from './civ.ts';
+import { WORLD_SIZES } from '../data/realm.ts';
 import { makeRegions, mkNeutralSlot, populateWorld, regionAt, TIERS } from './conquest.ts';
 import { cloneMap, finishMap, type MapDef } from './map.ts';
 import { gen, mkBases } from './mapgen.ts';
@@ -27,7 +28,7 @@ export interface GameConfig {
   /** Units finish the moment they are bought. */
   instant?: boolean;
   cheats?: Partial<import('./types.ts').Cheats>;
-  goal?: import('./types.ts').Goal;
+  size?: import('../data/realm.ts').WorldSize;
 }
 
 /** Copy of the chosen map, with extra bases placed for 3 to 5 players. */
@@ -37,8 +38,8 @@ export function prepareMap(map: MapDef, nP: number): MapDef {
 }
 
 /** Conquest worlds: 40x40 with nine regions for one rival, larger grids for more. */
-export function conquestMap(seed: number, rivals = 1): { map: MapDef; grid: number } {
-  const grid = rivals <= 1 ? 3 : rivals === 2 ? 4 : 5;
+export function conquestMap(seed: number, rivals = 1, worldSize?: import('../data/realm.ts').WorldSize): { map: MapDef; grid: number } {
+  const grid = worldSize ? WORLD_SIZES[worldSize].grid : rivals <= 1 ? 3 : rivals === 2 ? 4 : 5;
   // Sixteen tiles a region leaves room for a town.
   const size = grid * 16;
   const mines: [number, number][] = [];
@@ -83,12 +84,11 @@ function finishSetup(w: World, mode: Mode): void {
 export function newConquest(cfg?: GameConfig): World {
   const seed = cfg?.seed ?? 1;
   const rivals = Math.max(1, Math.min(4, cfg?.rivals ?? 1));
-  const { map, grid } = conquestMap(seed, rivals);
+  const { map, grid } = conquestMap(seed, rivals, cfg?.size);
   const allies = Array.from({ length: rivals + 1 }, (_, i) => i);
   const races = allies.map((i) => cfg?.races?.[i] ?? 'kingdom');
   const w = reset(map, { allies, diff: cfg?.diff ?? 'std', seed, ai: allies.map((i) => i !== 0), races, diffs: cfg?.diffs, instant: cfg?.instant, cheats: cfg?.cheats });
   w.mode = 'conquest';
-  w.goal = cfg?.goal ?? 'none';
   w.cap = 80;
   w.rules = { town: true, ages: true, civilians: true, upkeep: true, connection: true, garrison: true, unrest: true, materials: true, population: true, diplomacy: true, veterancy: true, ...(cfg?.rules ?? {}) };
   const rng = makeRng(seed ^ 0x9e3779b9);

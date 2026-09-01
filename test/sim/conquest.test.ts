@@ -13,7 +13,7 @@ import { act, run, ticks } from './helpers.ts';
 
 // The slice: later systems off, no neutrals, so these tests read like the M7 document.
 const conquest = (seed = 3) => {
-  const w = newGame({} as never, 'conquest', { seed, goal: 'capitals', rules: { unrest: false, materials: false, population: false, diplomacy: false, veterancy: false } });
+  const w = newGame({} as never, 'conquest', { seed, rules: { unrest: false, materials: false, population: false, diplomacy: false, veterancy: false } });
   if (w.neutral >= 0) w.slots[w.neutral].settlements = [];
   setTruce(w, 0, 1, false);
   return w;
@@ -117,18 +117,20 @@ test('save, reload, and continue identically', () => {
   assert.equal(w2.regions.length, 9);
 });
 
-test('the rival expands and the game can be won by taking its capital', () => {
+test('the rival expands and taking its capital is a feat', () => {
   const w = conquest(5);
   const home = w.slots[0].settlements[0];
   for (let i = 0; i < 8; i++) w.units.push(mkUnit(w, 0, 'kni', home.x + i * 8 - 28, home.y - 24));
   run(w, 240);
   assert.equal(w.over, null, 'still playing');
   assert.ok(w.slots[1].settlements.length >= 2 || w.regions.filter((r) => r.owner === 1).length >= 2, 'rival settled: ' + w.slots[1].settlements.length);
-  // Hand the player the rival capital region.
+  // Hand the player the rival capital region. The realm goes on; the feat is noted.
   for (const b of w.slots[1].settlements) b.hp = 0;
+  w.slots[1].alive = false;
   const cap = w.regions[w.capitals[1]];
   cap.owner = 0;
   ticks(w, 2);
-  assert.equal(w.over, 'win');
+  assert.equal(w.over, null);
+  assert.ok(w.feats.includes('conqueror'));
   assert.ok(TYPES.inf);
 });

@@ -10,6 +10,7 @@ import type { Region, Settlement, Slot, Tier, Unit, World } from './types.ts';
 import { mkUnit } from './units.ts';
 import { castleNear, townIncome, townPop } from './town.ts';
 import { civIncome } from './civ.ts';
+import { DAY, FEAT_RULES, FEATS, type FeatKey } from '../data/realm.ts';
 import { canPlaceSettlement as placeOk } from './buildings.ts';
 import { allied, emptyTown, pushEvent, say } from './world.ts';
 
@@ -539,24 +540,42 @@ export function conquestTick(w: World, dt: number, mcount: number[]): void {
     (w as unknown as Record<string, number>)[key] = hostile;
   }
   diplomacyTick(w, dt, value);
-  w.day = Math.floor(w.t / 120);
+  w.day = Math.floor(w.t / DAY);
   realmEvents(w, dt);
   regroup(w);
-  // Goals are optional. With none set, a Realm never ends on its own.
-  if (!w.over && w.goal !== 'none') {
-    let rivals = 0, taken = 0;
-    for (let i = 1; i < w.nP; i++) {
-      if (w.slots[i].neutral || w.slots[i].ally === w.slots[0].ally) continue;
-      rivals++;
-      const cap = w.capitals[i];
-      if (cap >= 0 && w.regions[cap].owner >= 0 && w.slots[w.regions[cap].owner].ally === w.slots[0].ally) taken++;
-    }
+  checkFeats(w, dt);
+}
+
+/** Accomplishments. Each fires once, with a notice, and the realm goes on. */
+function checkFeats(w: World, dt: number): void {
+  const s = w.slots[0];
+  const cap = s.settlements.find((b) => b.hp > 0);
+  if (!cap) return;
+  const has = (k: FeatKey): boolean => w.feats.includes(k);
+  const earn = (k: FeatKey): void => {
+    w.feats.push(k);
+    say(w, FEATS[k].name + '. ' + FEATS[k].text, 4);
+    pushEvent(w, 'feat', FEATS[k].name, cap.x, cap.y, cap.region);
+  };
+  if (!has('kingdom') && s.settlements.filter((b) => b.hp > 0 && b.tier !== 'outpost' && b.buildT <= 0).length >= FEAT_RULES.kingdomTowns) earn('kingdom');
+  if (!has('greatCity') && s.settlements.some((b) => b.hp > 0 && b.tier === 'city' && b.buildT <= 0)) earn('greatCity');
+  if (!has('empire')) {
     const share = w.regions.filter((r) => r.owner === 0).length / w.regions.length;
-    const hold = (w as unknown as Record<string, number>).holdT ?? 0;
-    (w as unknown as Record<string, number>).holdT = share >= 0.6 ? hold + dt : 0;
-    if (w.goal === 'capitals' && rivals && taken === rivals) { w.over = 'win'; say(w, 'Every rival capital is yours', 3); }
-    else if (w.goal === 'land' && (w as unknown as Record<string, number>).holdT >= 300) { w.over = 'win'; say(w, 'You have held most of the world', 3); }
+    const rec = w as unknown as Record<string, number>;
+    rec.holdT = share >= FEAT_RULES.empireShare ? (rec.holdT ?? 0) + dt : 0;
+    if (rec.holdT >= 60) earn('empire');
   }
+  if (!has('conqueror')) {
+    let rivals = 0, gone = 0;
+    for (let i = 1; i < w.nP; i++) if (!w.slots[i].neutral) { rivals++; if (!w.slots[i].alive) gone++; }
+    if (rivals && gone === rivals) earn('conqueror');
+  }
+  if (!has('greatPower')) {
+    let army = 0;
+    for (const u of w.units) if (u.team === 0 && u.hp > 0) army += TYPES[u.type].cost;
+    if (army >= FEAT_RULES.greatPowerArmy && w.net[0] >= FEAT_RULES.greatPowerNet) earn('greatPower');
+  }
+  if (!has('survivor') && w.day >= FEAT_RULES.survivorDays) earn('survivor');
 }
 
 /** Losing the last settlement is a crisis, not the end: the people regroup in free land. */

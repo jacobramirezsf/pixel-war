@@ -13,8 +13,6 @@ export type Mode = 'skirmish' | 'multi' | 'dom' | 'rich' | 'sand' | 'conquest';
 export type Tier = 'outpost' | 'village' | 'town' | 'fortress' | 'city' | 'camp' | 'ruin';
 export type Tech = 'melee' | 'ranged' | 'armor';
 
-export type Goal = 'none' | 'capitals' | 'land';
-
 /** An event waiting on the player's answer. */
 export interface Pending {
   kind: 'tribute' | 'truce' | 'caravan';
@@ -76,7 +74,7 @@ export interface TownStats {
 
 export interface GameEvent {
   tick: number;
-  kind: 'attack' | 'unrest' | 'built' | 'broke' | 'war' | 'truce' | 'revolt' | 'raid' | 'claim' | 'lost' | 'loot';
+  kind: 'attack' | 'unrest' | 'built' | 'broke' | 'war' | 'truce' | 'revolt' | 'raid' | 'claim' | 'lost' | 'loot' | 'feat';
   text: string;
   x: number;
   y: number;
@@ -293,6 +291,8 @@ export interface SandSnap {
 export interface World {
   map: MapDef;
   mode: Mode;
+  /** The seed the world was made from. Saved so a slot card and a replay can name it. */
+  seed: number;
   phase: Phase;
   nP: number;
   slots: Slot[];
@@ -358,8 +358,8 @@ export interface World {
   /** Production finishes at once. A game option, set at start. */
   instant: boolean;
   cheats: Cheats;
-  /** Realm: what ends the game, if anything. */
-  goal: Goal;
+  /** Realm accomplishments earned so far, in order. */
+  feats: import('../data/realm.ts').FeatKey[];
   /** Seconds until the next clocked event. */
   eventT: number;
   pending: Pending | null;
@@ -415,5 +415,4 @@ export interface WorldConfig {
   diffs?: DiffKey[];
   instant?: boolean;
   cheats?: Partial<Cheats>;
-  goal?: Goal;
 }

@@ -5,21 +5,43 @@ import assert from 'node:assert/strict';
 import { newGame } from '../../src/sim/game.ts';
 import { act, run, ticks } from './helpers.ts';
 
-const realm = (seed = 3, goal: 'none' | 'capitals' | 'land' = 'none') => newGame({} as never, 'conquest', { seed, rivals: 1, goal });
+const realm = (seed = 3, size?: 'small' | 'standard' | 'large') => newGame({} as never, 'conquest', { seed, rivals: 1, size });
 
-test('rivals start at peace, days tick, and nothing ends without a goal', () => {
+test('rivals start at peace, days tick, and beating every rival is a feat, not the end', () => {
   const w = realm();
   assert.ok(w.slots[0].truce[1] && w.slots[1].truce[0]);
   for (const b of w.slots[1].settlements) b.hp = 0;
   w.regions[w.capitals[1]].owner = 0;
+  w.slots[1].alive = false;
   run(w, 130);
-  assert.equal(w.over, null, 'no goal, no end');
+  assert.equal(w.over, null, 'the realm goes on');
   assert.equal(w.day, 1);
-  const g = realm(3, 'capitals');
-  for (const b of g.slots[1].settlements) b.hp = 0;
-  g.regions[g.capitals[1]].owner = 0;
-  ticks(g, 2);
-  assert.equal(g.over, 'win');
+  assert.ok(w.feats.includes('conqueror'), w.feats.join());
+  assert.ok(w.events.some((e) => e.kind === 'feat'));
+});
+
+test('world size sets the grid regardless of rival count', () => {
+  assert.equal(realm(1, 'small').map.cols, 48);
+  assert.equal(realm(1, 'standard').map.cols, 64);
+  assert.equal(realm(1, 'large').map.cols, 80);
+  assert.equal(realm(1, 'large').regions.length, 25);
+});
+
+test('feats: kingdom for three towns, great city for a city, survivor after thirty days', () => {
+  const w = realm(4);
+  const s = w.slots[0];
+  const cap = w.regions[w.capitals[0]];
+  const nbs = w.regions.filter((r) => cap.adj.includes(r.id) && r.owner < 0).slice(0, 2);
+  for (const r of nbs) { const b = { ...s.settlements[0], id: w.nextId++, x: r.cx, y: r.cy, region: r.id, tier: 'village' as const, buildT: 0, civ: { ...s.settlements[0].civ } }; s.settlements.push(b); r.owner = 0; }
+  ticks(w, 2);
+  assert.ok(w.feats.includes('kingdom'), w.feats.join());
+  s.settlements[0].tier = 'city';
+  ticks(w, 2);
+  assert.ok(w.feats.includes('greatCity'));
+  w.t = 30 * 120;
+  ticks(w, 2);
+  assert.ok(w.feats.includes('survivor'));
+  assert.equal(w.feats.filter((f) => f === 'kingdom').length, 1, 'each feat once');
 });
 
 test('events fire on a clock and choices resolve', () => {

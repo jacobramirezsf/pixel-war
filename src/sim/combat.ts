@@ -148,7 +148,7 @@ export function elim(w: World, slot: number): void {
   say(w, TNAME[slot] + ' IS ELIMINATED', 2.5);
   let foes = 0;
   for (let i = 0; i < w.nP; i++) if (w.slots[i].alive && !w.slots[i].neutral && !allied(w, 0, i)) foes++;
-  if (!foes) w.over = 'win';
+  if (!foes && w.mode !== 'conquest') w.over = 'win';
 }
 
 /** Armor for a unit right now. Treants harden in the trees. */

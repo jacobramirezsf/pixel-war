@@ -8,7 +8,8 @@ import { decodeMap, encodeMap } from '../../sim/map.ts';
 import type { Mode } from '../../sim/types.ts';
 import { allied, count } from '../../sim/world.ts';
 import { hideOverlay, openEditor, say, setEditorMap, startGame, type App } from '../app.ts';
-import { continueConquest, hasSave, saveConquest, startConquest } from '../conquest.ts';
+import { clearSlot, continueRealm, hasSave, latestSlot, saveRealm, SLOTS, slotMeta, startRealm } from '../conquest.ts';
+import { WORLD_SIZES, type WorldSize } from '../../data/realm.ts';
 import { showHelp, showSettings, showStats } from './settings.ts';
 import { recordGame } from '../stats.ts';
 import { synth } from '../../audio/synth.ts';
@@ -33,7 +34,7 @@ function wireDiff(app: App, rerender: () => void): void {
 }
 
 export function showMenu(app: App): void {
-  if (app.world?.mode === 'conquest' && app.running) saveConquest(app);
+  if (app.world?.mode === 'conquest' && app.running) saveRealm(app);
   app.running = false;
   const m = app.curMap;
   ov().innerHTML = `<div>
@@ -43,7 +44,7 @@ export function showMenu(app: App): void {
     <div class="row"><button class="pick" id="mRace">YOU: ${RACES[app.race].name}<span>change</span></button><button class="pick" id="mFoe">FOE: ${raceName(app.foeRace)}<span>change</span></button></div>
     <p class="blurb">${RACES[app.race].blurb}</p>
     ${diffRowHtml(app)}
-    <button class="gold" data-mode="conquest">REALM<small>Your own corner of a living world. Build, hold, grow, come back. ${hasSave(app) ? 'A realm is waiting.' : ''}</small></button>
+    ${hasSave(app) ? '<button class="gold" id="mCont">CONTINUE REALM<small>' + contLine(app) + '</small></button><button data-mode="conquest">NEW REALM<small>Another world, or another save slot.</small></button>' : '<button class="gold" data-mode="conquest">NEW REALM<small>Your own corner of a living world. Build, hold, grow, come back.</small></button>'}
     <button data-mode="skirmish">SKIRMISH<small>1v1. Destroy the enemy base. It sits behind a fort, so bring siege.</small></button>
     <button data-mode="multi">MULTI WAR<small>Up to 5 armies. Teams or free for all. Last alliance standing.</small></button>
     <button data-mode="dom">DOMINATION<small>Hold the mines to fill your meter. First to 150 points wins.</small></button>
@@ -61,6 +62,8 @@ export function showMenu(app: App): void {
       startGame(app, mode);
     });
   on($('mMap'), 'click', () => showMaps(app));
+  const mc = document.getElementById('mCont');
+  if (mc) on(mc, 'click', () => { if (!continueRealm(app)) { say(app, 'Save could not be read', 2); showConquest(app); } });
   on($('mSettings'), 'click', () => showSettings(app, () => showMenu(app)));
   on($('mHelp'), 'click', () => showHelp(() => showMenu(app)));
   on($('mStats'), 'click', () => showStats(app, () => showMenu(app)));
@@ -70,24 +73,47 @@ export function showMenu(app: App): void {
   ov().classList.remove('hide');
 }
 
+function contLine(app: App): string {
+  const m = slotMeta(app, latestSlot(app));
+  if (!m) return '';
+  return 'Slot ' + latestSlot(app) + ': day ' + m.day + ', ' + m.towns + ' town' + (m.towns === 1 ? '' : 's') + ', ' + m.people + ' people, ' + m.army + ' soldiers.';
+}
+
+function slotCard(app: App, n: number): string {
+  const m = slotMeta(app, n);
+  if (!m) return '<button class="pick dim" data-start="' + n + '">SLOT ' + n + ': EMPTY<span>start a new realm here</span></button>';
+  const when = m.savedAt ? new Date(m.savedAt).toLocaleDateString() : '';
+  const rel = m.rivals ? (m.wars ? m.wars + ' at war' : 'at peace') : 'no rivals left';
+  return '<div class="slotrow"><button class="pick name" data-cont="' + n + '">SLOT ' + n + ': ' + RACES[m.race].name + ', DAY ' + m.day
+    + '<span>' + m.towns + ' town' + (m.towns === 1 ? '' : 's') + ' · ' + m.regions + ' regions · ' + m.people + ' people · ' + m.army + ' soldiers · ' + rel + (m.feats ? ' · ' + m.feats + ' feat' + (m.feats === 1 ? '' : 's') : '') + (when ? ' · ' + when : '') + '</span></button>'
+    + '<button class="sm" data-clear="' + n + '">CLEAR</button></div>';
+}
+
 export function showConquest(app: App): void {
-  const saved = hasSave(app);
-  const goals: [import('../../sim/types.ts').Goal, string][] = [['none', 'NO END'], ['capitals', 'CAPITALS'], ['land', 'LAND']];
+  const empty = SLOTS.find((n) => !slotMeta(app, n));
   ov().innerHTML = '<div><h2>REALM</h2>'
-    + '<p>Your own corner of a living world. Found villages next to your land and hold them. Build houses, farms, a barracks, walls. Bandits raid, envoys come, rivals grow beside you. Nothing ends unless you set a goal.</p>'
-    + (saved ? '<button class="gold" id="cqCont">CONTINUE<small>Pick up the saved game.</small></button>' : '')
+    + '<p>A world that keeps going. Build a village into a city, settle the land next door, hold it against raids and rivals, and come back to it whenever you like. Nothing ends unless you lose everything.</p>'
+    + SLOTS.map((n) => slotCard(app, n)).join('')
+    + '<h3>NEW REALM</h3>'
+    + '<div class="row"><button class="pick" id="cqRace">YOU: ' + RACES[app.race].name + '<span>change</span></button><button class="pick" id="cqFoe">RIVALS: ' + raceName(app.foeRace) + '<span>change</span></button></div>'
     + '<div class="row">' + [1, 2, 3, 4].map((n) => '<button class="sm' + (app.rivals === n ? ' on' : '') + '" data-rivals="' + n + '">' + n + ' RIVAL' + (n > 1 ? 'S' : '') + '</button>').join('') + '</div>'
-    + '<div class="row">' + goals.map(([g, label]) => '<button class="sm' + (app.goal === g ? ' on' : '') + '" data-goal="' + g + '">' + label + '</button>').join('') + '</div>'
+    + '<div class="row">' + (Object.keys(WORLD_SIZES) as WorldSize[]).map((k) => '<button class="sm' + (app.size === k ? ' on' : '') + '" data-size="' + k + '">' + WORLD_SIZES[k].name + '</button>').join('') + '</div>'
+    + '<p class="blurb">' + WORLD_SIZES[app.size].text + '</p>'
     + diffRowHtml(app)
-    + '<button ' + (saved ? '' : 'class="gold"') + ' id="cqNew">NEW WORLD<small>' + (saved ? 'Replaces the saved game.' : 'A fresh world.') + ' ' + (app.rivals === 1 ? '48x48, nine regions.' : app.rivals === 2 ? '64x64, sixteen regions.' : '80x80, twenty-five regions.') + '</small></button>'
+    + '<div class="row seedrow"><label for="cqSeed">SEED</label><input id="cqSeed" type="text" inputmode="numeric" placeholder="random" value="' + (app.seed ?? '') + '"></div>'
+    + '<div class="row">' + SLOTS.map((n) => '<button class="sm' + (n === empty ? ' gold' : '') + '" data-new="' + n + '">' + (slotMeta(app, n) ? 'REPLACE ' : 'START IN ') + 'SLOT ' + n + '</button>').join('') + '</div>'
     + '<button id="cqBack">BACK</button></div>';
-  const c = document.getElementById('cqCont');
-  if (c) on(c, 'click', () => { if (!continueConquest(app)) { say(app, 'Save could not be read', 2); showMenu(app); } });
-  on($('cqNew'), 'click', () => startConquest(app));
+  const readSeed = (): void => { const v = (document.getElementById('cqSeed') as HTMLInputElement).value.trim(); app.seed = v === '' || !/^\d+$/.test(v) ? null : (+v | 0); };
+  for (const b of ov().querySelectorAll<HTMLButtonElement>('button[data-cont]')) on(b, 'click', () => { if (!continueRealm(app, +b.dataset.cont!)) { say(app, 'Save could not be read', 2); showConquest(app); } });
+  for (const b of ov().querySelectorAll<HTMLButtonElement>('button[data-start]')) on(b, 'click', () => { readSeed(); startRealm(app, +b.dataset.start!); });
+  for (const b of ov().querySelectorAll<HTMLButtonElement>('button[data-new]')) on(b, 'click', () => { const n = +b.dataset.new!; readSeed(); if (slotMeta(app, n) && !confirm('Replace the realm in slot ' + n + '?')) return; startRealm(app, n); });
+  for (const b of ov().querySelectorAll<HTMLButtonElement>('button[data-clear]')) on(b, 'click', () => { if (confirm('Clear slot ' + b.dataset.clear + '?')) { clearSlot(app, +b.dataset.clear!); showConquest(app); } });
+  for (const b of ov().querySelectorAll<HTMLButtonElement>('button[data-rivals]')) on(b, 'click', () => { readSeed(); app.rivals = +b.dataset.rivals!; showConquest(app); });
+  for (const b of ov().querySelectorAll<HTMLButtonElement>('button[data-size]')) on(b, 'click', () => { readSeed(); app.size = b.dataset.size as WorldSize; showConquest(app); });
+  on($('cqRace'), 'click', () => { readSeed(); app.race = nextRace(app.race, false)!; showConquest(app); });
+  on($('cqFoe'), 'click', () => { readSeed(); app.foeRace = nextRace(app.foeRace, true); showConquest(app); });
   on($('cqBack'), 'click', () => showMenu(app));
-  for (const b of ov().querySelectorAll<HTMLButtonElement>('button[data-rivals]')) on(b, 'click', () => { app.rivals = +b.dataset.rivals!; showConquest(app); });
-  for (const b of ov().querySelectorAll<HTMLButtonElement>('button[data-goal]')) on(b, 'click', () => { app.goal = b.dataset.goal as import('../../sim/types.ts').Goal; showConquest(app); });
-  wireDiff(app, () => showConquest(app));
+  wireDiff(app, () => { readSeed(); showConquest(app); });
   ov().classList.remove('hide');
 }
 
@@ -190,7 +216,7 @@ export function endScreen(app: App): void {
   }
   ov().innerHTML = '<div><h1>' + h1 + '</h1><p>' + body + '</p><p>' + tip + '</p>' + btns + '</div>';
   const a = document.getElementById('eAgain'), e = document.getElementById('eEdit'), r = document.getElementById('eReplay');
-  if (a) on(a, 'click', () => { if (w.mode === 'conquest') startConquest(app); else startGame(app, w.mode, w.slots.map((s) => s.ally), w.slots.map((s) => s.race)); });
+  if (a) on(a, 'click', () => { if (w.mode === 'conquest') showConquest(app); else startGame(app, w.mode, w.slots.map((s) => s.ally), w.slots.map((s) => s.race)); });
   if (e) on(e, 'click', () => toEdit(app));
   if (r) on(r, 'click', () => startBattle(app));
   on($('eMenu'), 'click', () => showMenu(app));

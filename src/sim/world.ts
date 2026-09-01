@@ -6,7 +6,7 @@ import type { RaceKey } from '../data/races.ts';
 import type { BldKey, BldKind } from '../data/buildings.ts';
 import { TILE, type MapDef, type TilePos } from './map.ts';
 import { makeRng, type Rng } from './rng.ts';
-import type { Building, Cheats, Command, Fx, GameEvent, Goal, Mode, Order, Outcome, Pending, Phase, QueueItem, Region, Rules, SandSnap, Settlement, Slot, Strike, Target, Tech, Unit, World, WorldConfig } from './types.ts';
+import type { Building, Cheats, Command, Fx, GameEvent, Mode, Order, Outcome, Pending, Phase, QueueItem, Region, Rules, SandSnap, Settlement, Slot, Strike, Target, Tech, Unit, World, WorldConfig } from './types.ts';
 
 export const BASE_HP = 400;
 
@@ -33,6 +33,7 @@ export function reset(map: MapDef, cfg?: Partial<WorldConfig>): World {
   return {
     map,
     mode: 'skirmish',
+    seed: cfg?.seed ?? 1,
     phase: 'play',
     nP,
     slots,
@@ -78,7 +79,7 @@ export function reset(map: MapDef, cfg?: Partial<WorldConfig>): World {
     strikes: [],
     instant: !!cfg?.instant,
     cheats: { gold: false, resources: false, instant: false, build: false, powers: false, ...(cfg?.cheats ?? {}) },
-    goal: cfg?.goal ?? 'none',
+    feats: [],
     eventT: 180,
     pending: null,
     day: 0,
@@ -156,7 +157,7 @@ interface SnapSlot {
 export interface Snapshot {
   v: 1;
   map: { name: string; cols: number; rows: number; tiles: number[]; bases: TilePos[]; mines: TilePos[] };
-  mode: Mode; phase: Phase; nP: number; slots: SnapSlot[]; diff: DiffKey; cap: number;
+  mode: Mode; seed?: number; phase: Phase; nP: number; slots: SnapSlot[]; diff: DiffKey; cap: number;
   tick: number; t: number; income: number; incFlash: number;
   units: SnapUnit[]; blds: SnapBld[]; fx: Fx[]; score: number[]; barbT: number; over: Outcome;
   mines: { x: number; y: number; owner: number; prev: number }[];
@@ -165,7 +166,7 @@ export interface Snapshot {
   queue: Command[]; log: Command[]; fxRng: Rng;
   regions: Region[]; regionOf: number[] | null; rules: Rules; net: number[]; broke: number[]; capitals: number[];
   events: GameEvent[]; neutral: number; strikes: Strike[]; instant: boolean; cheats: Cheats;
-  goal: Goal; eventT: number; pending: Pending | null; day: number;
+  feats: import('../data/realm.ts').FeatKey[]; eventT: number; pending: Pending | null; day: number;
 }
 
 const copyCmd = (c: Command): Command => JSON.parse(JSON.stringify(c)) as Command;
@@ -192,7 +193,7 @@ export function snapshot(w: World): Snapshot {
       name: w.map.name, cols: w.map.cols, rows: w.map.rows, tiles: Array.from(w.map.tiles),
       bases: w.map.bases.map((b) => ({ tx: b.tx, ty: b.ty })), mines: w.map.mines.map((q) => ({ tx: q.tx, ty: q.ty })),
     },
-    mode: w.mode, phase: w.phase, nP: w.nP,
+    mode: w.mode, seed: w.seed, phase: w.phase, nP: w.nP,
     slots: w.slots.map((s) => ({ ally: s.ally, race: s.race, diff: s.diff, alive: s.alive, gold: s.gold, settlements: s.settlements.map((b) => ({ ...b, civ: { ...b.civ } })), ai: s.ai, aiT: s.aiT, aiWant: s.aiWant, aiLast: s.aiLast, queue: s.queue.map((q) => ({ ...q })), rally: s.rally ? { ...s.rally } : null, mat: s.mat, neutral: s.neutral, attitude: s.attitude.slice(), truce: s.truce.slice(), truceT: s.truceT.slice(), powerCd: { ...s.powerCd }, age: s.age, tech: { ...s.tech } })),
     diff: w.diff, cap: w.cap, tick: w.tick, t: w.t, income: w.income, incFlash: w.incFlash,
     units: w.units.map((u) => ({
@@ -218,7 +219,7 @@ export function snapshot(w: World): Snapshot {
     rules: { ...w.rules }, net: w.net.slice(), broke: w.broke.slice(), capitals: w.capitals.slice(),
     events: w.events.map((e) => ({ ...e })), neutral: w.neutral, strikes: w.strikes.map((k) => ({ ...k })), instant: w.instant,
     cheats: { ...w.cheats },
-    goal: w.goal, eventT: w.eventT, pending: w.pending ? { ...w.pending } : null, day: w.day,
+    feats: w.feats.slice(), eventT: w.eventT, pending: w.pending ? { ...w.pending } : null, day: w.day,
   };
 }
 
@@ -259,7 +260,7 @@ export function restore(s: Snapshot): World {
     else { const a: Order = { type: 'attack', tgt: resolve(o.tgt) }; if (o.x !== undefined) { a.x = o.x; a.y = o.y; } units[i].order = a; }
   });
   return {
-    map, mode: s.mode, phase: s.phase, nP: s.nP, slots, diff: s.diff, cap: s.cap,
+    map, mode: s.mode, seed: s.seed ?? 1, phase: s.phase, nP: s.nP, slots, diff: s.diff, cap: s.cap,
     tick: s.tick, t: s.t, income: s.income, incFlash: s.incFlash, units, blds, bmap,
     fx: s.fx.map((f) => ({ ...f })), score: s.score.slice(), barbT: s.barbT, over: s.over,
     mines: s.mines.map((m) => ({ ...m })),
@@ -273,7 +274,7 @@ export function restore(s: Snapshot): World {
     net: (s.net ?? slots.map(() => 0)).slice(), broke: (s.broke ?? slots.map(() => 0)).slice(), capitals: (s.capitals ?? slots.map(() => -1)).slice(),
     events: (s.events ?? []).map((e) => ({ ...e })), neutral: s.neutral ?? -1, mapDirty: false, strikes: (s.strikes ?? []).map((k) => ({ ...k })), instant: !!s.instant,
     cheats: Object.assign({ gold: false, resources: false, instant: false, build: false, powers: false }, s.cheats ?? {}),
-    goal: s.goal ?? 'none', eventT: s.eventT ?? 180, pending: s.pending ? { ...s.pending } : null, day: s.day ?? 0,
+    feats: (s.feats ?? []).slice(), eventT: s.eventT ?? 180, pending: s.pending ? { ...s.pending } : null, day: s.day ?? 0,
   };
 }
 

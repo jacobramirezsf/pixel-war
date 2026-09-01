@@ -26,7 +26,7 @@ export function soundTick(app: App, w: World): void {
   if (w.events.length > lastEvents) {
     const e = w.events[w.events.length - 1];
     if (e.kind === 'attack' || e.kind === 'war' || e.kind === 'revolt' || e.kind === 'broke') synth.play('warning');
-    else if (e.kind === 'claim' || e.kind === 'built' || e.kind === 'loot') synth.play('capture');
+    else if (e.kind === 'claim' || e.kind === 'built' || e.kind === 'loot' || e.kind === 'feat') synth.play('capture');
   }
   lastEvents = w.events.length;
 }
