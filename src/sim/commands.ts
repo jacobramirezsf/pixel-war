@@ -10,6 +10,7 @@ import type { Action, Command, Target, TargetRef, Unit, World } from './types.ts
 import { buildTime, mkUnit } from './units.ts';
 import { absorb, ADVANCED_COST, choose, canAbsorb, canSettle, hasCity, NEXT_TIER, placeSettlement, popCap, popUsed, setTruce, startUpgrade, TIERS, truceAccepted } from './conquest.ts';
 import { popOf } from './units.ts';
+import { seedResidents } from './civ.ts';
 import { castPower } from './powers.ts';
 import { canResearch, canTrain, pickTrainer, queuedCount, RESEARCH_COST, TECH_NAMES } from './town.ts';
 import { allied, count, mapH, mapW, say as worldSay } from './world.ts';
@@ -121,6 +122,7 @@ export function applyCommand(w: World, c: Command, quiet = false): boolean {
       s.gold -= T.gold;
       s.mat -= mat;
       const b = placeSettlement(w, slot, c.payload.x, c.payload.y, tier);
+      if (tier !== 'outpost' && w.rules.civilians) seedResidents(w, b, 2);
       say((tier === 'outpost' ? 'Outpost' : 'Village') + ' founded in ' + w.regions[b.region].name + '. Hold it 30s to claim.', 2.5);
       return true;
     }
@@ -203,18 +205,24 @@ export function applyCommand(w: World, c: Command, quiet = false): boolean {
     case 'guard': {
       const us = ownUnits(w, slot, c.payload.ids);
       if (!us.length) return false;
-      const W = mapW(w), H = mapH(w), { x, y } = c.payload;
+      const W = mapW(w), H = mapH(w);
+      const tgt = c.payload.target ? resolveRef(w, c.payload.target) : null;
+      if (c.payload.target && (!tgt || !allied(w, tgt.team, slot))) return false;
+      const x = tgt ? tgt.x : c.payload.x, y = tgt ? tgt.y : c.payload.y;
       us.forEach((u, i) => {
-        const a = i * 2.4, r = Math.sqrt(i) * 3.4;
-        u.order = { type: 'guard', x: clamp(x + Math.cos(a) * r, 4, W - 4), y: clamp(y + Math.sin(a) * r, 4, H - 4) };
+        const a = i * 2.4, r = 6 + Math.sqrt(i) * 3.4;
+        const o: import('./types.ts').Order = { type: 'guard', x: clamp(x + Math.cos(a) * r, 4, W - 4), y: clamp(y + Math.sin(a) * r, 4, H - 4) };
+        if (tgt) o.tgt = tgt;
+        u.order = o;
       });
       w.fx.push({ k: 'mark', x, y, r: 6, t: 0.5, c: '#7dff7d' });
-      say('Guarding', 1);
+      say(tgt ? 'Guarding ' + (tgt.ent === 'unit' ? TYPES[tgt.type].name.toLowerCase() : tgt.ent === 'bld' ? BLD[tgt.type].name.toLowerCase() : 'the settlement') : 'Guarding', 1);
       return true;
     }
     case 'hold': {
-      for (const u of ownUnits(w, slot, c.payload.ids)) u.order = null;
-      say('Holding', 1);
+      // Hold: stay here, fight what comes into reach, never wander off after it.
+      for (const u of ownUnits(w, slot, c.payload.ids)) u.order = { type: 'guard', x: u.x, y: u.y, hold: true };
+      say('Holding position', 1);
       return true;
     }
     case 'retreat': {

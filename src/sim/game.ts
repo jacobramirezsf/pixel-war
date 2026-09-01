@@ -4,6 +4,7 @@ import type { DiffKey } from '../data/difficulty.ts';
 import type { RaceKey } from '../data/races.ts';
 import { buildFort } from './buildings.ts';
 import { prebuildTown } from './town.ts';
+import { seedResidents } from './civ.ts';
 import { makeRegions, mkNeutralSlot, populateWorld, regionAt, TIERS } from './conquest.ts';
 import { cloneMap, finishMap, type MapDef } from './map.ts';
 import { gen, mkBases } from './mapgen.ts';
@@ -89,7 +90,7 @@ export function newConquest(cfg?: GameConfig): World {
   w.mode = 'conquest';
   w.goal = cfg?.goal ?? 'none';
   w.cap = 80;
-  w.rules = { town: true, ages: true, upkeep: true, connection: true, garrison: true, unrest: true, materials: true, population: true, diplomacy: true, veterancy: true, ...(cfg?.rules ?? {}) };
+  w.rules = { town: true, ages: true, civilians: true, upkeep: true, connection: true, garrison: true, unrest: true, materials: true, population: true, diplomacy: true, veterancy: true, ...(cfg?.rules ?? {}) };
   const rng = makeRng(seed ^ 0x9e3779b9);
   const { regions, regionOf } = makeRegions(map, rng, grid);
   w.regions = regions;
@@ -116,7 +117,7 @@ export function newConquest(cfg?: GameConfig): World {
   w.net.push(0); w.broke.push(0); w.capitals.push(-1);
   w.score = w.slots.map(() => 0);
   populateWorld(w, rng);
-  for (let i = 0; i < w.nP; i++) if (!w.slots[i].neutral) prebuildTown(w, i, ['barracks']);
+  for (let i = 0; i < w.nP; i++) if (!w.slots[i].neutral) { prebuildTown(w, i, ['barracks']); for (const b of w.slots[i].settlements) seedResidents(w, b); }
   // Rivals begin at peace with you and each other. War is something that happens, not the default.
   for (let i = 0; i < w.nP; i++) for (let j = i + 1; j < w.nP; j++) {
     if (w.slots[i].neutral || w.slots[j].neutral) continue;

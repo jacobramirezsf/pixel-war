@@ -58,7 +58,9 @@ export function buildTargetCache(w: World): TargetCache {
   }
   for (const u of w.units) {
     if (u.hp <= 0 || !unitVisible(u)) continue;
-    for (let i = 0; i < w.nP; i++) if (hostile[i][u.team]) hostiles[i].push(u);
+    // Armies do not chase villagers. Bandits and rebels do, and anyone can be told to.
+    const civ = TYPES[u.type].role === 'civ';
+    for (let i = 0; i < w.nP; i++) if (hostile[i][u.team] && (!civ || w.slots[i].neutral)) hostiles[i].push(u);
   }
   return { hostile, hostiles, statics };
 }
@@ -136,6 +138,8 @@ const guarded = (w: World, u: Unit): boolean => inAura(w, u, 'guardAura', 20);
 export function elim(w: World, slot: number): void {
   const s = w.slots[slot];
   if (!s.alive || s.neutral) return;
+  // In a Realm the player's people regroup in free land instead; conquestTick decides if that is possible.
+  if (slot === 0 && w.mode === 'conquest') return;
   s.alive = false;
   for (const b of s.settlements) w.fx.push({ k: 'boom', x: b.x, y: b.y, r: 22, t: 0.25 });
   if (slot === 0) { w.over = 'lose'; return; }

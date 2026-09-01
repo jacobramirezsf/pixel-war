@@ -14,6 +14,7 @@ import { computeFlow, computeHome, flowDir } from './pathing.ts';
 import { conquestTick, grossIncome } from './conquest.ts';
 import { powersTick } from './powers.ts';
 import { townTick } from './town.ts';
+import { civTick, isCiv } from './civ.ts';
 import { rand, rnd } from './rng.ts';
 import { fillGrid, forNear, gridOf, nearestHostileWithin } from './spatial.ts';
 import type { Building, Target, Unit, World } from './types.ts';
@@ -132,11 +133,15 @@ function moveLogic(w: World, u: Unit, T: UnitDef, tgt: Target | null, best: numb
     return [dx / d, dy / d];
   }
   if (u.order && u.order.type === 'guard') {
-    // Chase what comes within reach, but not beyond the leash. Otherwise walk back to the post.
-    const px = u.order.x, py = u.order.y;
+    // Guarding a target follows it. Chase what comes within reach, but not beyond the leash.
+    const g = u.order;
+    if (g.tgt) { if (g.tgt.hp <= 0) g.tgt = null; else { g.x = g.tgt.x + (g.x - g.tgt.x) * 0; g.y = g.tgt.y; } }
+    const px = g.tgt ? g.tgt.x : g.x, py = g.tgt ? g.tgt.y : g.y;
+    const leash = g.hold ? 28 : 56;
     const offPost = Math.hypot(u.x - px, u.y - py);
-    if (tgt && best < T.aggro && best > T.range && Math.hypot(tgt.x - px, tgt.y - py) < 56) return dirTo(u, tgt);
-    if (offPost > 3 && !(tgt && best <= T.range)) return dirTo(u, { x: px, y: py });
+    if (tgt && best < T.aggro && best > T.range && Math.hypot(tgt.x - px, tgt.y - py) < leash) return dirTo(u, tgt);
+    const keep = g.tgt ? 12 : 3;
+    if (offPost > keep && !(tgt && best <= T.range)) return dirTo(u, { x: px, y: py });
     return null;
   }
   if (u.order && u.order.type === 'attack') {
@@ -163,7 +168,8 @@ function moveLogic(w: World, u: Unit, T: UnitDef, tgt: Target | null, best: numb
 /** Move, sliding along blockers. Returns the enemy building that stopped the move, if any. */
 function tryMove(w: World, u: Unit, mv: [number, number], sp: number, fly: boolean | undefined): Building | null {
   const nx = u.x + mv[0] * sp, ny = u.y + mv[1] * sp;
-  if (fly || passableFor(w, u.team, nx, ny)) { u.x = nx; u.y = ny; return null; }
+  // A unit already standing on blocked ground (pushed there, or a building went up around it) may always step.
+  if (fly || passableFor(w, u.team, nx, ny) || !passableFor(w, u.team, u.x, u.y)) { u.x = nx; u.y = ny; return null; }
   const b = bldAtPx(w, nx, ny);
   const blk = b && !allied(w, b.team, u.team) && b.kind !== 'trap' ? b : null;
   if (passableFor(w, u.team, nx, u.y)) { u.x = nx; return blk; }
@@ -207,6 +213,7 @@ export function step(w: World): void {
   if (w.phase === 'play') {
     powersTick(w, dt);
     townTick(w, dt);
+    civTick(w);
     if (w.cheats.gold) w.slots[0].gold = Infinity;
     if (w.cheats.resources) w.slots[0].mat = 99999;
     if (w.cheats.powers) w.slots[0].powerCd = {};
@@ -328,6 +335,9 @@ export function step(w: World): void {
         ally.hp = Math.min(maxHp(ally), ally.hp + T.heal);
         w.fx.push({ k: 'heal', x: ally.x, y: ally.y - 7, t: 0.3 });
       }
+    } else if (isCiv(u)) {
+      // Villagers only walk where the civilian pass sends them.
+      mv = moveLogic(w, u, T, null, Infinity);
     } else {
       mv = moveLogic(w, u, T, tgt, best);
       const fleeing = !!u.order && u.order.type === 'retreat';

@@ -52,6 +52,26 @@ export interface Settlement {
   hitBy: number;
   /** Neutral timers: seconds until a camp raids again, or seconds a ruin has been held. */
   nT: number;
+  /** Civilian life, updated by the civilian pass. */
+  civ: TownStats;
+}
+
+export type TownState = 'growing' | 'stable' | 'attacked' | 'recovering';
+
+export interface TownStats {
+  residents: number;
+  housing: number;
+  jobs: number;
+  employed: number;
+  /** Gold per second from staffed jobs. */
+  income: number;
+  state: TownState;
+  /** Seconds since an enemy was near. */
+  safeT: number;
+  /** Seconds toward the next resident. */
+  growT: number;
+  /** Most residents the town has had, for recovery. */
+  peak: number;
 }
 
 export interface GameEvent {
@@ -92,6 +112,8 @@ export interface Rules {
   town: boolean;
   /** Ages gate buildings by settlement tier. Realm only; elsewhere everything is unlocked. */
   ages: boolean;
+  /** Villagers live in towns, take jobs, and flee raids. Realm only. */
+  civilians: boolean;
   upkeep: boolean;
   connection: boolean;
   garrison: boolean;
@@ -133,8 +155,8 @@ export type Order =
   | { type: 'move'; x: number; y: number }
   /** Attack a target, or attack-move: head for (x, y) when set, fighting whatever comes into reach. */
   | { type: 'attack'; tgt: Target | null; x?: number; y?: number }
-  /** Hold a post: engage what comes within reach, never stray far, return when it is over. */
-  | { type: 'guard'; x: number; y: number }
+  /** Hold a post or follow a target: engage what comes within reach, never stray far, come back. */
+  | { type: 'guard'; x: number; y: number; tgt?: Target | null; hold?: boolean }
   /** Disengage and walk home. No attacking on the way, not even when blocked. */
   | { type: 'retreat' };
 
@@ -178,6 +200,12 @@ export interface Unit {
   kills: number;
   /** Seconds of haste left: faster movement and attacks. */
   hasteT: number;
+  /** Villagers: settlement they live in (-1 for soldiers), workplace building id (-1 none, 0 the settlement itself). */
+  home: number;
+  job: number;
+  /** Seconds until the villager picks a new place to stand, and seconds of fleeing left. */
+  civT: number;
+  fleeT: number;
 }
 
 export interface Mine {
@@ -360,7 +388,7 @@ export type Action =
   | { type: 'rally'; payload: { x: number; y: number } | null }
   | { type: 'move'; payload: { ids: number[]; x: number; y: number } }
   | { type: 'attack'; payload: { ids: number[]; target: TargetRef | null; x?: number; y?: number } }
-  | { type: 'guard'; payload: { ids: number[]; x: number; y: number } }
+  | { type: 'guard'; payload: { ids: number[]; x: number; y: number; target?: TargetRef | null } }
   | { type: 'hold'; payload: { ids: number[] } }
   | { type: 'retreat'; payload: { ids: number[] } }
   | { type: 'gate'; payload: { id: number } }

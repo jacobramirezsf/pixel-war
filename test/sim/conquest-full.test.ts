@@ -27,21 +27,25 @@ test('unrest climbs in an undermanned border region and the region revolts', () 
   const w = conquest();
   const cap = w.regions[w.capitals[0]];
   const nb = w.regions.find((r) => cap.adj.includes(r.id))!;
-  nb.owner = 1;
+  nb.owner = 0;
   for (const u of w.units) if (u.team === 0) u.hp = 0;
+  nb.unrest = 90;
+  let revolted = false;
+  for (let i = 0; i < 60 * 40 && !revolted; i++) { ticks(w, 1); revolted = w.events.some((e) => e.kind === 'revolt'); }
+  assert.ok(revolted, 'unrest ' + nb.unrest + ' owner ' + nb.owner);
+  assert.equal(nb.owner, -1);
+  assert.ok(w.units.some((u) => u.team === w.neutral && Math.hypot(u.x - nb.cx, u.y - nb.cy) < 40), 'rebels spawned');
+  // The capital itself does not revolt over a thin garrison.
   cap.unrest = 90;
-  run(w, 30);
-  assert.ok(cap.owner === -1 || cap.unrest > 90, 'unrest ' + cap.unrest + ' owner ' + cap.owner);
-  if (cap.owner === -1) {
-    assert.ok(w.units.some((u) => u.team === w.neutral), 'rebels spawned');
-    assert.ok(w.slots[w.neutral].settlements.some((b) => b.region === cap.id), 'capital went independent');
-  }
+  run(w, 20);
+  assert.ok(cap.unrest < 90 && cap.owner === 0, 'capital calm ' + cap.unrest);
 });
 
 test('bandit camps raid and drop loot when cleared', () => {
   const w = conquest();
   const camp = w.slots[w.neutral].settlements.find((b) => b.tier === 'camp')!;
-  run(w, 80);
+  camp.nT = 5;
+  run(w, 10);
   assert.ok(w.units.some((u) => u.team === w.neutral), 'raiders exist');
   const gold = w.slots[0].gold, mat = w.slots[0].mat;
   w.units = w.units.filter((u) => u.team !== w.neutral);

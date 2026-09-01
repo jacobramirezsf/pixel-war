@@ -161,7 +161,12 @@ function buildTown(w: World, slot: number, a: Assessment): boolean {
   const afford = (t: BldKey): boolean => s.gold >= BLD[t].cost + 40 && (!w.rules.materials || s.mat >= (BLD[t].mat ?? 0));
   const realm = w.mode === 'conquest';
   const spare = popCap(w, slot) - popUsed(w, slot);
-  if (realm && spare <= 3 && afford('house') && have('house') < 8) return placeNear(w, slot, 'house', home.x, home.y);
+  // Towns: people need houses, and people need work.
+  let crowded = false, idle = 0;
+  for (const b of s.settlements) if (b.hp > 0) { if (b.civ.residents >= b.civ.housing - 1 && b.civ.housing < 24) crowded = true; idle += Math.max(0, b.civ.residents - b.civ.employed); }
+  if (realm && (spare <= 3 || crowded) && afford('house') && have('house') < 10) return placeNear(w, slot, 'house', home.x, home.y);
+  if (realm && idle >= 2 && afford('farm') && have('farm') < 8) return placeNear(w, slot, 'farm', home.x, home.y);
+  if (realm && idle >= 4 && s.age >= 1 && afford('market') && have('market') < 2) return placeNear(w, slot, 'market', home.x, home.y);
   if (!have('barracks') && afford('barracks')) return placeNear(w, slot, 'barracks', home.x, home.y);
   if (realm && have('farm') < 3 && afford('farm') && w.t > 60) return placeNear(w, slot, 'farm', home.x, home.y);
   if (s.age >= 1) {

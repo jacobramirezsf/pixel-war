@@ -9,8 +9,9 @@ import { rand, randInt, type Rng } from './rng.ts';
 import type { Region, Settlement, Slot, Tier, Unit, World } from './types.ts';
 import { mkUnit } from './units.ts';
 import { castleNear, townIncome, townPop } from './town.ts';
+import { civIncome } from './civ.ts';
 import { canPlaceSettlement as placeOk } from './buildings.ts';
-import { allied, pushEvent, say } from './world.ts';
+import { allied, emptyTown, pushEvent, say } from './world.ts';
 
 export const REGION_NAMES = ['Ashford', 'Brine', 'Coldwater', 'Dunmere', 'Elsmoor', 'Fallow', 'Greyholm', 'Hollin', 'Ironmark', 'Kestrel', 'Larkspur', 'Marrow', 'Northam', 'Oakhurst', 'Pale Reach', 'Quarry Hill', 'Rook', 'Saltmere', 'Thornby', 'Umber', 'Vale', 'Wendle', 'Yarrow', 'Zell', 'Ambry'];
 
@@ -124,7 +125,7 @@ export function canSettle(w: World, slot: number, x: number, y: number): string 
 
 export function mkSettlement(w: World, slot: number, x: number, y: number, tier: Tier, instant: boolean): Settlement {
   const T = TIERS[tier];
-  return { ent: 'base', id: w.nextId++, team: slot, x: ((x / TILE) | 0) * TILE + 4, y: ((y / TILE) | 0) * TILE + 4, hp: instant ? T.hp : Math.round(T.hp * 0.3), max: T.hp, cd: 0, tier, region: regionAt(w, x, y), buildT: instant ? 0 : T.buildT, hitBy: -1, nT: tier === 'camp' ? 75 : 0 };
+  return { ent: 'base', id: w.nextId++, team: slot, x: ((x / TILE) | 0) * TILE + 4, y: ((y / TILE) | 0) * TILE + 4, hp: instant ? T.hp : Math.round(T.hp * 0.3), max: T.hp, cd: 0, tier, region: regionAt(w, x, y), buildT: instant ? 0 : T.buildT, hitBy: -1, nT: tier === 'camp' ? 150 : 0, civ: emptyTown() };
 }
 
 /** Founding clears the trees in the footprint. Water and rock are refused earlier. */
@@ -165,7 +166,7 @@ export function popCap(w: World, slot: number): number {
 
 export function popUsed(w: World, slot: number): number {
   let n = 0;
-  for (const u of w.units) if (u.team === slot && u.hp > 0) n += Math.max(1, Math.ceil(TYPES[u.type].cost / 60));
+  for (const u of w.units) if (u.team === slot && u.hp > 0 && TYPES[u.type].role !== 'civ') n += Math.max(1, Math.ceil(TYPES[u.type].cost / 60));
   for (const q of w.slots[slot].queue) n += Math.max(1, Math.ceil(TYPES[q.unit].cost / 60));
   return n;
 }
@@ -177,7 +178,7 @@ export function hasCity(w: World, slot: number): boolean {
 /** Gold per second a slot pays for what it fields. */
 export function upkeepRate(w: World, slot: number): number {
   let u = 0;
-  for (const x of w.units) if (x.team === slot && x.hp > 0) u += TYPES[x.type].cost / 100;
+  for (const x of w.units) if (x.team === slot && x.hp > 0 && TYPES[x.type].role !== 'civ') u += TYPES[x.type].cost / 100;
   for (const b of w.blds) if (b.team === slot && b.kind === 'tower') u += BLD[b.type].cost / 400;
   for (const b of w.slots[slot].settlements) if (b.hp > 0) u += TIERS[b.tier].upkeep;
   return u;
@@ -185,7 +186,8 @@ export function upkeepRate(w: World, slot: number): number {
 
 /** Gross gold: 2 base, plus each connected working settlement, plus mines. */
 export function grossIncome(w: World, slot: number, mcount: number[]): number {
-  let g = 2 + 1.5 * mcount[slot] + (w.rules.town ? townIncome(w, slot) : 0);
+  // With civilians, towns pay through staffed jobs. Without, buildings pay flat.
+  let g = 2 + 1.5 * mcount[slot] + (w.rules.civilians ? civIncome(w, slot) : w.rules.town ? townIncome(w, slot) : 0);
   for (const b of w.slots[slot].settlements) {
     if (b.hp <= 0) continue;
     const r = w.regions[b.region];
@@ -270,7 +272,7 @@ function neutralsTick(w: World, dt: number, byRegion: Map<string, number>): void
     if (b.tier === 'camp') {
       b.nT -= dt;
       if (b.nT <= 0 && raiders < 10) {
-        b.nT = 60;
+        b.nT = 90;
         const r = w.regions[b.region];
         // Raid a neighboring region that someone owns, else prowl a random neighbor.
         const owned = r.adj.filter((a) => w.regions[a].owner >= 0 && !w.slots[w.regions[a].owner].neutral);
@@ -480,10 +482,13 @@ export function conquestTick(w: World, dt: number, mcount: number[]): void {
   if (w.rules.unrest)
     for (const r of w.regions) {
       if (r.owner < 0 || isNeutral(w, r.owner)) continue;
-      const short = r.garrison < r.need;
-      // Shortfall grinds; a broken connection is the emergency. Full shortfall revolts in about 70 seconds.
+      // The capital's own people do not revolt over a thin garrison. Other regions grind when short;
+      // a broken connection is the emergency. Full shortfall revolts in about 70 seconds.
+      const short = r.garrison < r.need && r.id !== w.capitals[r.owner];
       let d = short ? 0.4 + 1.0 * Math.min(1, (r.need - r.garrison) / Math.max(1, r.need)) : -1.5;
       if (!r.connected) d = Math.max(d, 0) + 1.2;
+      // A working town is a content one.
+      if (w.rules.civilians) for (const b of settlementsIn(w, r.id)) if (b.team === r.owner && b.civ.jobs > 0 && b.civ.employed >= b.civ.jobs * 0.6 && b.civ.state !== 'attacked') { d -= 0.5; break; }
       const calm = settlementsIn(w, r.id).some((b) => (b.tier === 'fortress' || b.tier === 'city') && b.buildT <= 0 && b.team === r.owner) || r.adj.some((a) => settlementsIn(w, a).some((b) => (b.tier === 'fortress' || b.tier === 'city') && b.buildT <= 0 && b.team === r.owner)) || castleNear(w, r.owner, r.cx, r.cy, 110);
       if (calm) d -= 1;
       const before = r.unrest;

@@ -5,7 +5,7 @@ import { TYPES, unitVisible } from '../data/units.ts';
 import { TILE, type MapDef } from '../sim/map.ts';
 import { BLD } from '../data/buildings.ts';
 import type { Building, Mine, Settlement, World } from '../sim/types.ts';
-import { BASE_HP, mapH } from '../sim/world.ts';
+import { emptyTown, BASE_HP, mapH } from '../sim/world.ts';
 import { maxHp, rank } from '../sim/units.ts';
 import { drawBldSpr, drawSprite } from './atlas.ts';
 import { snapped, type Camera } from './camera.ts';
@@ -148,7 +148,7 @@ export function drawEditor(ctx: CanvasRenderingContext2D, bg: HTMLCanvasElement,
   for (let y = TILE; y < H; y += TILE) { ctx.moveTo(0, y + 0.5); ctx.lineTo(W, y + 0.5); }
   ctx.stroke();
   for (const q of m.mines) drawMine(ctx, { x: q.tx * TILE + 4, y: q.ty * TILE + 4, owner: -1, prev: -1 });
-  m.bases.forEach((b, i) => drawBase(ctx, { ent: 'base', id: 0, team: i, x: b.tx * TILE + 4, y: b.ty * TILE + 4, hp: BASE_HP, max: BASE_HP, cd: 0, tier: 'village', region: -1, buildT: 0, hitBy: -1, nT: 0 }, H));
+  m.bases.forEach((b, i) => drawBase(ctx, { ent: 'base', id: 0, team: i, x: b.tx * TILE + 4, y: b.ty * TILE + 4, hp: BASE_HP, max: BASE_HP, cd: 0, tier: 'village', region: -1, buildT: 0, hitBy: -1, nT: 0, civ: emptyTown() }, H));
 }
 
 export interface ViewState {
@@ -248,7 +248,9 @@ export function drawWorld(ctx: CanvasRenderingContext2D, bg: HTMLCanvasElement, 
   }
   // Region names and state on the overlay.
   if (v.overlay && w.regionOf) {
-    ctx.font = '6px monospace';
+    // Labels keep a readable size on screen whatever the zoom.
+    const fs = Math.max(3, Math.round(10 / v.cam.zoom));
+    ctx.font = fs + 'px monospace';
     ctx.textAlign = 'center';
     for (const r of w.regions) {
       if (!vis(r.cx, r.cy, 40)) continue;
@@ -258,9 +260,10 @@ export function drawWorld(ctx: CanvasRenderingContext2D, bg: HTMLCanvasElement, 
       else if (own && r.garrison < r.need) tag = ' NEEDS ' + Math.ceil(r.need - r.garrison);
       else if (r.contested) tag = ' CONTESTED';
       ctx.fillStyle = 'rgba(0,0,0,.55)';
-      ctx.fillRect(r.cx - 22, r.cy - 5, 44, 8);
+      const tw = ctx.measureText(r.name.toUpperCase() + tag).width + fs;
+      ctx.fillRect(r.cx - tw / 2, r.cy - fs * 0.8, tw, fs * 1.3);
       ctx.fillStyle = r.owner >= 0 ? TEAM[r.owner] : '#dde2ec';
-      ctx.fillText(r.name.toUpperCase() + tag, r.cx, r.cy + 1);
+      ctx.fillText(r.name.toUpperCase() + tag, r.cx, r.cy + fs * 0.35);
     }
     ctx.textAlign = 'left';
   }

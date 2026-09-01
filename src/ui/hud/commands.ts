@@ -29,7 +29,10 @@ export function charge(app: App): void {
 
 export function hold(app: App): void {
   const ids = selectedUnits(app).map((u) => u.id);
+  if (!ids.length) return;
+  app.stance = 'none';
   issueAction(app, { type: 'hold', payload: { ids } });
+  app.ui.updateUI();
 }
 
 export function togglePause(app: App): void {
@@ -44,10 +47,11 @@ export function cycleSpeed(app: App, dir = 1): void {
   app.ui.updateUI();
 }
 
-/** Drop whatever tool is active and go back to commanding. */
+/** Drop whatever tool or armed mode is active and go back to commanding. */
 export function cancelTool(app: App): void {
   app.tool = app.world?.phase === 'edit' ? 'place' : 'cmd';
   app.power = null;
+  app.stance = 'none';
   if (app.tab === 'build' || app.tab === 'powers') app.tab = 'units';
   app.ui.updateUI();
 }
@@ -56,7 +60,6 @@ export function wireCommands(app: App): void {
   const live = (): boolean => app.running && !!app.world;
   on($('bAll'), 'click', () => { if (live()) selectAll(app); });
   on($('bCharge'), 'click', () => { if (live()) charge(app); });
-  on($('bHold'), 'click', () => { if (live()) hold(app); });
   on($('bRetreat'), 'click', () => { if (live()) retreat(app); });
   on($('bRally'), 'click', () => {
     if (!live() || !app.world) return;
@@ -99,8 +102,9 @@ export function wireCommands(app: App): void {
     });
   }
   on($('bCancel'), 'click', () => cancelTool(app));
-  for (const [id, st, hint] of [['bMove', 'move', 'Tap the map to move there'], ['bAttack', 'attack', 'Tap the map: go there and fight what you meet. Tap an enemy to attack it.'], ['bGuard', 'guard', 'Tap the map to hold that spot and fight what comes near']] as const)
-    on($(id), 'click', () => { if (!live()) return; app.stance = st; app.ui.updateUI(); say(app, hint, 1.8); });
+  for (const [id, st, hint] of [['bMove', 'move', 'MOVE: tap where to go'], ['bAttack', 'attack', 'ATTACK: tap where to go, fighting on the way. Tap an enemy to attack it.'], ['bGuard', 'guard', 'GUARD: tap a friendly unit, building, settlement, or a spot to protect']] as const)
+    on($(id), 'click', () => { if (!live()) return; app.stance = app.stance === st ? 'none' : st; app.ui.updateUI(); say(app, app.stance === st ? hint : 'Cancelled', 2); });
+  on($('bHold'), 'click', () => { if (live()) hold(app); });
   on($('bSelect'), 'click', () => { app.selectMode = !app.selectMode; app.ui.updateUI(); say(app, app.selectMode ? 'Drag draws a selection box. Two fingers pan.' : 'Drag pans the map. Tap units to select.', 2); });
   on($('bSell'), 'click', () => { app.tool = app.tool === 'sell' ? 'cmd' : 'sell'; app.ui.updateUI(); say(app, app.tool === 'sell' ? 'Tap your buildings to sell them (half back)' : 'Sell off', 1.5); });
   on($('bTeam'), 'click', () => {

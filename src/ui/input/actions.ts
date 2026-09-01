@@ -33,18 +33,42 @@ export function selectAt(app: App, x: number, y: number, additive = false): bool
   return true;
 }
 
-/** Order the selection to a point. An enemy under the point is always the target; otherwise the stance decides. */
+/** A friendly thing under a point: unit, building, or settlement. For guard. */
+function friendlyAt(app: App, x: number, y: number): import('../../sim/types.ts').Target | null {
+  const w = app.world!;
+  const u = unitAt(w, app.ctl, x, y, 8);
+  if (u) return u;
+  for (const b of w.blds) if (b.team === app.ctl && b.tiles.some((t) => Math.abs(t[0] * TILE + 4 - x) <= 4 && Math.abs(t[1] * TILE + 4 - y) <= 4)) return b;
+  for (const s of w.slots[app.ctl].settlements) if (s.hp > 0 && Math.abs(s.x - x) < 14 && Math.abs(s.y - y) < 12) return s;
+  return null;
+}
+
+/** Order the selection to a point. An enemy under the point is always the target; otherwise the armed mode decides. */
 export function orderAt(app: App, x: number, y: number): boolean {
   const w = app.world;
   if (!w) return false;
   const sel = selectedUnits(app);
   if (!sel.length) { say(app, 'Select units first: tap one or drag a box', 2); return false; }
   const ids = sel.map((u) => u.id);
+  const mode = app.stance;
+  app.stance = 'none';
+  app.ui.updateUI();
   const en = hostileAt(w, app.ctl, x, y);
   if (en) return issueAction(app, { type: 'attack', payload: { ids, target: refOf(en) } });
-  if (app.stance === 'attack') return issueAction(app, { type: 'attack', payload: { ids, target: null, x, y } });
-  if (app.stance === 'guard') return issueAction(app, { type: 'guard', payload: { ids, x, y } });
+  if (mode === 'attack') return issueAction(app, { type: 'attack', payload: { ids, target: null, x, y } });
+  if (mode === 'guard') {
+    const f = friendlyAt(app, x, y);
+    return issueAction(app, { type: 'guard', payload: { ids, x, y, target: f && !sel.includes(f as never) ? refOf(f) : null } });
+  }
   return issueAction(app, { type: 'move', payload: { ids, x, y } });
+}
+
+/** Tap on one of your settlements: show its town card. */
+export function townAt(app: App, x: number, y: number): number {
+  const w = app.world;
+  if (!w) return -1;
+  for (const s of w.slots[app.ctl].settlements) if (s.hp > 0 && Math.abs(s.x - x) < 14 && Math.abs(s.y - y) < 12) return s.id;
+  return -1;
 }
 
 /** Double tap on a unit: select every unit of that type on screen. */
@@ -72,6 +96,8 @@ export function gateAt(app: App, x: number, y: number): boolean {
 export function tapAt(app: App, x: number, y: number): void {
   const w = app.world;
   if (!w) return;
+  // An armed mode with a selection takes the tap, whatever is under it.
+  if (app.stance !== 'none' && selectedUnits(app).length) { orderAt(app, x, y); return; }
   const own = unitAt(w, app.ctl, x, y);
   if (own) {
     const now = performance.now();
@@ -81,6 +107,14 @@ export function tapAt(app: App, x: number, y: number): void {
     return;
   }
   if (gateAt(app, x, y)) return;
+  if (!selectedUnits(app).length) {
+    const t = townAt(app, x, y);
+    if (t >= 0) { app.town = app.town === t ? -1 : t; app.ui.updateUI(); return; }
+    if (app.town >= 0) { app.town = -1; app.ui.updateUI(); }
+    say(app, 'Select units first: tap one or drag a box', 2);
+    return;
+  }
+  app.town = -1;
   orderAt(app, x, y);
 }
 

@@ -174,12 +174,14 @@ export function updateUI(app: App): void {
   show(B('bSelect'), live && !edit && !toolOn && !hasSel);
   show(B('bAll'), live && !edit && !toolOn);
   show(B('bCharge'), live && !edit && !toolOn && !hasSel);
+  const armed = app.stance !== 'none' && hasSel;
   for (const [id, st] of [['bMove', 'move'], ['bAttack', 'attack'], ['bGuard', 'guard']] as const) { show(B(id), live && !edit && !toolOn && hasSel); B(id).classList.toggle('on', app.stance === st); }
-  show(B('bRetreat'), live && !edit && !toolOn && hasSel);
-  show(B('bHold'), false);
-  show(B('bCancel'), toolOn || (edit && app.tool === 'erase'));
+  show(B('bHold'), live && !edit && !toolOn && hasSel);
+  show(B('bRetreat'), live && !edit && !toolOn && hasSel && !armed);
+  show(B('bCancel'), toolOn || armed || (edit && app.tool === 'erase'));
+  document.body.classList.toggle('armed', armed);
   const pw = app.power;
-  B('bCancel').textContent = 'CANCEL ' + (app.tool === 'power' && pw ? POWERS[pw].name : app.tool === 'build' ? BLD[app.bbrush].name : app.tool.toUpperCase());
+  B('bCancel').textContent = 'CANCEL ' + (armed ? app.stance.toUpperCase() : app.tool === 'power' && pw ? POWERS[pw].name : app.tool === 'build' ? BLD[app.bbrush].name : app.tool.toUpperCase());
   B('bSelect').classList.toggle('on', app.selectMode);
   B('bSelect').textContent = app.selectMode ? 'DRAG: BOX' : 'DRAG: PAN';
   // More grid.
@@ -261,9 +263,20 @@ function renderQueue(app: App): void {
   el.querySelectorAll<HTMLButtonElement>('button.head').forEach((btn, n) => { const it = items.filter((x) => x.head)[n]; const bar = btn.querySelector<HTMLElement>('i'); if (it && bar) bar.style.width = Math.round(100 * (1 - it.t / buildTime(it.unit))) + '%'; });
 }
 
+const STATE_LABEL: Record<string, string> = { growing: 'GROWING', stable: 'STABLE', attacked: 'UNDER ATTACK', recovering: 'RECOVERING' };
+
 function renderSelCard(app: App): void {
   const el = $('selcard');
   const sel = selectedUnits(app);
+  const w = app.world;
+  if (!sel.length && w && app.town >= 0) {
+    const s = w.slots[app.ctl].settlements.find((b) => b.id === app.town);
+    if (!s || s.hp <= 0) { app.town = -1; el.textContent = ''; return; }
+    const name = w.regions[s.region]?.name ?? 'Base', c = s.civ;
+    const st = c.state;
+    el.innerHTML = '<span class="town"><b>' + name.toUpperCase() + '</b> ' + s.tier + (w.rules.civilians ? ' · <span class="st-' + st + '">' + STATE_LABEL[st] + '</span><br><span class="civ">' + c.residents + '/' + c.housing + ' people · ' + c.employed + '/' + c.jobs + ' jobs · +' + c.income.toFixed(1) + '/s</span>' : '') + '</span>';
+    return;
+  }
   if (!sel.length) { if (el.textContent) el.textContent = ''; return; }
   const comp = new Map<string, number>();
   let hp = 0, max = 0;

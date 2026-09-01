@@ -9,6 +9,10 @@ import { makeRng, type Rng } from './rng.ts';
 import type { Building, Cheats, Command, Fx, GameEvent, Goal, Mode, Order, Outcome, Pending, Phase, QueueItem, Region, Rules, SandSnap, Settlement, Slot, Strike, Target, Tech, Unit, World, WorldConfig } from './types.ts';
 
 export const BASE_HP = 400;
+
+export function emptyTown(): import('./types.ts').TownStats {
+  return { residents: 0, housing: 0, jobs: 0, employed: 0, income: 0, state: 'stable', safeT: 999, growT: 0, peak: 0 };
+}
 export const ARMY_CAP = 40;
 /** Fixed simulation timestep in seconds. */
 export const DT = 1 / 60;
@@ -21,7 +25,7 @@ export function reset(map: MapDef, cfg?: Partial<WorldConfig>): World {
   let nextId = 1;
   const slots: Slot[] = allies.map((ally, i) => {
     const b = map.bases[i];
-    const base: Settlement = { ent: 'base', id: nextId++, team: i, x: b.tx * TILE + 4, y: b.ty * TILE + 4, hp: BASE_HP, max: BASE_HP, cd: 0, tier: 'village', region: -1, buildT: 0, hitBy: -1, nT: 0 };
+    const base: Settlement = { ent: 'base', id: nextId++, team: i, x: b.tx * TILE + 4, y: b.ty * TILE + 4, hp: BASE_HP, max: BASE_HP, cd: 0, tier: 'village', region: -1, buildT: 0, hitBy: -1, nT: 0, civ: emptyTown() };
     const ai = cfg?.ai ? !!cfg.ai[i] : i !== 0;
     const race: RaceKey = cfg?.races?.[i] ?? 'kingdom';
     return { ally, race, diff: cfg?.diffs?.[i] ?? diff, alive: true, gold: i === 0 ? 60 : 40, settlements: [base], ai, aiT: 1.5, aiWant: null, aiLast: 0, queue: [], rally: null, mat: 0, neutral: false, attitude: allies.map(() => 0), truce: allies.map(() => false), truceT: allies.map(() => 0), powerCd: {}, age: 0, tech: { melee: 0, ranged: 0, armor: 0 } };
@@ -64,7 +68,7 @@ export function reset(map: MapDef, cfg?: Partial<WorldConfig>): World {
     fxRng: makeRng((cfg?.seed ?? 1) ^ 0x5f3759df),
     regions: [],
     regionOf: null,
-    rules: { town: true, ages: false, upkeep: false, connection: false, garrison: false, unrest: false, materials: false, population: false, diplomacy: false, veterancy: false },
+    rules: { town: true, ages: false, civilians: false, upkeep: false, connection: false, garrison: false, unrest: false, materials: false, population: false, diplomacy: false, veterancy: false },
     net: Array.from({ length: nP }, () => 0),
     broke: Array.from({ length: nP }, () => 0),
     capitals: Array.from({ length: nP }, () => -1),
@@ -126,13 +130,14 @@ export function count(w: World, team: number): number {
 // ---------- snapshot and restore ----------
 
 type SnapRef = { kind: 'unit' | 'bld' | 'base'; id: number };
-type SnapOrder = { type: 'move'; x: number; y: number } | { type: 'attack'; tgt: SnapRef | null; x?: number; y?: number } | { type: 'guard'; x: number; y: number } | { type: 'retreat' };
+type SnapOrder = { type: 'move'; x: number; y: number } | { type: 'attack'; tgt: SnapRef | null; x?: number; y?: number } | { type: 'guard'; x: number; y: number; tgt?: SnapRef | null; hold?: boolean } | { type: 'retreat' };
 
 interface SnapUnit {
   id: number; team: number; type: UnitKey; x: number; y: number; hp: number; cd: number;
   order: SnapOrder | null; flash: number; walk: number; moving: boolean; held: boolean;
   blk: number | null; px: number; py: number; ox: number; oy: number;
   slowT: number; rootT: number; reveal: number; run: number; blinkT: number; dropT: number; kills: number; hasteT: number;
+  home: number; job: number; civT: number; fleeT: number;
 }
 
 interface SnapBld {
@@ -172,7 +177,7 @@ function ref(t: Target): SnapRef {
 function snapOrder(o: Order | null): SnapOrder | null {
   if (!o) return null;
   if (o.type === 'move') return { type: 'move', x: o.x, y: o.y };
-  if (o.type === 'guard') return { type: 'guard', x: o.x, y: o.y };
+  if (o.type === 'guard') { const g: SnapOrder = { type: 'guard', x: o.x, y: o.y }; if (o.tgt) g.tgt = ref(o.tgt); if (o.hold) g.hold = true; return g; }
   if (o.type === 'retreat') return { type: 'retreat' };
   const a: SnapOrder = { type: 'attack', tgt: o.tgt ? ref(o.tgt) : null };
   if (o.x !== undefined) { a.x = o.x; a.y = o.y; }
@@ -188,12 +193,13 @@ export function snapshot(w: World): Snapshot {
       bases: w.map.bases.map((b) => ({ tx: b.tx, ty: b.ty })), mines: w.map.mines.map((q) => ({ tx: q.tx, ty: q.ty })),
     },
     mode: w.mode, phase: w.phase, nP: w.nP,
-    slots: w.slots.map((s) => ({ ally: s.ally, race: s.race, diff: s.diff, alive: s.alive, gold: s.gold, settlements: s.settlements.map((b) => ({ ...b })), ai: s.ai, aiT: s.aiT, aiWant: s.aiWant, aiLast: s.aiLast, queue: s.queue.map((q) => ({ ...q })), rally: s.rally ? { ...s.rally } : null, mat: s.mat, neutral: s.neutral, attitude: s.attitude.slice(), truce: s.truce.slice(), truceT: s.truceT.slice(), powerCd: { ...s.powerCd }, age: s.age, tech: { ...s.tech } })),
+    slots: w.slots.map((s) => ({ ally: s.ally, race: s.race, diff: s.diff, alive: s.alive, gold: s.gold, settlements: s.settlements.map((b) => ({ ...b, civ: { ...b.civ } })), ai: s.ai, aiT: s.aiT, aiWant: s.aiWant, aiLast: s.aiLast, queue: s.queue.map((q) => ({ ...q })), rally: s.rally ? { ...s.rally } : null, mat: s.mat, neutral: s.neutral, attitude: s.attitude.slice(), truce: s.truce.slice(), truceT: s.truceT.slice(), powerCd: { ...s.powerCd }, age: s.age, tech: { ...s.tech } })),
     diff: w.diff, cap: w.cap, tick: w.tick, t: w.t, income: w.income, incFlash: w.incFlash,
     units: w.units.map((u) => ({
       id: u.id, team: u.team, type: u.type, x: u.x, y: u.y, hp: u.hp, cd: u.cd, order: snapOrder(u.order),
       flash: u.flash, walk: u.walk, moving: u.moving, held: u.held, blk: u.blk ? u.blk.id : null, px: u.px, py: u.py, ox: u.ox, oy: u.oy,
       slowT: u.slowT, rootT: u.rootT, reveal: u.reveal, run: u.run, blinkT: u.blinkT, dropT: u.dropT, kills: u.kills, hasteT: u.hasteT,
+      home: u.home, job: u.job, civT: u.civT, fleeT: u.fleeT,
     })),
     blds: w.blds.map((b) => ({
       id: b.id, team: b.team, type: b.type, kind: b.kind, tx: b.tx, ty: b.ty, x: b.x, y: b.y, hp: b.hp, max: b.max, cd: b.cd,
@@ -222,7 +228,7 @@ export function restore(s: Snapshot): World {
     name: s.map.name, cols: s.map.cols, rows: s.map.rows, tiles: Uint8Array.from(s.map.tiles),
     bases: s.map.bases.map((b) => ({ tx: b.tx, ty: b.ty })), mines: s.map.mines.map((q) => ({ tx: q.tx, ty: q.ty })),
   };
-  const slots: Slot[] = s.slots.map((x) => ({ ally: x.ally, race: x.race, diff: x.diff, alive: x.alive, gold: x.gold, settlements: x.settlements.map((b) => ({ ...b })), ai: x.ai, aiT: x.aiT, aiWant: x.aiWant, aiLast: x.aiLast ?? 0, queue: (x.queue ?? []).map((q) => ({ ...q })), rally: x.rally ? { ...x.rally } : null, mat: x.mat ?? 0, neutral: !!x.neutral, attitude: (x.attitude ?? s.slots.map(() => 0)).slice(), truce: (x.truce ?? s.slots.map(() => false)).slice(), truceT: (x.truceT ?? s.slots.map(() => 0)).slice(), powerCd: { ...(x.powerCd ?? {}) }, age: x.age ?? 0, tech: Object.assign({ melee: 0, ranged: 0, armor: 0 }, x.tech ?? {}) }));
+  const slots: Slot[] = s.slots.map((x) => ({ ally: x.ally, race: x.race, diff: x.diff, alive: x.alive, gold: x.gold, settlements: x.settlements.map((b) => ({ ...b, civ: Object.assign(emptyTown(), b.civ ?? {}) })), ai: x.ai, aiT: x.aiT, aiWant: x.aiWant, aiLast: x.aiLast ?? 0, queue: (x.queue ?? []).map((q) => ({ ...q })), rally: x.rally ? { ...x.rally } : null, mat: x.mat ?? 0, neutral: !!x.neutral, attitude: (x.attitude ?? s.slots.map(() => 0)).slice(), truce: (x.truce ?? s.slots.map(() => false)).slice(), truceT: (x.truceT ?? s.slots.map(() => 0)).slice(), powerCd: { ...(x.powerCd ?? {}) }, age: x.age ?? 0, tech: Object.assign({ melee: 0, ranged: 0, armor: 0 }, x.tech ?? {}) }));
   const blds: Building[] = s.blds.map((b) => ({ ent: 'bld', ...b, tiles: b.tiles.map((q) => [q[0], q[1]] as [number, number]), buildT: b.buildT ?? 0, queue: (b.queue ?? []).map((q) => ({ ...q })), rally: b.rally ? { ...b.rally } : null }));
   const bmap = new Map<number, Building>();
   for (const b of blds) for (const q of b.tiles) bmap.set(q[1] * map.cols + q[0], b);
@@ -234,6 +240,7 @@ export function restore(s: Snapshot): World {
     ent: 'unit', id: u.id, team: u.team, type: u.type, x: u.x, y: u.y, hp: u.hp, cd: u.cd, order: null,
     flash: u.flash, walk: u.walk, moving: u.moving, held: u.held, blk: u.blk != null ? bldById.get(u.blk) ?? null : null, px: u.px, py: u.py, ox: u.ox, oy: u.oy,
     slowT: u.slowT, rootT: u.rootT, reveal: u.reveal, run: u.run, blinkT: u.blinkT, dropT: u.dropT, ix: 0, kills: u.kills ?? 0, hasteT: u.hasteT ?? 0,
+    home: u.home ?? -1, job: u.job ?? -1, civT: u.civT ?? 0, fleeT: u.fleeT ?? 0,
   }));
   const unitById = new Map<number, Unit>();
   for (const u of units) unitById.set(u.id, u);
@@ -247,7 +254,7 @@ export function restore(s: Snapshot): World {
     const o = su.order;
     if (!o) return;
     if (o.type === 'move') units[i].order = { type: 'move', x: o.x, y: o.y };
-    else if (o.type === 'guard') units[i].order = { type: 'guard', x: o.x, y: o.y };
+    else if (o.type === 'guard') { const g: Order = { type: 'guard', x: o.x, y: o.y }; if (o.tgt) g.tgt = resolve(o.tgt); if (o.hold) g.hold = true; units[i].order = g; }
     else if (o.type === 'retreat') units[i].order = { type: 'retreat' };
     else { const a: Order = { type: 'attack', tgt: resolve(o.tgt) }; if (o.x !== undefined) { a.x = o.x; a.y = o.y; } units[i].order = a; }
   });
@@ -262,7 +269,7 @@ export function restore(s: Snapshot): World {
     snap: s.snap ? { units: s.snap.units.map((u) => ({ ...u })), blds: s.snap.blds.map((b) => ({ ...b })) } : null,
     queue: s.queue.map(copyCmd), log: s.log.map(copyCmd), fxRng: { s: s.fxRng.s },
     regions: (s.regions ?? []).map((r) => ({ ...r, adj: r.adj.slice() })), regionOf: s.regionOf ? Uint8Array.from(s.regionOf) : null,
-    rules: Object.assign({ town: false, ages: false, upkeep: false, connection: false, garrison: false, unrest: false, materials: false, population: false, diplomacy: false, veterancy: false }, s.rules ?? {}),
+    rules: Object.assign({ town: false, ages: false, civilians: false, upkeep: false, connection: false, garrison: false, unrest: false, materials: false, population: false, diplomacy: false, veterancy: false }, s.rules ?? {}),
     net: (s.net ?? slots.map(() => 0)).slice(), broke: (s.broke ?? slots.map(() => 0)).slice(), capitals: (s.capitals ?? slots.map(() => -1)).slice(),
     events: (s.events ?? []).map((e) => ({ ...e })), neutral: s.neutral ?? -1, mapDirty: false, strikes: (s.strikes ?? []).map((k) => ({ ...k })), instant: !!s.instant,
     cheats: Object.assign({ gold: false, resources: false, instant: false, build: false, powers: false }, s.cheats ?? {}),

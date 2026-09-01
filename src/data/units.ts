@@ -5,7 +5,7 @@
 import { RACES, RACE_KEYS, type RaceKey } from './races.ts';
 
 export type UnitKey = string;
-export type Role = 'scout' | 'line' | 'ranged' | 'fast' | 'siege' | 'support' | 'heavy' | 'air' | 'special';
+export type Role = 'scout' | 'line' | 'ranged' | 'fast' | 'siege' | 'support' | 'heavy' | 'air' | 'special' | 'civ';
 
 export interface UnitDef {
   key: UnitKey;
@@ -266,6 +266,12 @@ for (const race of RACE_KEYS) {
   list.sort((a, b) => a.cost - b.cost || a.name.localeCompare(b.name));
   for (const d of list) { TYPES[d.key] = d; ROSTER[race].push(d.key); }
 }
+
+// Villagers. Not on any roster, never bought: towns grow them. Team color on the tunic.
+TYPES.civ = {
+  key: 'civ', name: 'VILLAGER', race: 'kingdom', role: 'civ', cost: 0, hp: 12, dmg: 0, range: 0, speed: 14, cd: 1, aggro: 0, sz: 8, r: 2,
+  sprite: ['........', '...DD...', '...SS...', '..TTTT..', '..TTTT..', '...DD...', '...D.D..', '...D.D..'],
+};
 
 /** Kingdom build order, kept for the prototype's tests and tools. */
 export const ORDER: readonly UnitKey[] = ROSTER.kingdom;

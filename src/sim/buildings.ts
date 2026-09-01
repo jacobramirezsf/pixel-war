@@ -1,5 +1,6 @@
 // Building placement, removal, and passability.
 
+import { TYPES } from '../data/units.ts';
 import { BLD, type BldKey } from '../data/buildings.ts';
 import { blocked, nearBase, passable, TILE } from './map.ts';
 import { rnd } from './rng.ts';
@@ -88,7 +89,8 @@ function cellBlock(w: World, tx: number, ty: number, team: number, type: BldKey)
   for (const q of w.mines) if (Math.abs(q.x - (tx * TILE + 4)) < 12 && Math.abs(q.y - (ty * TILE + 4)) < 12) return 'mine ground';
   if (BLD[type].kind !== 'trap') {
     const cx = tx * TILE + 4, cy = ty * TILE + 4;
-    for (const u of w.units) if (u.hp > 0 && Math.abs(u.x - cx) < 6 && Math.abs(u.y - cy) < 6) return 'unit in the way';
+    // Villagers step aside; soldiers do not.
+    for (const u of w.units) if (u.hp > 0 && TYPES[u.type].role !== 'civ' && Math.abs(u.x - cx) < 6 && Math.abs(u.y - cy) < 6) return 'unit in the way';
   }
   return null;
 }

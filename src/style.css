@@ -58,6 +58,11 @@ canvas{image-rendering:pixelated;image-rendering:crisp-edges;display:block}
 #cmdrow .st{border-color:#3a3d4a;color:#b9bccb}
 #cmdrow .st.on{background:#7dff7d;border-color:#7dff7d;color:#141520}
 #bAttack.on{background:#ff9a9a;border-color:#ff9a9a}
+body.armed #c{outline:3px solid rgba(125,255,125,.55);outline-offset:-3px}
+body.armed #bAttack.on ~ #c{outline-color:rgba(255,154,154,.6)}
+#selcard .town{white-space:normal;line-height:1.35;display:block}
+#selcard .civ{color:#b9bccb}
+#selcard .st-growing{color:#7dff7d}#selcard .st-stable{color:#b9bccb}#selcard .st-attacked{color:#ff6b6b}#selcard .st-recovering{color:#ffb02a}
 #cmdrow button{min-width:0;padding:4px 2px;font-size:11px}
 #tabs{display:flex;gap:6px}
 #tabs .tab{flex:1;min-height:36px;font-size:11px;border-color:#2a2d3a;color:#8a8d9e;background:#101219}

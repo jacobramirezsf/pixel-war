@@ -11,7 +11,7 @@ export function mkUnit(w: World, team: number, type: UnitKey, x: number, y: numb
   return {
     ent: 'unit', id: w.nextId++, team, type, x, y, hp: T.hp, cd: rnd(w.rng, 0, 0.4), order: null,
     flash: 0, walk: 0, moving: false, held: false, blk: null, px: x, py: y, ox: x, oy: y,
-    slowT: 0, rootT: 0, reveal: 0, run: 0, blinkT: 0, dropT: T.dropTrap ? T.dropTrap / 2 : 0, ix: 0, kills: 0, hasteT: 0,
+    slowT: 0, rootT: 0, reveal: 0, run: 0, blinkT: 0, dropT: T.dropTrap ? T.dropTrap / 2 : 0, ix: 0, kills: 0, hasteT: 0, home: -1, job: -1, civT: 0, fleeT: 0,
   };
 }
 
@@ -25,8 +25,9 @@ export function maxHp(u: { type: UnitKey; kills: number }): number {
   return Math.round(TYPES[u.type].hp * (1 + 0.1 * rank(u)));
 }
 
-/** Population a unit takes up. */
+/** Population a unit takes up. Villagers live in houses, not the army cap. */
 export function popOf(type: UnitKey): number {
+  if (TYPES[type].role === 'civ') return 0;
   return Math.max(1, Math.ceil(TYPES[type].cost / 60));
 }
 

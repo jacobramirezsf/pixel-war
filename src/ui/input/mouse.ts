@@ -3,7 +3,7 @@
 
 import { panBy, setZoom, toWorld } from '../../render/camera.ts';
 import { unitAt } from '../../sim/queries.ts';
-import type { App } from '../app.ts';
+import { selectedUnits, type App } from '../app.ts';
 import { boxSelect, dragTool, orderAt, placeRelease, selectAt, toolAt, usesTool, type ToolState } from './actions.ts';
 import type { Scheme } from './touch.ts';
 
@@ -19,6 +19,7 @@ export function mouseScheme(app: App): Scheme {
       if (button === 2) { if (usesTool(app)) { app.tool = app.world?.phase === 'edit' ? 'place' : 'cmd'; app.power = null; app.ui.updateUI(); } else orderAt(app, p.x, p.y); return; }
       if (button === 1) return;
       if (usesTool(app)) { toolAt(app, p.x, p.y, ts, true); placeRelease(app); return; }
+      if (app.stance !== 'none' && selectedUnits(app).length) { orderAt(app, p.x, p.y); return; }
       selectAt(app, p.x, p.y, shift);
     },
     dragStart(x, y, button) {
