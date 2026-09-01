@@ -100,6 +100,11 @@ function paintTown(f: (col: string, px: number, py: number, w: number, h: number
     f('#2b5f9e', 0, H - 6, W, 6); f('#8a5a2b', 1, 2, W - 2, H - 7); f('#a06a35', 1, 2, W - 2, 1); f('#5b3d1e', 2, 8, W - 4, 1); f('#5b3d1e', 1, 11, W - 2, 1); f(dark, W - 4, 4, 2, 6); f(tc, 1, 0, 3, 2); f('#dde2ec', 0, 0, 1, 5);
   } else if (type === 'port') {
     f('#2b5f9e', 0, H - 6, W, 6); f(stone, 1, 2, W - 2, H - 7); f(shade, 1, 2, W - 2, 1); f('#8a5a2b', 2, 9, W - 4, 2); f('#5b3d1e', 3, 12, W - 6, 1); f(dark, 5, 5, 4, 4); f('#f2d34a', W - 7, 5, 3, 3); f(tc, W - 5, 0, 4, 2); f('#dde2ec', W - 6, 0, 1, 6); f('#4a4f5e', 2, 3, 6, 1);
+  } else if (type === 'darpa') {
+    f('#2c2f3a', 1, 4, W - 2, H - 5); f('#4a4d5a', 1, 3, W - 2, 1); f('#9aa0ae', 3, 6, W - 6, 1); f('#67e8f9', 4, 9, 3, 3); f('#67e8f9', W - 7, 9, 3, 3); f('#dde2ec', (W >> 1) - 1, 0, 2, 5); f('#ff6b6b', (W >> 1) - 3, 1, 6, 1); f(dark, (W >> 1) - 2, H - 6, 4, 6); f(tc, 2, 1, 4, 2);
+    for (let x = 3; x < W - 3; x += 4) f('#4a4d5a', x, 13, 2, 3);
+  } else if (type === 'robolab') {
+    f('#3d4453', 1, 4, W - 2, H - 5); f('#59637a', 1, 3, W - 2, 1); f('#c9ced8', 3, 7, W - 6, 2); f('#7dff7d', 5, 11, 2, 2); f('#7dff7d', W - 7, 11, 2, 2); f('#9aa0ae', (W >> 1) - 2, 0, 4, 4); f(dark, (W >> 1) - 2, H - 6, 4, 6); f(tc, W - 5, 1, 3, 2);
   } else if (type === 'factory') {
     f(shade, 1, 5, W - 2, H - 6); f(stone, 1, 4, W - 2, 1); f('#4a4d5a', 3, 0, 3, 6); f('#4a4d5a', W - 7, 1, 3, 5); f('#9aa0ae', 3, 0, 3, 1); f('#ff8c2a', 9, 9, 4, 3); f(dark, 4, 10, 3, 5); f(dark, W - 8, 10, 4, 5); f(tc, W - 4, 4, 3, 2); f('#c9ced8', 2, 7, W - 4, 1);
   } else if (type === 'castle') {

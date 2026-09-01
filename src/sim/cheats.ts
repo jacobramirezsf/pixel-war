@@ -1,7 +1,7 @@
 // One-shot cheats. Toys for sandbox play and testing. Every one is a command, so replays keep them.
 
 import { BLD, type BldKey } from '../data/buildings.ts';
-import { roster, TYPES, type Role, type UnitKey } from '../data/units.ts';
+import { EXTRA_UNITS, roster, TYPES, type Role, type UnitKey } from '../data/units.ts';
 import { addBld, canBuild, passableFor, removeBld } from './buildings.ts';
 import { seedResidents } from './civ.ts';
 import { damage } from './combat.ts';
@@ -13,15 +13,21 @@ import { allied } from './world.ts';
 
 type Payload = Extract<Action, { type: 'cheat' }>['payload'];
 
-const ARMIES: Record<'small' | 'large' | 'siege' | 'elite', Partial<Record<Role, number>>> = {
+const ARMIES: Record<'small' | 'large' | 'siege' | 'elite' | 'navy' | 'air' | 'darpa', Partial<Record<Role, number>>> = {
   small: { line: 6, ranged: 3 },
   large: { line: 12, ranged: 6, fast: 3, heavy: 2 },
   siege: { line: 8, ranged: 4, siege: 3 },
   elite: { heavy: 3, special: 3, support: 2 },
+  navy: { naval: 6 },
+  air: { air: 4, darpa: 4 },
+  darpa: { darpa: 10, robot: 3 },
 };
 
 function pick(race: import('../data/races.ts').RaceKey, role: Role, i: number): UnitKey | null {
-  const list = roster(race).filter((k) => TYPES[k].role === role && !TYPES[k].repair && TYPES[k].role !== 'civ');
+  const pool = role === 'naval' || role === 'vehicle' || role === 'darpa' || role === 'robot' ? EXTRA_UNITS : roster(race);
+  let list = pool.filter((k) => TYPES[k].role === role && !TYPES[k].repair && TYPES[k].role !== 'civ');
+  if (role === 'air' && !list.length) list = EXTRA_UNITS.filter((k) => TYPES[k].fly && TYPES[k].dmg > 0);
+  if (role === 'darpa' && i % 2) list = list.filter((k) => TYPES[k].fly && TYPES[k].dmg > 0);
   if (!list.length) return null;
   return list[i % list.length];
 }
@@ -30,7 +36,7 @@ function pick(race: import('../data/races.ts').RaceKey, role: Role, i: number): 
 export function spawnUnits(w: World, team: number, unit: UnitKey, n: number, x: number, y: number, hostileOrders = false): number {
   let placed = 0;
   for (let i = 0; i < n && i < 200; i++) {
-    for (let k = 0; k < 80; k++) {
+    for (let k = 0; k < (TYPES[unit].naval ? 400 : 80); k++) {
       const a = (i + k) * 2.4, r = 3 + Math.sqrt(i + k) * 4.5;
       const px = x + Math.cos(a) * r, py = y + Math.sin(a) * r;
       if (px < 4 || py < 4 || px > w.map.cols * 8 - 4 || py > w.map.rows * 8 - 4) continue;

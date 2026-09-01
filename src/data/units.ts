@@ -42,6 +42,10 @@ export interface UnitDef {
   trainer?: import('./buildings.ts').BldKey;
   /** Shared by every race and outside the race rosters: boats, vehicles, aircraft. */
   extra?: boolean;
+  /** Sight in tiles, when more than the role's usual. */
+  sight?: number;
+  /** Enemies within this radius move at half speed. */
+  slowAura?: number;
   aura?: number;
   minRange?: number;
   // race specials, each used by one race only
@@ -312,8 +316,74 @@ const EXTRA: Record<string, Omit<UnitDef, 'key' | 'race' | 'sz' | 'r'> & { sprit
 };
 for (const [key, d] of Object.entries(EXTRA)) TYPES[key] = { key, race: 'kingdom', sz: d.sprite.length, r: d.sprite.length > 8 ? 4 : 3, ...d };
 
+// Late game. DARPA: the experimental arm. Every unit here is a game piece with a role and a counter,
+// named for flavor, not modeled on anything real.
+const S8 = (rows: string[]): readonly string[] => rows;
+const DARPA: Record<string, Omit<UnitDef, 'key' | 'race' | 'sz' | 'r'> & { sprite: readonly string[] }> = {
+  a10:       { name: 'A-10',          role: 'darpa', cost: 260, hp: 140, dmg: 40, range: 30, speed: 50, cd: 1.0, aggro: 44, fly: true, splash: 8, bldDmg: 1.5, extra: true, trainer: 'darpa', shot: '#ffb02a',
+    sprite: S8(['...DD...', '..DTTD..', 'WWDTTDWW', 'WDDDDDDW', '..DTTD..', '..DDDD..', '...WW...', '........']) },
+  b2:        { name: 'B-2',           role: 'darpa', cost: 500, hp: 200, dmg: 120, range: 34, speed: 40, cd: 4.0, aggro: 48, fly: true, splash: 20, bldDmg: 3, extra: true, trainer: 'darpa', shot: '#ff6b6b',
+    sprite: S8(['....DD....', '...DDDD...', '..DDTTDD..', '.DDDTTDDD.', 'DDDDTTDDDD', 'DD..DD..DD', '..........', '..........', '..........', '..........']) },
+  predator:  { name: 'PREDATOR',      role: 'darpa', cost: 180, hp: 60,  dmg: 24, range: 60, speed: 44, cd: 1.8, aggro: 66, fly: true, sight: 15, extra: true, trainer: 'darpa', shot: '#dde2ec',
+    sprite: S8(['...DD...', 'WWWDDWWW', '...DD...', '...DD...', '..DDDD..', '...WW...', '........', '........']) },
+  f16:       { name: 'F-16',          role: 'darpa', cost: 300, hp: 120, dmg: 30, range: 34, speed: 60, cd: 0.7, aggro: 48, fly: true, vsAir: 3, extra: true, trainer: 'darpa', shot: '#67e8f9',
+    sprite: S8(['...DD...', '...TT...', '.DDTTDD.', 'DDDTTDDD', '...TT...', '..DTTD..', '...DD...', '........']) },
+  shahed:    { name: 'SHAHED',        role: 'darpa', cost: 70,  hp: 30,  dmg: 90, range: 5,  speed: 48, cd: 0.1, aggro: 50, fly: true, suicide: true, splash: 16, bldDmg: 2, extra: true, trainer: 'darpa',
+    sprite: S8(['........', '..DDDD..', 'DDDTTDDD', '..DTTD..', '...DD...', '...WW...', '........', '........']) },
+  t800:      { name: 'T-800',         role: 'darpa', cost: 320, hp: 400, dmg: 40, range: 9,  speed: 20, cd: 0.9, aggro: 30, armor: 6, extra: true, trainer: 'darpa',
+    sprite: S8(['..SSSS..', '..SRRS..', '..SSSS..', '.STTTTS.', '.STTTTS.', '.SDDDDS.', '..S..S..', '.SS..SS.']) },
+  t1000:     { name: 'T-1000',        role: 'darpa', cost: 450, hp: 500, dmg: 35, range: 9,  speed: 26, cd: 0.8, aggro: 32, armor: 8, regen: 8, extra: true, trainer: 'darpa',
+    sprite: S8(['..WWWW..', '..WSSW..', '..WWWW..', '.WWTTWW.', '.WWTTWW.', '.WWWWWW.', '..W..W..', '.WW..WW.']) },
+  swarm:     { name: 'DRONE SWARM',   role: 'darpa', cost: 220, hp: 150, dmg: 6,  range: 14, speed: 44, cd: 0.15, aggro: 40, fly: true, splash: 4, extra: true, trainer: 'darpa', shot: '#dde2ec',
+    sprite: S8(['D.D..D.D', '.D.DD.D.', 'D..DD..D', '.DDTTDD.', '.DDTTDD.', 'D..DD..D', '.D.DD.D.', 'D.D..D.D']) },
+  stealth:   { name: 'STEALTH DRONE', role: 'darpa', cost: 150, hp: 50,  dmg: 14, range: 40, speed: 50, cd: 1.2, aggro: 48, fly: true, stealth: true, sight: 14, extra: true, trainer: 'darpa', shot: '#b06cff',
+    sprite: S8(['...DD...', '..DDDD..', '.DDTTDD.', 'DDDTTDDD', '..DDDD..', '...DD...', '........', '........']) },
+  ugv:       { name: 'HEAVY UGV',     role: 'darpa', cost: 240, hp: 300, dmg: 28, range: 20, speed: 24, cd: 1.0, aggro: 34, armor: 4, extra: true, trainer: 'darpa', shot: '#f2d34a',
+    sprite: S8(['..DDDD..', '.DTTTTD.', 'DDDDDDDD', 'DSSSSSSD', 'DDDDDDDD', '.O.OO.O.', '........', '........']) },
+  ewv:       { name: 'JAMMER',        role: 'darpa', cost: 200, hp: 120, dmg: 6,  range: 30, speed: 30, cd: 1.0, aggro: 40, slow: 2, slowAura: 22, extra: true, trainer: 'darpa', shot: '#67e8f9',
+    sprite: S8(['...W....', '..WWW...', '...D....', '.DDDDDD.', '.DTTTTD.', 'DDDDDDDD', '.O.OO.O.', '........']) },
+  laser:     { name: 'LASER TRUCK',   role: 'darpa', cost: 260, hp: 130, dmg: 20, range: 44, speed: 30, cd: 0.5, aggro: 50, vsAir: 4, extra: true, trainer: 'darpa', shot: '#ff6b6b',
+    sprite: S8(['....R...', '...RR...', '..DDDD..', '.DTTTTD.', 'DDDDDDDD', '.O.OO.O.', '........', '........']) },
+  hypersonic:{ name: 'HYPERSONIC',    role: 'darpa', cost: 400, hp: 20,  dmg: 250, range: 5, speed: 90, cd: 0.1, aggro: 70, fly: true, suicide: true, splash: 12, bldDmg: 2, extra: true, trainer: 'darpa',
+    sprite: S8(['........', '.....DD.', '...DDTD.', 'DDDDTDD.', '...DDD..', '.....D..', '........', '........']) },
+  autotank:  { name: 'AUTO TANK',     role: 'darpa', cost: 380, hp: 360, dmg: 34, range: 22, speed: 24, cd: 1.1, aggro: 36, armor: 5, regen: 2, extra: true, trainer: 'darpa', shot: '#f2d34a',
+    sprite: S8(['...DDD..', '..DTTDWW', '.DDDDDD.', 'DTTTTTTD', 'DTTTTTTD', '.DDDDDD.', 'DWDWDWDW', '.DDDDDD.']) },
+  gunship:   { name: 'GUNSHIP',       role: 'darpa', cost: 340, hp: 200, dmg: 18, range: 28, speed: 40, cd: 0.4, aggro: 42, fly: true, splash: 5, extra: true, trainer: 'darpa', shot: '#ffb02a',
+    sprite: S8(['WWWWWWWW', '...DD...', '.DDTTDD.', 'DDDTTDDD', '.DDDDDD.', '..DDDD..', '...D.DD.', '..D.D...']) },
+  vtol:      { name: 'VTOL',          role: 'darpa', cost: 260, hp: 160, dmg: 0,  range: 0,  speed: 48, cd: 1,   aggro: 0,  fly: true, capacity: 8, extra: true, trainer: 'darpa',
+    sprite: S8(['WW....WW', '.DD..DD.', '.DDDDDD.', 'DDBBBBDD', 'DDBBBBDD', '.DDDDDD.', '..D..D..', '........']) },
+  railtruck: { name: 'RAIL TRUCK',    role: 'darpa', cost: 350, hp: 120, dmg: 60, range: 70, speed: 22, cd: 2.5, aggro: 76, pierce: true, extra: true, trainer: 'darpa', shot: '#67e8f9',
+    sprite: S8(['WWWWW...', '....DD..', '..DDDD..', '.DTTTTD.', 'DDDDDDDD', '.O.OO.O.', '........', '........']) },
+  robosquad: { name: 'ROBO SQUAD',    role: 'darpa', cost: 160, hp: 140, dmg: 14, range: 12, speed: 24, cd: 0.5, aggro: 32, armor: 2, regen: 1, extra: true, trainer: 'darpa',
+    sprite: S8(['S.SS.S..', 'S.SS.S..', 'SSSSSS..', 'TTTTTT..', 'TTTTTT..', 'DDDDDD..', 'S.SS.S..', 'S.SS.S..']) },
+};
+for (const [key, d] of Object.entries(DARPA)) TYPES[key] = { key, race: 'kingdom', sz: d.sprite.length, r: d.sprite.length > 8 ? 4 : 3, ...d };
+
+// The Robotics Lab: machines that carry, mend, shield, and slow. Utility over firepower.
+const ROBOTS: Record<string, Omit<UnitDef, 'key' | 'race' | 'sz' | 'r'> & { sprite: readonly string[] }> = {
+  fixer:     { name: 'FIXER DRONE',   role: 'robot', cost: 90,  hp: 60,  dmg: 0,  range: 0,  speed: 40, cd: 0.6, aggro: 0,  fly: true, repair: 4, extra: true, trainer: 'robolab',
+    sprite: S8(['WW....WW', '..DDDD..', '.DTYYTD.', '.DDDDDD.', '...DD...', '........', '........', '........']) },
+  medbot:    { name: 'MEDBOT',        role: 'robot', cost: 120, hp: 80,  dmg: 0,  range: 0,  speed: 26, cd: 0.8, aggro: 30, heal: 6, extra: true, trainer: 'robolab',
+    sprite: S8(['..SSSS..', '..SWWS..', '..SSSS..', '.SSRRSS.', '.SSRRSS.', '.SSSSSS.', '..S..S..', '.SS..SS.']) },
+  walker:    { name: 'SHIELD WALKER', role: 'robot', cost: 200, hp: 220, dmg: 10, range: 9,  speed: 18, cd: 1.0, aggro: 28, armor: 3, guardAura: 22, extra: true, trainer: 'robolab',
+    sprite: S8(['.SSSSSS.', '.STTTTS.', '.SSSSSS.', 'SSDDDDSS', 'SSDDDDSS', '.SSSSSS.', '.S.SS.S.', 'SS.SS.SS']) },
+  sentinel:  { name: 'SENTINEL',      role: 'robot', cost: 180, hp: 160, dmg: 12, range: 36, speed: 16, cd: 0.5, aggro: 44, vsAir: 3, extra: true, trainer: 'robolab', shot: '#ffb02a',
+    sprite: S8(['...WW...', '..WSSW..', '..SSSS..', '.SSDDSS.', '.SSDDSS.', '.SSSSSS.', '..S..S..', '.SS..SS.']) },
+  mule:      { name: 'CARGO MULE',    role: 'robot', cost: 180, hp: 200, dmg: 0,  range: 0,  speed: 30, cd: 1,   aggro: 0,  capacity: 10, extra: true, trainer: 'robolab',
+    sprite: S8(['........', '.DDDDDD.', 'DBBBBBBD', 'DBBBBBBD', 'DDDDDDDD', '.S.SS.S.', '.S.SS.S.', '........']) },
+  dozer:     { name: 'BULLDOZER',     role: 'robot', cost: 220, hp: 260, dmg: 12, range: 8,  speed: 22, cd: 0.8, aggro: 26, armor: 3, bldDmg: 4, extra: true, trainer: 'robolab',
+    sprite: S8(['........', '..DDDD..', 'YDTTTTD.', 'YDDDDDD.', 'YYYYYYY.', '.O.OO.O.', '........', '........']) },
+  hopper:    { name: 'HOPPER',        role: 'robot', cost: 100, hp: 40,  dmg: 4,  range: 10, speed: 56, cd: 0.8, aggro: 30, fly: true, sight: 16, blink: 30, extra: true, trainer: 'robolab',
+    sprite: S8(['...WW...', '..DDDD..', '..DTTD..', '..DDDD..', '.D....D.', 'D......D', '........', '........']) },
+  dome:      { name: 'SHIELD DOME',   role: 'robot', cost: 240, hp: 300, dmg: 0,  range: 0,  speed: 8,  cd: 1,   aggro: 0,  armor: 5, guardAura: 30, extra: true, trainer: 'robolab',
+    sprite: S8(['..SSSS..', '.SWWWWS.', 'SWWWWWWS', 'SWWTTWWS', 'SWWTTWWS', 'SWWWWWWS', '.SSSSSS.', '..DDDD..']) },
+  damper:    { name: 'DAMPER',        role: 'robot', cost: 210, hp: 150, dmg: 0,  range: 0,  speed: 20, cd: 1,   aggro: 0,  slowAura: 26, extra: true, trainer: 'robolab',
+    sprite: S8(['...WW...', '..WWWW..', '.WW..WW.', '..SSSS..', '.SSDDSS.', '.SSDDSS.', '..S..S..', '.SS..SS.']) },
+};
+for (const [key, d] of Object.entries(ROBOTS)) TYPES[key] = { key, race: 'kingdom', sz: d.sprite.length, r: d.sprite.length > 8 ? 4 : 3, ...d };
+
 /** Shared units a slot can train once the trainer stands. */
-export const EXTRA_UNITS: readonly UnitKey[] = Object.keys(EXTRA);
+export const EXTRA_UNITS: readonly UnitKey[] = [...Object.keys(EXTRA), ...Object.keys(DARPA), ...Object.keys(ROBOTS)];
 
 /** Kingdom build order, kept for the prototype's tests and tools. */
 export const ORDER: readonly UnitKey[] = ROSTER.kingdom;

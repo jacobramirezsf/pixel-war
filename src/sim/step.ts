@@ -337,6 +337,10 @@ export function step(w: World): void {
         if (n < BUILD_CAP && !canBuild(w, tx, ty, u.team, 'brb')) addBld(w, u.team, 'brb', tx, ty);
       }
     }
+    if (T.slowAura && w.tick % 10 === 0) {
+      // Jammers and dampers: everything hostile within reach crawls while it stays there.
+      forNear(grid, u.x, u.y, T.slowAura, (o) => { if (o.hp > 0 && !allied(w, o.team, u.team) && Math.hypot(o.x - u.x, o.y - u.y) <= T.slowAura!) o.slowT = Math.max(o.slowT, 0.4); });
+    }
     let slow = u.slowT > 0 ? 0.5 : 1;
     if (u.rootT > 0) slow = 0;
     if (hasSpeedAura(w, u)) slow *= 1.3;

@@ -7,7 +7,7 @@ import type { Role } from './units.ts';
 
 export type BldKey =
   | 'brb' | 'stk' | 'wal' | 'stw' | 'gat' | 'twr' | 'stt' | 'trt'
-  | 'house' | 'farm' | 'market' | 'smith' | 'barracks' | 'range' | 'stable' | 'siege' | 'castle' | 'wonder' | 'bridge' | 'dock' | 'port' | 'factory' | 'aatwr';
+  | 'house' | 'farm' | 'market' | 'smith' | 'barracks' | 'range' | 'stable' | 'siege' | 'castle' | 'wonder' | 'bridge' | 'dock' | 'port' | 'factory' | 'aatwr' | 'darpa' | 'robolab';
 export type BldKind = 'trap' | 'wall' | 'gate' | 'tower' | 'town' | 'bridge';
 export type BldGroup = 'defense' | 'economy' | 'military' | 'ground';
 
@@ -43,6 +43,8 @@ export interface BldDef {
   town?: boolean;
   /** How many of these a faction may own. */
   max?: number;
+  /** Finished buildings that must stand first. */
+  needs?: BldKey[];
   hint?: string;
 }
 
@@ -69,6 +71,8 @@ export const BLD: Record<BldKey, BldDef> = {
   port:     { name: 'PORT',        cost: 200, hp: 500, kind: 'town', group: 'military', w: 3, h: 2, mat: 120, age: 1, buildT: 50, trains: ['naval'], income: 1, town: true, max: 2, hint: 'On a shore, town age. The destroyer, four jobs, and a gold a second.' },
   factory:  { name: 'FACTORY',     cost: 180, hp: 450, kind: 'town', group: 'military', w: 3, h: 2, mat: 100, age: 2, buildT: 45, trains: ['vehicle'], town: true, max: 3, hint: 'City age. Trucks, armored cars, flak, transport helicopters.' },
   aatwr:    { name: 'FLAK TOWER',  cost: 120, hp: 280, kind: 'tower', group: 'defense', w: 1, h: 1, dmg: 14, range: 40, cd: 0.5, armor: 2, mat: 100, age: 2, buildT: 30, vsAir: 3 },
+  darpa:    { name: 'DARPA',       cost: 600, hp: 700, kind: 'town', group: 'military', w: 4, h: 3, mat: 300, age: 2, buildT: 90, trains: ['darpa'], town: true, max: 1, needs: ['factory', 'castle'], hint: 'City age, a factory and a castle. The experimental arm: aircraft, drones, war machines. Slow to build, dear to run.' },
+  robolab:  { name: 'ROBOTICS LAB', cost: 400, hp: 500, kind: 'town', group: 'military', w: 3, h: 3, mat: 200, age: 2, buildT: 70, trains: ['robot'], town: true, max: 1, needs: ['factory'], hint: 'City age and a factory. Machines that carry, mend, shield, and slow.' },
   castle:   { name: 'CASTLE',      cost: 250, hp: 900, kind: 'tower', group: 'military', w: 3, h: 3, dmg: 14, range: 46, cd: 0.5, armor: 4, mat: 300, age: 2, buildT: 75, pop: 20, trains: ['heavy', 'special'], town: true, max: 3, hint: 'Shoots, trains heavies and specials, holds the region calm.' },
 };
 

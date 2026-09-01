@@ -17,14 +17,15 @@ export interface CheatTool {
   unit?: UnitKey;
   n?: number;
   team?: number;
-  kind?: 'small' | 'large' | 'siege' | 'elite';
+  kind?: 'small' | 'large' | 'siege' | 'elite' | 'navy' | 'air' | 'darpa';
   /** Preview radius. */
   r?: number;
 }
 
-const ROLES: [Role, string][] = [['line', 'INFANTRY'], ['ranged', 'RANGED'], ['fast', 'FAST'], ['siege', 'SIEGE'], ['heavy', 'HEAVY'], ['support', 'SUPPORT'], ['special', 'SPECIAL'], ['scout', 'SCOUT'], ['naval', 'NAVY'], ['vehicle', 'VEHICLES']];
+const ROLES: [Role, string][] = [['line', 'INFANTRY'], ['ranged', 'RANGED'], ['fast', 'FAST'], ['siege', 'SIEGE'], ['heavy', 'HEAVY'], ['support', 'SUPPORT'], ['special', 'SPECIAL'], ['scout', 'SCOUT'], ['naval', 'NAVY'], ['vehicle', 'VEHICLES'], ['darpa', 'DARPA'], ['robot', 'ROBOTICS']];
 
 let ui = { unit: 'inf' as UnitKey, n: 5, team: 0, kind: 'small' as CheatTool['kind'] };
+void ui;
 let lastKey = '';
 
 function enemyTeam(app: App): number {
@@ -62,7 +63,7 @@ export function renderCheats(app: App): void {
     + '<h3>ARMY</h3><div class="row wrap">' + btn('heal', 'HEAL ALL') + btn('revive', 'REVIVE ARMY') + btn('finish', 'FINISH BUILDS') + btn('queues', 'FINISH QUEUES') + btn('clearNear', 'CLEAR NEARBY') + btn('clearAll', 'CLEAR ALL ENEMIES', 'danger') + btn('destroy', 'DESTROY TARGET', 'danger') + '</div>'
     + '<h3>SPAWN</h3><div class="row wrap"><select id="chUnit">' + byRole.map((g) => '<optgroup label="' + g.label + '">' + g.list.map((k) => '<option value="' + k + '"' + (k === ui.unit ? ' selected' : '') + '>' + TYPES[k].name + ' ' + TYPES[k].cost + '</option>').join('') + '</optgroup>').join('') + '</select></div>'
     + '<div class="row wrap">' + [1, 5, 10, 25].map((n) => '<button class="chip' + (ui.n === n ? ' on' : '') + '" data-n="' + n + '">x' + n + '</button>').join('') + '<button class="chip' + (ui.team === 0 ? ' on' : '') + '" data-team="0">YOURS</button><button class="chip' + (ui.team === 1 ? ' on' : '') + '" data-team="1">ENEMY</button>' + btn('spawn', 'SPAWN: TAP MAP', 'gold') + '</div>'
-    + '<div class="row wrap">' + (['small', 'large', 'siege', 'elite'] as const).map((k) => '<button class="chip' + (ui.kind === k ? ' on' : '') + '" data-kind="' + k + '">' + k.toUpperCase() + '</button>').join('') + btn('army', 'ARMY: TAP MAP', 'gold') + btn('enemyArmy', 'ENEMY ARMY: TAP MAP') + '</div>'
+    + '<div class="row wrap">' + (['small', 'large', 'siege', 'elite', 'navy', 'air', 'darpa'] as const).map((k) => '<button class="chip' + (ui.kind === k ? ' on' : '') + '" data-kind="' + k + '">' + k.toUpperCase() + '</button>').join('') + btn('army', 'ARMY: TAP MAP', 'gold') + btn('enemyArmy', 'ENEMY ARMY: TAP MAP') + '</div>'
     + (realm ? '<h3>REALM</h3><div class="row wrap">' + btn('raidS', 'RAID S') + btn('raidM', 'RAID M') + btn('raidL', 'RAID L') + btn('bandits', 'BANDITS: TAP') + btn('settle', 'FOUND: TAP') + btn('rebuild', 'REBUILD CITY') + btn('maxCity', 'MAX CITY') + btn('peace', 'PEACE') + btn('totalWar', 'TOTAL WAR', 'danger') + '</div><p class="blurb">Raids, rebuild, and max city use the selected town, else the capital.</p>' : '');
   on($('chClose'), 'click', () => { app.cheatsOpen = false; app.ui.updateUI(); });
   for (const b of el.querySelectorAll<HTMLButtonElement>('button[data-tog]')) on(b, 'click', () => { const k = b.dataset.tog as Exclude<keyof Cheats, 'on'>; app.settings.cheats[k] = !app.settings.cheats[k]; applyCheats(app); lastKey = ''; });

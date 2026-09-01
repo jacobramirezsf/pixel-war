@@ -148,6 +148,7 @@ export function canBuild(w: World, tx: number, ty: number, team: number, type: B
     const age = cheat(w, team, 'allAges') || !w.rules.ages ? 2 : w.slots[team].age;
     if ((D.age ?? 0) > age) return 'needs the ' + ['village', 'town', 'city'][D.age ?? 0] + ' age';
     if (D.max && w.blds.filter((b) => b.team === team && b.type === type).length >= D.max) return 'you have enough of those';
+    if (D.needs) for (const n of D.needs) if (!w.blds.some((b) => b.team === team && b.type === n && b.buildT <= 0)) return 'needs a finished ' + BLD[n].name.toLowerCase();
     if (D.trains && type !== 'barracks' && D.kind === 'town' && !w.blds.some((b) => b.team === team && b.type === 'barracks' && b.buildT <= 0)) return 'build a barracks first';
     if (type === 'dock' || type === 'port') {
       const m = w.map;

@@ -8,7 +8,6 @@ import { damage, explode } from './combat.ts';
 import type { Unit, World } from './types.ts';
 import { maxHp, mkUnit } from './units.ts';
 import { allied, cheat, count } from './world.ts';
-import { removeBld } from './buildings.ts';
 import { setTruce } from './conquest.ts';
 
 /** Null when the power went off, otherwise why it did not. */
@@ -209,7 +208,14 @@ export function powersTick(w: World, dt: number): void {
     for (const u of w.units) if (u.hp > 0 && allied(w, u.team, k.team) && Math.hypot(u.x - k.x, u.y - k.y) <= k.r) damage(w, u, k.kind ? k.dmg : Math.round(k.dmg * 0.6), true);
     if (k.kind === 'nuke') {
       // Buildings and settlements in the circle go too, friend or foe.
-      for (const b of w.blds.slice()) if (b.hp > 0 && Math.hypot(b.x - k.x, b.y - k.y) <= k.r) removeBld(w, b);
+      // One pass over the list, one flow rebuild: a city block goes at once without an O(n^2) sweep.
+      const gone = new Set<number>();
+      for (const b of w.blds) if (b.hp > 0 && Math.hypot(b.x - k.x, b.y - k.y) <= k.r) gone.add(b.id);
+      if (gone.size) {
+        for (const b of w.blds) if (gone.has(b.id)) for (const q of b.tiles) w.bmap.delete(q[1] * w.map.cols + q[0]);
+        w.blds = w.blds.filter((b) => !gone.has(b.id));
+        w.flowDirty = true;
+      }
       for (const sl of w.slots) for (const b of sl.settlements) if (b.hp > 0 && Math.hypot(b.x - k.x, b.y - k.y) <= k.r) damage(w, b, 9999, true);
     }
   }

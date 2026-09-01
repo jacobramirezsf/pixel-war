@@ -30,7 +30,7 @@ test('rosters: 21 kingdom units, 20 for every other race, all distinct', () => {
 
 test('each special mechanic belongs to exactly one race', () => {
   for (const f of SPECIAL_FIELDS) {
-    const races = new Set(ALL_UNITS.filter((k) => TYPES[k][f] !== undefined && f !== 'regen' && f !== 'treeArmor' || (f === 'regen' && TYPES[k].regen && !TYPES[k].treeArmor) || (f === 'treeArmor' && TYPES[k].treeArmor)).map((k) => TYPES[k].race));
+    const races = new Set(ALL_UNITS.filter((k) => !TYPES[k].extra).filter((k) => TYPES[k][f] !== undefined && f !== 'regen' && f !== 'treeArmor' || (f === 'regen' && TYPES[k].regen && !TYPES[k].treeArmor) || (f === 'treeArmor' && TYPES[k].treeArmor)).map((k) => TYPES[k].race));
     assert.ok(races.size >= 1, f + ' is used');
     assert.ok(races.size <= 1 || f === 'regen', f + ' is shared by ' + [...races].join(','));
   }

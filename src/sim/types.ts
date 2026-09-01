@@ -452,7 +452,7 @@ export type Action =
   | { type: 'absorb'; payload: { id: number } }
   | { type: 'truce'; payload: { slot: number; offer: boolean } }
   | { type: 'power'; payload: { power: PowerKey; x: number; y: number; ids?: number[] } }
-  | { type: 'cheat'; payload: { op: CheatOp; x?: number; y?: number; n?: number; unit?: UnitKey; team?: number; id?: number; size?: 'small' | 'medium' | 'large'; kind?: 'small' | 'large' | 'siege' | 'elite' } }
+  | { type: 'cheat'; payload: { op: CheatOp; x?: number; y?: number; n?: number; unit?: UnitKey; team?: number; id?: number; size?: 'small' | 'medium' | 'large'; kind?: 'small' | 'large' | 'siege' | 'elite' | 'navy' | 'air' | 'darpa' } }
   | { type: 'research'; payload: { tech: Tech } }
   | { type: 'ageUp'; payload: { id?: number } | null }
   | { type: 'bldRally'; payload: { id: number; x: number; y: number } }
