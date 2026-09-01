@@ -2,7 +2,7 @@
 
 import { AGE_NAMES, BLD, BORDER } from '../../data/buildings.ts';
 import { canTrain, RESEARCH_COST, TECH_NAMES } from '../../sim/town.ts';
-import { canGrow, NEXT_TIER, TIERS } from '../../sim/conquest.ts';
+import { canGrow, NEXT_TIER, TIERS, canCapture, CAPTURE_COST, relation } from '../../sim/conquest.ts';
 import { DIFF } from '../../data/difficulty.ts';
 import { TOOLS, type EditorTool } from '../../data/maps.ts';
 import { POWER_KEYS, POWERS, type PowerKey } from '../../data/powers.ts';
@@ -16,7 +16,8 @@ import { drawTile } from '../../render/terrain.ts';
 import { matRate, popCap, popUsed } from '../../sim/conquest.ts';
 import { buildTime, maxHp } from '../../sim/units.ts';
 import { allied, count } from '../../sim/world.ts';
-import { ctlRace, fit, issueAction, say, selectedUnits, type App, type Tab } from '../app.ts';
+import { ctlRace, fit, issueAction, say, saveLayers, selectedUnits, type App, type Layers, type Tab } from '../app.ts';
+import { refOf } from '../../sim/commands.ts';
 import { $, on, show } from '../dom.ts';
 import { focusBase } from '../input/hotkeys.ts';
 import { renderTerritory, updateTerritoryVisibility } from '../territory.ts';
@@ -53,7 +54,7 @@ function unitTap(app: App, k: UnitKey): void {
     say(app, 'Tap the map to place ' + T.name + '. Drag to place many.', 1.5);
     return;
   }
-  issueAction(app, { type: 'buy', payload: { unit: k } });
+  issueAction(app, { type: 'buy', payload: { unit: k, building: app.bld >= 0 ? app.bld : undefined, near: app.town >= 0 ? app.town : undefined } });
 }
 
 export function buildStrips(app: App): void {
@@ -176,20 +177,29 @@ export function updateUI(app: App): void {
   for (const [id, tab] of [['tUnits', 'units'], ['tBuild', 'build'], ['tPowers', 'powers'], ['tMore', 'more'], ['tTools', 'tools'], ['tEdit', 'edit']] as const) B(id).classList.toggle('on', app.tab === tab);
   show(B('strip'), app.tab === 'units'); show(B('bstrip'), app.tab === 'build'); show(B('pstrip'), app.tab === 'powers'); show(B('more'), app.tab === 'more');
   show(B('tstrip'), app.tab === 'tools'); show(B('estrip'), app.tab === 'edit');
-  // Command row: context sensitive.
+  // Command row: context sensitive. Units, a town, a building, another side's settlement, or nothing.
   const hasSel = selectedUnits(app).length > 0;
-  // No selection: pan toggle, select all, charge. With a selection: the stances and retreat.
-  show(B('bSelect'), live && !edit && !toolOn && !hasSel);
-  show(B('bAll'), live && !edit && !toolOn);
-  show(B('bCharge'), live && !edit && !toolOn && !hasSel);
+  if (w && app.bld >= 0 && !w.blds.some((b) => b.id === app.bld && b.team === app.ctl)) app.bld = -1;
+  const hasCard = app.town >= 0 || app.bld >= 0 || !!app.foreign;
   const armed = app.stance !== 'none' && hasSel;
+  show(B('bDesel'), live && !edit && !toolOn && (hasSel || hasCard || !!app.warAsk));
+  show(B('bSelect'), live && !edit && !toolOn && !hasSel && !hasCard);
+  show(B('bAll'), live && !edit && !toolOn && !hasCard);
+  show(B('bCharge'), live && !edit && !toolOn && !hasSel && !hasCard);
   for (const [id, st] of [['bMove', 'move'], ['bAttack', 'attack'], ['bGuard', 'guard']] as const) { show(B(id), live && !edit && !toolOn && hasSel); B(id).classList.toggle('on', app.stance === st); }
   show(B('bHold'), live && !edit && !toolOn && hasSel);
-  show(B('bRetreat'), live && !edit && !toolOn && hasSel && !armed);
+  show(B('bRetreat'), live && !edit && !toolOn && hasSel && !armed && !app.warAsk);
   show(B('bCancel'), toolOn || armed || (edit && app.tool === 'erase'));
   document.body.classList.toggle('armed', armed);
   const pw = app.power;
-  B('bCancel').textContent = 'CANCEL ' + (armed ? app.stance.toUpperCase() : app.tool === 'power' && pw ? POWERS[pw].name : app.tool === 'build' ? BLD[app.bbrush].name : app.tool.toUpperCase());
+  B('bCancel').textContent = 'CANCEL ' + (armed ? app.stance.toUpperCase() : app.tool === 'power' && pw ? POWERS[pw].name : app.tool === 'build' ? BLD[app.bbrush].name : app.tool === 'sell' ? 'REMOVE' : app.tool.toUpperCase());
+  contextAction(app);
+  const act = app.act;
+  show(B('bAct'), live && !edit && !toolOn && !!act);
+  if (act) { B('bAct').textContent = act.label; B('bAct').classList.toggle('danger', !!act.danger); }
+  show(B('bLayers'), conq && !map);
+  show(B('layers'), conq && app.layersOpen);
+  if (conq && app.layersOpen) renderLayers(app);
   B('bSelect').classList.toggle('on', app.selectMode);
   B('bSelect').textContent = app.selectMode ? 'DRAG: BOX' : 'DRAG: PAN';
   // More grid.
@@ -209,7 +219,7 @@ export function updateUI(app: App): void {
   B('bOutpost').classList.toggle('on', app.tool === 'outpost');
   B('bFort').classList.toggle('on', app.tool === 'upgrade');
   B('bAbsorb').classList.toggle('on', app.tool === 'absorb');
-  B('bLand').classList.toggle('on', app.overlay);
+  B('bLand').classList.toggle('on', app.layers.territory);
   B('bTerr').classList.toggle('on', app.terrOpen);
   for (const n of [1, 2, 3]) B('bG' + n).classList.toggle('has', app.groups.has(n));
   // Top bar.
@@ -285,6 +295,52 @@ function renderQueue(app: App): void {
 
 const STATE_LABEL: Record<string, string> = { growing: 'GROWING', stable: 'STABLE', attacked: 'UNDER ATTACK', recovering: 'RECOVERING' };
 
+/** The one gold button that does the obvious thing for what is selected. */
+function contextAction(app: App): void {
+  const w = app.world;
+  app.act = null;
+  if (!w || !app.running) return;
+  if (app.warAsk) {
+    const a = app.warAsk;
+    app.act = { label: 'DECLARE WAR ON ' + a.name + ' AND ATTACK', danger: true, fn: () => { const ids = selectedUnits(app).map((u) => u.id); app.warAsk = null; issueAction(app, { type: 'attack', payload: { ids, target: a.ref, declare: true } }); app.ui.updateUI(); } };
+    return;
+  }
+  if (app.foreign) {
+    let b: import('../../sim/types.ts').Settlement | null = null;
+    for (const sl of w.slots) for (const x of sl.settlements) if (x.id === app.foreign.id) b = x;
+    if (!b || b.team === app.ctl) { app.foreign = null; return; }
+    const why = w.mode === 'conquest' ? canCapture(w, app.ctl, b) : 'not in this mode';
+    if (!why) { const cost = w.slots[b.team].neutral && b.tier === 'village' ? 200 : CAPTURE_COST; const id = b.id; app.act = { label: 'CAPTURE · ' + cost + 'g', fn: () => { issueAction(app, { type: 'capture', payload: { id } }); app.ui.updateUI(); } }; }
+    else if (b.hp > 0 && selectedUnits(app).length) { const tgt = b; app.act = { label: 'ATTACK IT', danger: true, fn: () => { const sel = selectedUnits(app); issueAction(app, { type: 'attack', payload: { ids: sel.map((u) => u.id), target: refOf(tgt), declare: !!allied(w, tgt.team, app.ctl) } }); } }; }
+    return;
+  }
+  if (app.bld >= 0) {
+    const b = w.blds.find((x) => x.id === app.bld && x.team === app.ctl);
+    if (!b) { app.bld = -1; return; }
+    const D = BLD[b.type];
+    app.act = { label: 'DEMOLISH', danger: true, fn: () => { if (D.cost >= 100 && !confirm('Demolish the ' + D.name.toLowerCase() + '? Half its cost comes back.')) return; issueAction(app, { type: 'sell', payload: { x: b.x, y: b.y, id: b.id } }); app.bld = -1; app.ui.updateUI(); } };
+    return;
+  }
+  if (app.town >= 0 && w.mode === 'conquest') {
+    const s = w.slots[app.ctl].settlements.find((x) => x.id === app.town);
+    if (!s) return;
+    const to = s.buildT <= 0 ? NEXT_TIER[s.tier] : undefined;
+    if (to && !canGrow(w, s)) { const id = s.id; app.act = { label: 'GROW TO ' + to.toUpperCase() + ' · ' + TIERS[to].gold + 'g', fn: () => { issueAction(app, { type: 'ageUp', payload: { id } }); app.ui.updateUI(); } }; }
+  }
+}
+
+const LAYER_LABELS: [keyof Layers, string][] = [['territory', 'TERRITORY'], ['borders', 'BORDERS'], ['names', 'REGION NAMES'], ['tags', 'REGION STATE']];
+let layersKey = '';
+function renderLayers(app: App): void {
+  const key = LAYER_LABELS.map(([k]) => (app.layers[k] ? 1 : 0)).join('');
+  if (key === layersKey) return;
+  layersKey = key;
+  const el = $('layers');
+  el.innerHTML = LAYER_LABELS.map(([k, l]) => '<button class="chip' + (app.layers[k] ? ' on' : '') + '" data-layer="' + k + '">' + (app.layers[k] ? '■ ' : '□ ') + l + '</button>').join('') + '<button class="chip" id="layersClose">CLOSE</button>';
+  for (const b of el.querySelectorAll<HTMLButtonElement>('button[data-layer]')) on(b, 'click', () => { const k = b.dataset.layer as keyof Layers; app.layers[k] = !app.layers[k]; saveLayers(app); layersKey = ''; app.ui.updateUI(); });
+  on($('layersClose'), 'click', () => { app.layersOpen = false; app.ui.updateUI(); });
+}
+
 function renderSelCard(app: App): void {
   const el = $('selcard');
   const sel = selectedUnits(app);
@@ -303,7 +359,37 @@ function renderSelCard(app: App): void {
     if (rn) rn.onclick = () => { const v = prompt('Name this settlement', name); if (v != null) issueAction(app, { type: 'rename', payload: { region: s.region, name: v } }); };
     return;
   }
+  if (!sel.length && w && app.bld >= 0) {
+    const b = w.blds.find((x) => x.id === app.bld && x.team === app.ctl);
+    if (!b) { app.bld = -1; el.textContent = ''; return; }
+    const D = BLD[b.type];
+    const role = D.trains?.[0];
+    const isDefault = role !== undefined && w.slots[app.ctl].prefer[role] === b.id;
+    const lines = [D.name + (b.buildT > 0 ? ' · building' : '') + ' · ' + Math.round(b.hp) + '/' + b.max + ' hp' + (b.queue.length ? ' · ' + b.queue.length + ' in queue' : '')];
+    if (D.trains) lines.push('trains ' + D.trains.join(', ') + (isDefault ? ' · DEFAULT' : '') + '. UNITS tab trains here.');
+    if (b.rally) lines.push('rally point set');
+    el.innerHTML = '<span class="town"><b>' + lines[0] + '</b>' + (lines.length > 1 ? '<br><span class="civ">' + lines.slice(1).join(' · ') + '</span>' : '') + '</span>';
+    return;
+  }
+  if (!sel.length && w && app.foreign) {
+    let b: import('../../sim/types.ts').Settlement | null = null;
+    for (const sl of w.slots) for (const x of sl.settlements) if (x.id === app.foreign.id) b = x;
+    if (!b) { app.foreign = null; el.textContent = ''; return; }
+    const owner = w.slots[b.team].neutral ? (b.tier === 'camp' ? 'BANDITS' : b.tier === 'ruin' ? 'RUINS' : 'INDEPENDENT') : TNAME[b.team] + ' · ' + relation(w, app.ctl, b.team);
+    const why = w.mode === 'conquest' ? canCapture(w, app.ctl, b) : 'not in this mode';
+    const status = !why ? 'READY TO CAPTURE' : why.toUpperCase();
+    el.innerHTML = '<span class="town"><b>' + (w.regions[b.region]?.name ?? 'SETTLEMENT').toUpperCase() + '</b> ' + b.tier + ' · ' + owner + (b.hp > 0 ? ' · ' + Math.round(b.hp) + '/' + b.max + ' hp' : ' · RAZED') + '<br><span class="' + (why ? 'civ' : 'st-growing') + '">' + status + '</span></span>';
+    return;
+  }
   if (!sel.length) { if (el.textContent) el.textContent = ''; return; }
+  if (sel.length === 1 && sel[0].type === 'caravan' && w) {
+    const u = sel[0];
+    const t = w.slots[u.team].settlements.find((x) => x.id === u.job);
+    let threat = false;
+    for (const o of w.units) if (o.hp > 0 && !allied(w, o.team, u.team) && TYPES[o.type].dmg > 0 && Math.hypot(o.x - u.x, o.y - u.y) < 60) { threat = true; break; }
+    el.innerHTML = '<span class="town"><b>MERCHANT CARAVAN</b> · to ' + (t ? (w.regions[t.region]?.name ?? 'town') : 'nowhere') + ' · +100 gold on arrival<br><span class="' + (threat ? 'st-attacked' : 'civ') + '">' + (threat ? 'THREATENED: enemies close' : 'Traveling. Keep the road clear.') + '</span></span>';
+    return;
+  }
   const comp = new Map<string, number>();
   let hp = 0, max = 0;
   for (const u of sel) { comp.set(u.type, (comp.get(u.type) ?? 0) + 1); hp += u.hp; max += maxHp(u); }

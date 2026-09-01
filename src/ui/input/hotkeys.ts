@@ -5,7 +5,7 @@ import { roster, TYPES } from '../../data/units.ts';
 import { centerOn } from '../../render/camera.ts';
 import { unitsOf } from '../../sim/queries.ts';
 import { primaryBase } from '../../sim/world.ts';
-import { ctlRace, issueAction, say, selectedUnits, type App } from '../app.ts';
+import { ctlRace, issueAction, say, selectedUnits, type App, clearSelection, saveLayers } from '../app.ts';
 import { cancelTool, charge, cycleSpeed, hold, selectAll, togglePause } from '../hud/commands.ts';
 import { POWER_KEYS, POWERS } from '../../data/powers.ts';
 import { panBy, setZoom } from '../../render/camera.ts';
@@ -101,7 +101,7 @@ export function wireHotkeys(app: App): void {
     const w = app.world;
     const k = e.key;
     if (k === ' ') { e.preventDefault(); if (!e.repeat) app.spaceT = performance.now(); return; }
-    if (k === 'Escape') { if (app.tool !== 'cmd' && !(w.phase === 'edit' && app.tool === 'place')) cancelTool(app); else app.selection.clear(); app.drag = null; return; }
+    if (k === 'Escape') { if (app.tool !== 'cmd' && !(w.phase === 'edit' && app.tool === 'place')) cancelTool(app); else if (app.stance !== 'none' || app.warAsk) { app.stance = 'none'; app.warAsk = null; } else clearSelection(app); app.drag = null; app.ui.updateUI(); return; }
     if (k === 'Backspace') { e.preventDefault(); retreat(app); return; }
     if (k === '+' || k === '=') { setZoom(app.cam, app.cam.zoom + 1); return; }
     if (k === '-' || k === '_') { setZoom(app.cam, app.cam.zoom - 1); return; }
@@ -129,7 +129,7 @@ export function wireHotkeys(app: App): void {
     else if (lk === 'h') hold(app);
     else if (lk === 'f') focusBase(app);
     else if (lk === 'y') { app.tool = app.tool === 'rally' ? 'cmd' : 'rally'; app.ui.updateUI(); }
-    else if (lk === 'l' && w.mode === 'conquest') { app.overlay = !app.overlay; app.ui.updateUI(); }
+    else if (lk === 'l' && w.mode === 'conquest') { app.layers.territory = !app.layers.territory; saveLayers(app); app.ui.updateUI(); }
     else if (lk === 'b') { app.tab = app.tab === 'build' ? 'units' : 'build'; app.tool = app.tab === 'build' ? 'build' : w.phase === 'edit' ? 'place' : 'cmd'; app.ui.updateUI(); }
     else if (lk === 'a' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); selectAll(app); }
   });

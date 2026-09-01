@@ -78,6 +78,10 @@ body.armed #bAttack.on ~ #c{outline-color:rgba(255,154,154,.6)}
 #selcard .civ{color:#b9bccb}
 #selcard .st-growing{color:#7dff7d}#selcard .st-stable{color:#b9bccb}#selcard .st-attacked{color:#ff6b6b}#selcard .st-recovering{color:#ffb02a}
 #cmdrow button{min-width:0;padding:4px 2px;font-size:11px}
+#cmdrow .desel{border-color:#8a8d9e;color:#e6e6ee;font-size:16px}
+#cmdrow .act{border-color:#f2d34a;color:#f2d34a}#cmdrow .act.danger{border-color:#ff6b6b;color:#ff9a9a}
+#layers{position:absolute;right:6px;bottom:290px;background:rgba(10,11,16,.96);border:1px solid #3a3d4a;padding:8px;z-index:3;display:flex;flex-direction:column;gap:4px}
+#layers .chip{min-height:34px;text-align:left}
 #tabs{display:flex;gap:6px}
 #tabs .tab{flex:1;min-height:36px;font-size:11px;border-color:#2a2d3a;color:#8a8d9e;background:#101219}
 #tabs .tab.on{color:#f2d34a;border-color:#f2d34a;background:#171923}

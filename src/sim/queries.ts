@@ -59,3 +59,21 @@ export function armyValue(w: World, slot: number, TYPES: Record<string, { cost: 
   for (const u of w.units) if (u.team === slot && u.hp > 0) v += TYPES[u.type].cost;
   return v;
 }
+
+/** Any settlement under a point, living or razed. */
+export function settleAt(w: World, x: number, y: number): Settlement | null {
+  for (const s of w.slots) for (const b of s.settlements) if (Math.abs(x - b.x) < 14 && Math.abs(y - b.y) < 12) return b;
+  return null;
+}
+
+/** Something of another side under the point that is not hostile: a unit, building, or settlement at peace or allied. */
+export function foreignAt(w: World, slot: number, x: number, y: number): Target | null {
+  let best: Unit | null = null, bd = 8;
+  for (const u of w.units) { if (u.team === slot || u.hp <= 0 || !allied(w, u.team, slot)) continue; const d = Math.hypot(u.x - x, u.y - y); if (d < bd) { bd = d; best = u; } }
+  if (best) return best;
+  const b = bldAtPx(w, x, y);
+  if (b && b.team !== slot && allied(w, b.team, slot)) return b;
+  const st = settleAt(w, x, y);
+  if (st && st.team !== slot && st.hp > 0 && allied(w, st.team, slot)) return st;
+  return null;
+}

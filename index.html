@@ -23,7 +23,8 @@
     <div id="stage">
       <canvas id="c"></canvas>
       <canvas id="mini"></canvas>
-      <div id="viewctl"><button id="bZoomIn" class="vc" title="zoom in">+</button><button id="bZoomOut" class="vc" title="zoom out">−</button><button id="bFit" class="vc" title="fit the map">FIT</button><button id="bHome" class="vc" title="jump to base (F)">HOME</button></div>
+      <div id="viewctl"><button id="bZoomIn" class="vc" title="zoom in">+</button><button id="bZoomOut" class="vc" title="zoom out">−</button><button id="bFit" class="vc" title="fit the map">FIT</button><button id="bHome" class="vc" title="jump to base (F)">HOME</button><button id="bLayers" class="vc" title="map layers">LAYERS</button></div>
+      <div id="layers" class="hide"></div>
       <div id="msg"></div>
       <div id="pauseov" class="hide"><div>PAUSED<small>tap or press Space to resume</small></div></div>
       <div id="cheats" class="hide"></div>
@@ -36,14 +37,16 @@
     <div id="panel">
       <div id="info"><span id="selcard"></span><span id="queue"></span></div>
       <div id="cmdrow">
+        <button id="bDesel" class="desel" title="deselect (Esc)">✕</button>
+        <button id="bAct" class="act hide">ACT</button>
         <button id="bSelect" class="cmd">SELECT</button>
         <button id="bAll" class="cmd">ALL</button>
         <button id="bCharge" class="cmd">CHARGE</button>
-        <button id="bMove" class="st">MOVE</button>
-        <button id="bAttack" class="st">ATTACK</button>
-        <button id="bGuard" class="st">GUARD</button>
-        <button id="bRetreat" class="cmd">RETREAT</button>
-        <button id="bHold" class="cmd">HOLD</button>
+        <button id="bMove" class="st">→ MOVE</button>
+        <button id="bAttack" class="st">⚔ ATTACK</button>
+        <button id="bGuard" class="st">◆ GUARD</button>
+        <button id="bRetreat" class="cmd">↩ RETREAT</button>
+        <button id="bHold" class="cmd">■ HOLD</button>
         <button id="bCancel" class="cancel">CANCEL</button>
       </div>
       <div id="tabs">
@@ -64,7 +67,7 @@
           <button id="bG1" class="grp">G1</button>
           <button id="bG2" class="grp">G2</button>
           <button id="bG3" class="grp">G3</button>
-          <button id="bSell">SELL</button>
+          <button id="bSell">REMOVE</button>
           <button id="bLand">LAND</button>
           <button id="bTerr">LIST</button>
           <button id="bSettle">VILLAGE</button>

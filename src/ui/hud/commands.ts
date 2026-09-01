@@ -5,7 +5,7 @@ import { TNAME } from '../../data/teams.ts';
 import { TYPES } from '../../data/units.ts';
 import { unitsOf } from '../../sim/queries.ts';
 import { recallGroup, retreat, setGroup } from '../input/hotkeys.ts';
-import { hideOverlay, issueAction, leaveEditor, openEditor, say, selectedUnits, SPEEDS, type App } from '../app.ts';
+import { hideOverlay, issueAction, leaveEditor, openEditor, say, selectedUnits, SPEEDS, type App, clearSelection, saveLayers } from '../app.ts';
 import { saveConquest } from '../conquest.ts';
 import { $, on } from '../dom.ts';
 
@@ -53,6 +53,7 @@ export function cancelTool(app: App): void {
   app.tool = app.world?.phase === 'edit' ? 'place' : 'cmd';
   app.power = null;
   app.stance = 'none';
+  app.warAsk = null;
   app.cheatTool = null;
   if (app.tab === 'build' || app.tab === 'powers') app.tab = 'units';
   app.ui.updateUI();
@@ -66,6 +67,7 @@ export function wireCommands(app: App): void {
   on($('bRally'), 'click', () => {
     if (!live() || !app.world) return;
     if (app.tool === 'rally') { app.tool = 'cmd'; app.ui.updateUI(); return; }
+    if (app.bld >= 0) { app.tool = 'rally'; app.ui.updateUI(); say(app, 'Tap the map: units from this building gather there', 2); return; }
     if (app.world.slots[app.ctl].rally && !selectedUnits(app).length) { issueAction(app, { type: 'rally', payload: null }); app.ui.updateUI(); return; }
     app.tool = 'rally';
     app.ui.updateUI();
@@ -87,7 +89,7 @@ export function wireCommands(app: App): void {
   on($('bGrow'), 'click', () => { if (live()) issueAction(app, { type: 'ageUp', payload: app.town >= 0 ? { id: app.town } : null }); });
   (['melee', 'ranged', 'armor'] as const).forEach((t, i) => on($('bTech' + (i + 1)), 'click', () => { if (live()) issueAction(app, { type: 'research', payload: { tech: t } }); }));
   on($('bSave'), 'click', () => { say(app, saveConquest(app) ? 'Saved to slot ' + app.slot : 'Nothing to save', 1.2); });
-  on($('bLand'), 'click', () => { app.overlay = !app.overlay; app.ui.updateUI(); });
+  on($('bLand'), 'click', () => { app.layers.territory = !app.layers.territory; saveLayers(app); app.ui.updateUI(); });
   on($('bCheats'), 'click', () => { app.cheatsOpen = !app.cheatsOpen; app.terrOpen = false; app.ui.updateUI(); });
   // Mobile groups: tap recalls, tap with a selection and an empty slot saves, hold saves over.
   for (const n of [1, 2, 3]) {
@@ -111,11 +113,14 @@ export function wireCommands(app: App): void {
     });
   }
   on($('bCancel'), 'click', () => cancelTool(app));
+  on($('bDesel'), 'click', () => { clearSelection(app); app.ui.updateUI(); });
+  on($('bAct'), 'click', () => { app.act?.fn(); });
+  on($('bLayers'), 'click', () => { app.layersOpen = !app.layersOpen; app.ui.updateUI(); });
   for (const [id, st, hint] of [['bMove', 'move', 'MOVE: tap where to go'], ['bAttack', 'attack', 'ATTACK: tap where to go, fighting on the way. Tap an enemy to attack it.'], ['bGuard', 'guard', 'GUARD: tap a friendly unit, building, settlement, or a spot to protect']] as const)
     on($(id), 'click', () => { if (!live()) return; app.stance = app.stance === st ? 'none' : st; app.ui.updateUI(); say(app, app.stance === st ? hint : 'Cancelled', 2); });
   on($('bHold'), 'click', () => { if (live()) hold(app); });
   on($('bSelect'), 'click', () => { app.selectMode = !app.selectMode; app.ui.updateUI(); say(app, app.selectMode ? 'Drag draws a selection box. Two fingers pan.' : 'Drag pans the map. Tap units to select.', 2); });
-  on($('bSell'), 'click', () => { app.tool = app.tool === 'sell' ? 'cmd' : 'sell'; app.ui.updateUI(); say(app, app.tool === 'sell' ? 'Tap your buildings to sell them (half back)' : 'Sell off', 1.5); });
+  on($('bSell'), 'click', () => { app.tool = app.tool === 'sell' ? 'cmd' : 'sell'; app.ui.updateUI(); say(app, app.tool === 'sell' ? 'REMOVE: tap a building, or drag across walls. Half the cost comes back.' : 'Remove off', 2); });
   on($('bTeam'), 'click', () => {
     const x = app.world;
     app.ctl = 1 - app.ctl;

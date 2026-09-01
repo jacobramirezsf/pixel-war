@@ -7,9 +7,9 @@ import { cleanName } from '../data/names.ts';
 import { TYPES } from '../data/units.ts';
 import { addBld, bldAtPx, canBuild, gateDir, passableFor, removeBld } from './buildings.ts';
 import { clamp, TILE } from './map.ts';
-import type { Action, Command, Target, TargetRef, Unit, World } from './types.ts';
+import type { Action, Command, Settlement, Target, TargetRef, Unit, World } from './types.ts';
 import { buildTime, mkUnit } from './units.ts';
-import { absorb, ADVANCED_COST, allyAccepted, canGrow, choose, setPact, truceAccepted, canAbsorb, canSettle, hasCity, NEXT_TIER, placeSettlement, popCap, popUsed, setTruce, startUpgrade, TIERS, nameRegionFor, regionAt, settlementsIn } from './conquest.ts';
+import { absorb, ADVANCED_COST, allyAccepted, canGrow, choose, setPact, truceAccepted, canAbsorb, canSettle, hasCity, NEXT_TIER, placeSettlement, popCap, popUsed, setTruce, startUpgrade, TIERS, nameRegionFor, regionAt, settlementsIn, canCapture, capture, CAPTURE_COST } from './conquest.ts';
 import { popOf } from './units.ts';
 import { seedResidents } from './civ.ts';
 import { wonderBegun, wonderDone } from './wonder.ts';
@@ -81,7 +81,7 @@ export function applyCommand(w: World, c: Command, quiet = false): boolean {
       if (!cheat(w, slot, 'noPop') && committed(w, slot) >= w.cap) { say('Army cap reached (' + w.cap + ')', 1.5); return false; }
       const why = canTrain(w, slot, c.payload.unit);
       if (why) { say(T.name + ' ' + why, 1.5); return false; }
-      const trainer = pickTrainer(w, slot, c.payload.unit);
+      const trainer = pickTrainer(w, slot, c.payload.unit, c.payload.building, c.payload.near);
       const queue = trainer ? trainer.queue : s.queue;
       if (queue.length >= 12) { say('Queue is full', 1.2); return false; }
       if (!cheat(w, slot, 'noPop') && w.mode === 'conquest' && w.rules.population && popUsed(w, slot) + popOf(c.payload.unit) > popCap(w, slot)) { say('No room. Houses and settlements add population.', 1.5); return false; }
@@ -267,7 +267,13 @@ export function applyCommand(w: World, c: Command, quiet = false): boolean {
       const us = ownUnits(w, slot, c.payload.ids);
       if (!us.length) return false;
       const tgt = resolveRef(w, c.payload.target);
-      if (c.payload.target && (!tgt || allied(w, tgt.team, slot))) return false;
+      if (c.payload.target && (!tgt || tgt.team === slot)) return false;
+      // Attacking someone at peace with you is a declaration of war. The UI asks first.
+      if (tgt && allied(w, tgt.team, slot)) {
+        if (!c.payload.declare || w.slots[tgt.team].ally === s.ally) return false;
+        setTruce(w, slot, tgt.team, false);
+        chronicle(w, (slot === 0 ? 'Attacked ' : TNAME[slot] + ' attacked ') + TNAME[tgt.team] + ' without warning');
+      }
       const dest = c.payload.x !== undefined && c.payload.y !== undefined ? { x: clamp(c.payload.x, 4, mapW(w) - 4), y: clamp(c.payload.y, 4, mapH(w) - 4) } : null;
       const back = dest ? lineBack(us, dest.x, dest.y) : () => ({ x: 0, y: 0 });
       us.forEach((u, i) => {
@@ -352,11 +358,34 @@ export function applyCommand(w: World, c: Command, quiet = false): boolean {
       return true;
     }
     case 'sell': {
-      const b = bldAtPx(w, c.payload.x, c.payload.y);
-      if (!b || b.team !== slot) { say('Tap one of your buildings', 1); return false; }
+      const b = c.payload.id != null ? w.blds.find((x) => x.id === c.payload.id) : bldAtPx(w, c.payload.x, c.payload.y);
+      if (!b || b.team !== slot) { if (c.payload.id != null) say('Tap one of your buildings', 1); return false; }
       removeBld(w, b);
-      if (w.mode !== 'sand') s.gold += Math.floor(BLD[b.type].cost / 2);
-      say('Sold ' + BLD[b.type].name, 0.8);
+      // Half back, in what it cost: materials for walls and towers in a Realm, gold otherwise.
+      const D = BLD[b.type];
+      if (w.mode !== 'sand') { if (w.mode === 'conquest' && w.rules.materials && !D.town) s.mat += Math.floor(D.cost / 2); else s.gold += Math.floor(D.cost / 2); }
+      say('Removed ' + D.name, 0.8);
+      return true;
+    }
+    case 'setDefault': {
+      const b = w.blds.find((x) => x.id === c.payload.building && x.team === slot);
+      if (b) { s.prefer[c.payload.role] = b.id; say(BLD[b.type].name + ' is the default for ' + c.payload.role + ' units', 1.5); }
+      else { delete s.prefer[c.payload.role]; say('Default cleared', 1); }
+      return true;
+    }
+    case 'capture': {
+      if (w.mode !== 'conquest') return false;
+      let b: Settlement | null = null;
+      for (const sl of w.slots) for (const x of sl.settlements) if (x.id === c.payload.id) b = x;
+      if (!b || b.team === slot) return false;
+      const why = canCapture(w, slot, b);
+      if (why) { say('Cannot capture: ' + why, 1.5); return false; }
+      const neutral = w.slots[b.team].neutral;
+      const cost = neutral && b.tier === 'village' ? 200 : CAPTURE_COST;
+      if (s.gold < cost) { say('Need ' + cost + ' gold', 1.2); return false; }
+      s.gold -= cost;
+      if (neutral && b.tier === 'village') { absorb(w, slot, b); say(w.regions[b.region].name + ' joins you with its buildings intact', 2.5); }
+      else capture(w, slot, b);
       return true;
     }
     case 'place': {

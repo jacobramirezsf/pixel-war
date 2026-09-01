@@ -271,6 +271,8 @@ export interface Slot {
   queue: QueueItem[];
   /** Where new units walk to after spawning. Null means they stay at the gate. */
   rally: { x: number; y: number } | null;
+  /** Preferred trainer per role: building id. Missing means the shortest queue. */
+  prefer: Partial<Record<import('../data/units.ts').Role, number>>;
   /** Materials, the second Conquest resource. */
   mat: number;
   /** Bandits, independents, and rebels. Never eliminated, never a rival. */
@@ -423,7 +425,9 @@ export interface TargetRef {
 }
 
 export type Action =
-  | { type: 'buy'; payload: { unit: UnitKey; held?: boolean } }
+  | { type: 'buy'; payload: { unit: UnitKey; held?: boolean; building?: number; near?: number } }
+  | { type: 'setDefault'; payload: { role: import('../data/units.ts').Role; building: number } }
+  | { type: 'capture'; payload: { id: number } }
   | { type: 'cancel'; payload: { index: number; building?: number } }
   | { type: 'settle'; payload: { x: number; y: number; tier?: 'outpost' | 'village' } }
   | { type: 'absorb'; payload: { id: number } }
@@ -440,13 +444,13 @@ export type Action =
   | { type: 'upgrade'; payload: { id: number } }
   | { type: 'rally'; payload: { x: number; y: number } | null }
   | { type: 'move'; payload: { ids: number[]; x: number; y: number } }
-  | { type: 'attack'; payload: { ids: number[]; target: TargetRef | null; x?: number; y?: number } }
+  | { type: 'attack'; payload: { ids: number[]; target: TargetRef | null; x?: number; y?: number; declare?: boolean } }
   | { type: 'guard'; payload: { ids: number[]; x: number; y: number; target?: TargetRef | null } }
   | { type: 'hold'; payload: { ids: number[] } }
   | { type: 'retreat'; payload: { ids: number[] } }
   | { type: 'gate'; payload: { id: number } }
   | { type: 'build'; payload: { x: number; y: number; bld: BldKey } }
-  | { type: 'sell'; payload: { x: number; y: number } }
+  | { type: 'sell'; payload: { x: number; y: number; id?: number } }
   | { type: 'place'; payload: { unit: UnitKey; x: number; y: number } }
   | { type: 'erase'; payload: { x: number; y: number } }
   | { type: 'clear'; payload: null }

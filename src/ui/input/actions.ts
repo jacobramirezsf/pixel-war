@@ -8,8 +8,11 @@ import { refOf } from '../../sim/commands.ts';
 import { BLD } from '../../data/buildings.ts';
 import { canBuild } from '../../sim/buildings.ts';
 import { clamp, TILE } from '../../sim/map.ts';
-import { hostileAt, ownGateAt, unitAt } from '../../sim/queries.ts';
-import { issueAction, say, selectedUnits, type App } from '../app.ts';
+import { foreignAt, hostileAt, ownGateAt, settleAt, unitAt } from '../../sim/queries.ts';
+import { bldAtPx } from '../../sim/buildings.ts';
+import { relation } from '../../sim/conquest.ts';
+import { TNAME } from '../../data/teams.ts';
+import { issueAction, say, selectedUnits, type App, clearSelection } from '../app.ts';
 import { paint } from '../menus/editor.ts';
 
 export interface Rect { x: number; y: number; w: number; h: number }
@@ -58,7 +61,19 @@ export function orderAt(app: App, x: number, y: number): boolean {
   app.stance = 'none';
   app.ui.updateUI();
   const en = hostileAt(w, app.ctl, x, y);
-  if (en) return issueAction(app, { type: 'attack', payload: { ids, target: refOf(en) } });
+  if (en) { app.warAsk = null; return issueAction(app, { type: 'attack', payload: { ids, target: refOf(en) } }); }
+  // Someone at peace or allied: the first tap asks, the second declares war and attacks.
+  const fo = mode !== 'guard' ? foreignAt(w, app.ctl, x, y) : null;
+  if (fo) {
+    const ref = refOf(fo), name = TNAME[fo.team];
+    const ask = app.warAsk;
+    if (ask && ask.team === fo.team && ask.ref.kind === ref.kind && ask.ref.id === ref.id) { app.warAsk = null; app.ui.updateUI(); return issueAction(app, { type: 'attack', payload: { ids, target: ref, declare: true } }); }
+    const rel = relation(w, app.ctl, fo.team);
+    app.warAsk = { team: fo.team, ref, name };
+    app.ui.updateUI();
+    say(app, (rel === 'allied' ? 'ATTACK AN ALLY? ' : '') + 'Attacking will declare war on ' + name + '. Tap again to confirm.', 3);
+    return false;
+  }
   if (mode === 'attack') return issueAction(app, { type: 'attack', payload: { ids, target: null, x, y } });
   if (mode === 'guard') {
     const f = friendlyAt(app, x, y);
@@ -111,15 +126,50 @@ export function tapAt(app: App, x: number, y: number): void {
     return;
   }
   if (gateAt(app, x, y)) return;
-  if (!selectedUnits(app).length) {
-    const t = townAt(app, x, y);
-    if (t >= 0) { app.town = app.town === t ? -1 : t; app.ui.updateUI(); return; }
-    if (app.town >= 0) { app.town = -1; app.ui.updateUI(); }
-    say(app, 'Select units first: tap one or drag a box', 2);
-    return;
+  const hasUnits = selectedUnits(app).length > 0;
+  // With units selected: enemies and open ground take orders; your own buildings and towns switch the selection.
+  if (hasUnits && !hostileAt(w, app.ctl, x, y) && !foreignAt(w, app.ctl, x, y)) {
+    const own = ownThingAt(app, x, y);
+    if (own) { app.selection.clear(); app.stance = 'none'; app.warAsk = null; pickThing(app, own); return; }
   }
-  app.town = -1;
-  orderAt(app, x, y);
+  if (hasUnits) { orderAt(app, x, y); return; }
+  // Nothing selected: pick what is under the finger, or clear the cards on empty ground.
+  const thing = ownThingAt(app, x, y) ?? foreignThingAt(app, x, y);
+  if (thing) { pickThing(app, thing); return; }
+  const had = app.town >= 0 || app.bld >= 0 || !!app.foreign;
+  clearSelection(app);
+  app.ui.updateUI();
+  if (!had) say(app, 'Tap a unit to select it, or drag a box', 1.5);
+}
+
+type Thing = { kind: 'town'; id: number } | { kind: 'bld'; id: number } | { kind: 'foreign'; team: number; id: number };
+
+function ownThingAt(app: App, x: number, y: number): Thing | null {
+  const w = app.world!;
+  const t = townAt(app, x, y);
+  if (t >= 0) return { kind: 'town', id: t };
+  const b = bldAtPx(w, x, y);
+  if (b && b.team === app.ctl && b.kind !== 'trap') return { kind: 'bld', id: b.id };
+  return null;
+}
+
+function foreignThingAt(app: App, x: number, y: number): Thing | null {
+  const st = settleAt(app.world!, x, y);
+  if (st && st.team !== app.ctl) return { kind: 'foreign', team: st.team, id: st.id };
+  return null;
+}
+
+/** Select a town, building, or another side's settlement. Tapping the selected one again clears it. */
+function pickThing(app: App, t: Thing): void {
+  const same = (t.kind === 'town' && app.town === t.id) || (t.kind === 'bld' && app.bld === t.id) || (t.kind === 'foreign' && app.foreign?.id === t.id);
+  clearSelection(app);
+  if (!same) {
+    if (t.kind === 'town') app.town = t.id;
+    else if (t.kind === 'bld') app.bld = t.id;
+    else app.foreign = { team: t.team, id: t.id };
+    synth.play('select');
+  }
+  app.ui.updateUI();
 }
 
 export interface ToolState { lt: number; lx: number; ly: number }
@@ -158,7 +208,14 @@ export function toolAt(app: App, x: number, y: number, ts: ToolState, first: boo
     issueAction(app, { type: 'build', payload: { x, y, bld: app.bbrush } });
     return true;
   }
-  if (app.tool === 'sell') { if (first) issueAction(app, { type: 'sell', payload: { x, y } }); return true; }
+  if (app.tool === 'sell') {
+    // Remove paints: drag across walls and roads, tap a building.
+    const tx = clamp((x / TILE) | 0, 0, w.map.cols - 1), ty = clamp((y / TILE) | 0, 0, w.map.rows - 1), i = ty * w.map.cols + tx;
+    if (ts.lt === i) return true;
+    ts.lt = i;
+    issueAction(app, { type: 'sell', payload: { x, y } });
+    return true;
+  }
   if (app.tool === 'settle' || app.tool === 'outpost') {
     if (first) { if (issueAction(app, { type: 'settle', payload: { x, y, tier: app.tool === 'outpost' ? 'outpost' : 'village' } })) { app.tool = 'cmd'; app.ui.updateUI(); } }
     return true;
@@ -193,7 +250,7 @@ export function toolAt(app: App, x: number, y: number, ts: ToolState, first: boo
     return true;
   }
   if (app.tool === 'rally') {
-    if (first) { issueAction(app, { type: 'rally', payload: { x, y } }); app.tool = 'cmd'; app.ui.updateUI(); }
+    if (first) { issueAction(app, app.bld >= 0 ? { type: 'bldRally', payload: { id: app.bld, x, y } } : { type: 'rally', payload: { x, y } }); app.tool = 'cmd'; app.ui.updateUI(); }
     return true;
   }
   if (w.phase === 'edit') {
@@ -214,6 +271,6 @@ export function usesTool(app: App): boolean {
 /** Tools that paint while dragging. Everything else applies on a tap and lets a drag pan. */
 export function dragTool(app: App): boolean {
   if (app.editor) return true;
-  if (app.tool === 'build') return true;
+  if (app.tool === 'build' || app.tool === 'sell') return true;
   return app.world?.phase === 'edit' && (app.tool === 'place' || app.tool === 'erase');
 }

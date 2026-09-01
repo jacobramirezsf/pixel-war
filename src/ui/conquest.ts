@@ -102,7 +102,6 @@ function enter(app: App): void {
   app.stance = 'none';
   app.town = -1;
   app.drag = null;
-  app.overlay = true;
   app.terrOpen = false;
   app.seenEvents = app.world!.events.length;
   loadMap(app, app.world!.map);

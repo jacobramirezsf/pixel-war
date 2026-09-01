@@ -198,8 +198,8 @@ export interface ViewState {
   hover: number | null;
   cam: Camera;
   dpr: number;
-  /** Territory overlay with region outlines and names. */
-  overlay: boolean;
+  /** Territory tint, borders, region names, and state tags. */
+  layers: { territory: boolean; borders: boolean; names: boolean; tags: boolean };
   damageNumbers: boolean;
   /** Screen shake offset in world pixels. */
   shake: { x: number; y: number };
@@ -212,9 +212,9 @@ export interface ViewState {
 let tintCanvas: HTMLCanvasElement | null = null, tintKey = '';
 
 /** Ownership tint, cached until ownership or connection changes. */
-function tintLayer(w: World): HTMLCanvasElement | null {
+function tintLayer(w: World, fill = true, borders = true): HTMLCanvasElement | null {
   if (!w.regionOf) return null;
-  const key = w.regions.map((r) => r.owner + (r.connected ? '' : '!') + (r.contested ? '?' : '') + (r.garrison < r.need ? '-' : '')).join(',') + '/' + w.map.cols + 'x' + w.map.rows;
+  const key = w.regions.map((r) => r.owner + (r.connected ? '' : '!') + (r.contested ? '?' : '') + (r.garrison < r.need ? '-' : '')).join(',') + '/' + w.map.cols + 'x' + w.map.rows + (fill ? 'f' : '') + (borders ? 'b' : '');
   if (tintCanvas && key === tintKey) return tintCanvas;
   tintKey = key;
   const c = tintCanvas ?? document.createElement('canvas');
@@ -227,6 +227,7 @@ function tintLayer(w: World): HTMLCanvasElement | null {
     for (let tx = 0; tx < cols; tx++) {
       const r = w.regions[w.regionOf[ty * cols + tx]];
       if (r.owner < 0 && !r.contested) continue;
+      if (!fill && !r.contested) continue;
       g.fillStyle = r.owner >= 0 ? TEAM[r.owner] : '#ffffff';
       g.globalAlpha = r.contested ? ((tx + ty) % 2 ? 0.28 : 0.08) : r.connected ? 0.16 : 0.08;
       g.fillRect(tx * TILE, ty * TILE, TILE, TILE);
@@ -234,7 +235,7 @@ function tintLayer(w: World): HTMLCanvasElement | null {
   g.globalAlpha = 1;
   // Borders between regions.
   g.fillStyle = 'rgba(255,255,255,.22)';
-  for (let ty = 0; ty < w.map.rows; ty++)
+  if (borders) for (let ty = 0; ty < w.map.rows; ty++)
     for (let tx = 0; tx < cols; tx++) {
       const a = w.regionOf[ty * cols + tx];
       if (tx + 1 < cols && w.regionOf[ty * cols + tx + 1] !== a) g.fillRect(tx * TILE + TILE - 1, ty * TILE, 1, TILE);
@@ -276,7 +277,7 @@ export function drawWorld(ctx: CanvasRenderingContext2D, bg: HTMLCanvasElement, 
   const r = beginView(ctx, cam, v.dpr, v.shake);
   const vis = (x: number, y: number, pad = 16): boolean => x > r.x0 - pad && x < r.x1 + pad && y > r.y0 - pad && y < r.y1 + pad;
   ctx.drawImage(bg, 0, 0);
-  if (w.regionOf && (v.overlay || w.regions.some((r) => r.contested))) { const t = tintLayer(w); if (t) ctx.drawImage(t, 0, 0); }
+  if (w.regionOf && (v.layers.territory || v.layers.borders || w.regions.some((r) => r.contested))) { const t = tintLayer(w, v.layers.territory, v.layers.borders); if (t) ctx.drawImage(t, 0, 0); }
   const H = mapH(w);
   const fog = frameVision(w, v.viewer), seen = fog ? w.seen : null, cols = w.map.cols;
   const own = (team: number): boolean => w.slots[team].ally === w.slots[v.viewer].ally;
@@ -315,7 +316,7 @@ export function drawWorld(ctx: CanvasRenderingContext2D, bg: HTMLCanvasElement, 
     if (hidden) ctx.globalAlpha = 1;
   }
   // Region names and state on the overlay.
-  if (v.overlay && w.regionOf) {
+  if (v.layers.names && w.regionOf) {
     // Labels keep a readable size on screen whatever the zoom.
     const fs = Math.max(3, Math.round(10 / v.cam.zoom));
     ctx.font = fs + 'px monospace';
@@ -324,9 +325,11 @@ export function drawWorld(ctx: CanvasRenderingContext2D, bg: HTMLCanvasElement, 
       if (!vis(r.cx, r.cy, 40)) continue;
       const own = r.owner === v.viewer;
       let tag = '';
-      if (own && !r.connected) tag = ' CUT OFF';
-      else if (own && r.garrison < r.need) tag = ' NEEDS ' + Math.ceil(r.need - r.garrison);
-      else if (r.contested) tag = ' CONTESTED';
+      if (v.layers.tags) {
+        if (own && !r.connected) tag = ' CUT OFF';
+        else if (own && r.garrison < r.need) tag = ' NEEDS ' + Math.ceil(r.need - r.garrison);
+        else if (r.contested) tag = ' CONTESTED';
+      }
       ctx.fillStyle = 'rgba(0,0,0,.55)';
       const tw = ctx.measureText(r.name.toUpperCase() + tag).width + fs;
       ctx.fillRect(r.cx - tw / 2, r.cy - fs * 0.8, tw, fs * 1.3);

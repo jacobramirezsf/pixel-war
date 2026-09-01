@@ -46,12 +46,23 @@ export function canTrain(w: World, slot: number, unit: UnitKey): string | null {
   return null;
 }
 
-/** The trainer with the shortest queue, or null when the settlement trains it. */
-export function pickTrainer(w: World, slot: number, unit: UnitKey): Building | null {
+/**
+ * Which building trains this unit. A named building wins when it can. Then the slot's default
+ * for the role. Then the one nearest a named settlement. Then the shortest queue. Null when
+ * the settlement itself trains it.
+ */
+export function pickTrainer(w: World, slot: number, unit: UnitKey, building?: number, near?: number): Building | null {
   const t = trainerType(unit);
   if (!t || !w.rules.town) return null;
   const list = ownBlds(w, slot, t);
   if (!list.length) return null;
+  if (building != null) { const b = list.find((x) => x.id === building); if (b) return b; }
+  const pref = w.slots[slot].prefer[TYPES[unit].role];
+  if (pref != null) { const b = list.find((x) => x.id === pref); if (b && b.queue.length < 12) return b; }
+  if (near != null) {
+    const home = w.slots[slot].settlements.find((x) => x.id === near);
+    if (home) return list.reduce((a, b) => (Math.hypot(b.x - home.x, b.y - home.y) < Math.hypot(a.x - home.x, a.y - home.y) ? b : a));
+  }
   return list.reduce((a, b) => (b.queue.length < a.queue.length ? b : a));
 }
 

@@ -374,6 +374,45 @@ export function onSettlementDeath(w: World, b: Settlement): void {
   if (b.hitBy === 0) { say(w, 'Bandit camp cleared: 120 gold, 60 materials', 3); pushEvent(w, 'loot', 'Bandit camp cleared', b.x, b.y, b.region); }
 }
 
+/** Why `slot` cannot take this settlement now, or null. The UI shows the reason verbatim. */
+export function canCapture(w: World, slot: number, b: Settlement): string | null {
+  if (b.team === slot) return 'already yours';
+  const neutral = isNeutral(w, b.team);
+  if (neutral && b.tier === 'ruin') return 'stand on the ruin to claim it';
+  if (neutral && b.tier === 'camp') return b.hp > 0 ? 'raze the camp' : null;
+  if (neutral) return canAbsorb(w, slot, b);
+  if (b.hp > 0) return 'still standing: bring it down first';
+  let near = false;
+  for (const u of w.units) if (u.hp > 0 && u.team === slot && TYPES[u.type].role !== 'civ' && Math.hypot(u.x - b.x, u.y - b.y) < 40) { near = true; break; }
+  if (!near) return 'bring soldiers to it';
+  for (const u of w.units) if (u.hp > 0 && !allied(w, u.team, slot) && TYPES[u.type].dmg > 0 && Math.hypot(u.x - b.x, u.y - b.y) < 56) return 'enemy units still defending';
+  const r = w.regions[b.region];
+  if (r && !(r.owner === slot || r.adj.some((a) => w.regions[a].owner === slot) || cheat(w, slot, 'territory'))) return 'not next to your territory';
+  return null;
+}
+
+export const CAPTURE_COST = 100;
+
+/** Take a razed enemy settlement: it stands again at a third, its buildings change hands, the region follows. */
+export function capture(w: World, slot: number, b: Settlement): void {
+  const from = b.team;
+  const os = w.slots[from];
+  os.settlements.splice(os.settlements.indexOf(b), 1);
+  b.team = slot;
+  b.hp = Math.max(1, Math.round(b.max * 0.3));
+  b.hitBy = -1;
+  b.buildT = 0;
+  w.slots[slot].settlements.push(b);
+  for (const bl of w.blds) if (bl.team === from && Math.hypot(bl.x - b.x, bl.y - b.y) < 70) bl.team = slot;
+  const r = w.regions[b.region];
+  if (r) { r.owner = slot; r.claimant = slot; r.claimT = 0; r.unrest = w.rules.unrest ? 40 : 0; }
+  if (w.capitals[from] === b.region) w.capitals[from] = os.settlements.find((x) => x.hp > 0)?.region ?? -1;
+  w.flowDirty = true;
+  const name = r?.name ?? 'the settlement';
+  if (slot === 0) { say(w, 'Captured ' + name, 3); pushEvent(w, 'claim', 'Captured ' + name, b.x, b.y, b.region); }
+  chronicle(w, (slot === 0 ? 'Captured ' : TNAME[slot] + ' captured ') + name + ' from ' + TNAME[from]);
+}
+
 /** Absorb an independent village: it joins with its buildings intact. */
 export function canAbsorb(w: World, slot: number, b: Settlement): string | null {
   if (!w.slots[b.team].neutral || b.tier === 'camp' || b.tier === 'ruin') return 'not an independent settlement';
@@ -879,7 +918,7 @@ export function populateWorld(w: World, rng: Rng): void {
 
 export function mkNeutralSlot(w: World): Slot {
   return {
-    ally: 99, race: 'horde', diff: w.diff, alive: true, gold: 0, settlements: [], ai: false, aiT: 0, aiWant: null, aiLast: 0, queue: [], rally: null, mat: 0, neutral: true,
+    ally: 99, race: 'horde', diff: w.diff, alive: true, gold: 0, settlements: [], ai: false, aiT: 0, aiWant: null, aiLast: 0, queue: [], rally: null, prefer: {}, mat: 0, neutral: true,
     attitude: w.slots.map(() => -100), truce: w.slots.map(() => false), truceT: w.slots.map(() => 0), pact: w.slots.map(() => false), raidT: 0, powerCd: {}, age: 0, tech: { melee: 0, ranged: 0, armor: 0 },
   };
 }
