@@ -25,8 +25,13 @@ export function soundTick(app: App, w: World): void {
   lastBlds = w.blds.length;
   if (w.events.length > lastEvents) {
     const e = w.events[w.events.length - 1];
-    if (e.kind === 'attack' || e.kind === 'war' || e.kind === 'revolt' || e.kind === 'broke') synth.play('warning');
-    else if (e.kind === 'claim' || e.kind === 'built' || e.kind === 'loot' || e.kind === 'feat') synth.play('capture');
+    if (e.kind === 'raid') synth.play('raid');
+    else if (e.kind === 'war') synth.play(e.text.startsWith('Alliance with') && e.text.includes('ended') ? 'warning' : 'war');
+    else if (e.kind === 'truce') synth.play('ally');
+    else if (e.kind === 'feat') synth.play(e.text.includes('WONDER') || e.text.includes('wonder') ? 'wonder' : 'feat');
+    else if (e.kind === 'built') synth.play(e.text.includes('wonder') ? 'wonder' : e.text.includes('is now a') ? 'grow' : 'done');
+    else if (e.kind === 'attack' || e.kind === 'revolt' || e.kind === 'broke' || e.kind === 'lost') synth.play('warning');
+    else if (e.kind === 'claim' || e.kind === 'loot') synth.play('capture');
   }
   lastEvents = w.events.length;
 }

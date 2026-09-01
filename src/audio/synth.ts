@@ -1,7 +1,7 @@
 // A small WebAudio synth. No sound files. Every sound is an oscillator envelope or a noise burst.
 // Mobile browsers need a user gesture before audio starts, so unlock() runs on the first tap or key.
 
-export type SoundName = 'attack' | 'death' | 'build' | 'capture' | 'warning' | 'victory' | 'defeat' | 'click';
+export type SoundName = 'attack' | 'death' | 'build' | 'capture' | 'warning' | 'victory' | 'defeat' | 'click' | 'select' | 'move' | 'grow' | 'raid' | 'war' | 'ally' | 'feat' | 'wonder' | 'done';
 
 export class Synth {
   private ctx: AudioContext | null = null;
@@ -79,6 +79,15 @@ export class Synth {
       case 'victory': [523, 659, 784, 1047].forEach((f, i) => this.tone(f, 0.22, 'triangle', 0.22, 1, i * 0.14)); break;
       case 'defeat': [392, 349, 311, 262].forEach((f, i) => this.tone(f, 0.3, 'sawtooth', 0.16, 0.9, i * 0.2)); break;
       case 'click': this.tone(1200, 0.03, 'square', 0.08); break;
+      case 'select': this.tone(900, 0.03, 'square', 0.07); break;
+      case 'move': this.tone(700, 0.04, 'triangle', 0.09); this.tone(900, 0.04, 'triangle', 0.07, 1, 0.04); break;
+      case 'grow': [523, 659, 784, 880].forEach((f, i) => this.tone(f, 0.14, 'triangle', 0.18, 1, i * 0.09)); break;
+      case 'raid': this.tone(220, 0.2, 'sawtooth', 0.2, 0.7); this.tone(196, 0.24, 'sawtooth', 0.2, 0.7, 0.24); this.burst(0.08, 0.25, 900); break;
+      case 'war': [262, 233, 262, 196].forEach((f, i) => this.tone(f, 0.18, 'square', 0.16, 0.9, i * 0.16)); break;
+      case 'ally': [392, 494, 587, 784].forEach((f, i) => this.tone(f, 0.16, 'triangle', 0.18, 1, i * 0.1)); break;
+      case 'feat': [659, 784, 1047, 1319].forEach((f, i) => this.tone(f, 0.2, 'triangle', 0.2, 1, i * 0.12)); break;
+      case 'wonder': [392, 523, 659, 784, 1047, 1319].forEach((f, i) => this.tone(f, 0.3, 'triangle', 0.2, 1, i * 0.16)); break;
+      case 'done': this.tone(880, 0.08, 'square', 0.14); this.tone(1175, 0.14, 'square', 0.14, 1, 0.1); break;
     }
   }
 }

@@ -93,7 +93,7 @@ export function encodeMap(m: MapDef): string {
 /** Throws on a bad code. */
 export function decodeMap(s: string): MapDef {
   const o = JSON.parse(s) as { c: number; r: number; t: string; b?: number[][]; m?: number[][] };
-  if (!(o.c >= 8 && o.c <= 40 && o.r >= 8 && o.r <= 60) || typeof o.t !== 'string' || o.t.length !== o.c * o.r) throw new Error('bad map code');
+  if (!(o.c >= 8 && o.c <= 96 && o.r >= 8 && o.r <= 96) || typeof o.t !== 'string' || o.t.length !== o.c * o.r) throw new Error('bad map code');
   const m = blankMap('Custom', o.c, o.r);
   for (let i = 0; i < o.t.length; i++) m.tiles[i] = clamp(+o.t[i] || 0, 0, 4);
   if (o.b && o.b.length === 2) m.bases = o.b.map((b) => ({ tx: b[0] | 0, ty: b[1] | 0 }));

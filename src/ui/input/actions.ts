@@ -1,6 +1,7 @@
 // What a pointer means in world coordinates, independent of how it got there.
 // Touch and mouse both end up here. Everything that changes the sim goes out as a command.
 
+import { synth } from '../../audio/synth.ts';
 import { refOf } from '../../sim/commands.ts';
 import { BLD } from '../../data/buildings.ts';
 import { canBuild } from '../../sim/buildings.ts';
@@ -26,6 +27,7 @@ export function selectAt(app: App, x: number, y: number, additive = false): bool
   if (!w) return false;
   const own = unitAt(w, app.ctl, x, y);
   if (!own) { if (!additive) app.selection.clear(); return false; }
+  synth.play('select');
   if (additive) { if (app.selection.has(own.id)) app.selection.delete(own.id); else app.selection.add(own.id); return true; }
   const only = app.selection.has(own.id) && selectedUnits(app).length === 1;
   app.selection.clear();

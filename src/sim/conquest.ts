@@ -587,7 +587,9 @@ export function conquestTick(w: World, dt: number, mcount: number[]): void {
     b.buildT -= dt;
     if (b.buildT <= 0) {
       b.buildT = 0;
-      if (b.team === 0) { const r = w.regions[b.region]; say(w, b.tier[0].toUpperCase() + b.tier.slice(1) + ' finished in ' + r.name, 2); pushEvent(w, 'built', b.tier + ' finished in ' + r.name, b.x, b.y, b.region); }
+      const r = w.regions[b.region];
+      if (b.team === 0) { say(w, r.name + ' is now a ' + b.tier, 2.5); pushEvent(w, 'built', r.name + ' is now a ' + b.tier, b.x, b.y, b.region); }
+      if (b.tier !== 'outpost') chronicle(w, (b.team === 0 ? '' : TNAME[b.team] + ': ') + r.name + ' became a ' + b.tier);
     }
   }
   neutralsTick(w, dt, byRegion);

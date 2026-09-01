@@ -1,6 +1,7 @@
 // UI state and the handful of transitions that every part of the UI needs.
 // Sim state lives in app.world. Editor state lives in app.editor. Never both.
 
+import { synth } from '../audio/synth.ts';
 import type { BldKey } from '../data/buildings.ts';
 import type { DiffKey } from '../data/difficulty.ts';
 import { RACE_KEYS, type RaceKey } from '../data/races.ts';
@@ -29,6 +30,8 @@ export interface EditorState {
   map: MapDef;
   ret: 'sand' | 'menu';
   tool: EditorTool;
+  /** Brush side in tiles: 1, 2, or 3. */
+  brush: number;
 }
 
 export interface SlotRow {
@@ -183,7 +186,9 @@ export function hideOverlay(): void {
 /** Send an action for the controlled slot. Applied now, logged for replay. */
 export function issueAction(app: App, a: Action): boolean {
   if (!app.world) return false;
-  return issue(app.world, cmd(app.world, app.ctl, a));
+  const ok = issue(app.world, cmd(app.world, app.ctl, a));
+  if (ok && (a.type === 'move' || a.type === 'attack' || a.type === 'guard' || a.type === 'hold')) synth.play('move');
+  return ok;
 }
 
 /** Selected units that are still alive, in world order. */
@@ -234,7 +239,7 @@ export function startGame(app: App, mode: Mode, allies?: number[], races?: (Race
 export function openEditor(app: App, ret: 'sand' | 'menu'): void {
   const m = app.custom && app.custom === app.curMap ? app.custom : cloneMap(app.curMap, 'Custom');
   app.world = null;
-  app.editor = { map: m, ret, tool: 2 };
+  app.editor = { map: m, ret, tool: 2, brush: 1 };
   app.running = true;
   app.tab = 'tools';
   loadMap(app, m);
