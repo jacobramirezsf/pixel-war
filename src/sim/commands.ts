@@ -186,8 +186,26 @@ export function applyCommand(w: World, c: Command, quiet = false): boolean {
       if (!us.length) return false;
       const tgt = resolveRef(w, c.payload.target);
       if (c.payload.target && (!tgt || allied(w, tgt.team, slot))) return false;
-      for (const u of us) u.order = { type: 'attack', tgt };
-      say(tgt ? 'Attacking' : 'Charge!', 1);
+      const dest = c.payload.x !== undefined && c.payload.y !== undefined ? { x: clamp(c.payload.x, 4, mapW(w) - 4), y: clamp(c.payload.y, 4, mapH(w) - 4) } : null;
+      us.forEach((u, i) => {
+        const o: import('./types.ts').Order = { type: 'attack', tgt };
+        if (dest && !tgt) { const a = i * 2.4, r = Math.sqrt(i) * 3.4; o.x = clamp(dest.x + Math.cos(a) * r, 4, mapW(w) - 4); o.y = clamp(dest.y + Math.sin(a) * r, 4, mapH(w) - 4); }
+        u.order = o;
+      });
+      if (dest && !tgt) w.fx.push({ k: 'mark', x: dest.x, y: dest.y, r: 6, t: 0.5, c: '#ff9a9a' });
+      say(tgt ? 'Attacking' : dest ? 'Attack-moving' : 'Charge!', 1);
+      return true;
+    }
+    case 'guard': {
+      const us = ownUnits(w, slot, c.payload.ids);
+      if (!us.length) return false;
+      const W = mapW(w), H = mapH(w), { x, y } = c.payload;
+      us.forEach((u, i) => {
+        const a = i * 2.4, r = Math.sqrt(i) * 3.4;
+        u.order = { type: 'guard', x: clamp(x + Math.cos(a) * r, 4, W - 4), y: clamp(y + Math.sin(a) * r, 4, H - 4) };
+      });
+      w.fx.push({ k: 'mark', x, y, r: 6, t: 0.5, c: '#7dff7d' });
+      say('Guarding', 1);
       return true;
     }
     case 'hold': {

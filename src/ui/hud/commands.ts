@@ -97,6 +97,8 @@ export function wireCommands(app: App): void {
     });
   }
   on($('bCancel'), 'click', () => cancelTool(app));
+  for (const [id, st, hint] of [['bMove', 'move', 'Tap the map to move there'], ['bAttack', 'attack', 'Tap the map: go there and fight what you meet. Tap an enemy to attack it.'], ['bGuard', 'guard', 'Tap the map to hold that spot and fight what comes near']] as const)
+    on($(id), 'click', () => { if (!live()) return; app.stance = st; app.ui.updateUI(); say(app, hint, 1.8); });
   on($('bSelect'), 'click', () => { app.selectMode = !app.selectMode; app.ui.updateUI(); say(app, app.selectMode ? 'Drag draws a selection box. Two fingers pan.' : 'Drag pans the map. Tap units to select.', 2); });
   on($('bSell'), 'click', () => { app.tool = app.tool === 'sell' ? 'cmd' : 'sell'; app.ui.updateUI(); say(app, app.tool === 'sell' ? 'Tap your buildings to sell them (half back)' : 'Sell off', 1.5); });
   on($('bTeam'), 'click', () => {

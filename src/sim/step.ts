@@ -131,9 +131,24 @@ function moveLogic(w: World, u: Unit, T: UnitDef, tgt: Target | null, best: numb
     if (d < 2.5) { u.order = null; return null; }
     return [dx / d, dy / d];
   }
+  if (u.order && u.order.type === 'guard') {
+    // Chase what comes within reach, but not beyond the leash. Otherwise walk back to the post.
+    const px = u.order.x, py = u.order.y;
+    const offPost = Math.hypot(u.x - px, u.y - py);
+    if (tgt && best < T.aggro && best > T.range && Math.hypot(tgt.x - px, tgt.y - py) < 56) return dirTo(u, tgt);
+    if (offPost > 3 && !(tgt && best <= T.range)) return dirTo(u, { x: px, y: py });
+    return null;
+  }
   if (u.order && u.order.type === 'attack') {
     let ct = u.order.tgt;
     if (ct && ct.hp <= 0) { ct = null; u.order.tgt = null; }
+    if (!ct && u.order.x !== undefined && u.order.y !== undefined) {
+      // Attack-move: fight what is within reach, otherwise keep walking to the point.
+      if (tgt && best < T.aggro) { if (best <= T.range) return null; return dirTo(u, tgt); }
+      const dx = u.order.x - u.x, dy = u.order.y - u.y, d = Math.hypot(dx, dy);
+      if (d < 2.5) { u.order.x = undefined; u.order.y = undefined; return null; }
+      return [dx / d, dy / d];
+    }
     if (!ct) ct = tgt;
     if (!ct) return null;
     const d = edist(u, ct);

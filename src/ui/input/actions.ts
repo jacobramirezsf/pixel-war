@@ -33,7 +33,7 @@ export function selectAt(app: App, x: number, y: number, additive = false): bool
   return true;
 }
 
-/** Order the selection to a point: attack what is there, otherwise move. */
+/** Order the selection to a point. An enemy under the point is always the target; otherwise the stance decides. */
 export function orderAt(app: App, x: number, y: number): boolean {
   const w = app.world;
   if (!w) return false;
@@ -42,7 +42,20 @@ export function orderAt(app: App, x: number, y: number): boolean {
   const ids = sel.map((u) => u.id);
   const en = hostileAt(w, app.ctl, x, y);
   if (en) return issueAction(app, { type: 'attack', payload: { ids, target: refOf(en) } });
+  if (app.stance === 'attack') return issueAction(app, { type: 'attack', payload: { ids, target: null, x, y } });
+  if (app.stance === 'guard') return issueAction(app, { type: 'guard', payload: { ids, x, y } });
   return issueAction(app, { type: 'move', payload: { ids, x, y } });
+}
+
+/** Double tap on a unit: select every unit of that type on screen. */
+export function selectTypeOnScreen(app: App, type: string): number {
+  const w = app.world;
+  if (!w) return 0;
+  const c = app.cam, x0 = c.x, y0 = c.y, x1 = c.x + c.vw / c.zoom, y1 = c.y + c.vh / c.zoom;
+  app.selection.clear();
+  for (const u of w.units) if (u.team === app.ctl && u.hp > 0 && u.type === type && u.x >= x0 && u.x <= x1 && u.y >= y0 && u.y <= y1) app.selection.add(u.id);
+  say(app, app.selection.size + ' selected', 1);
+  return app.selection.size;
 }
 
 /** A gate under the point toggles. Returns true when it did. */
@@ -59,7 +72,14 @@ export function gateAt(app: App, x: number, y: number): boolean {
 export function tapAt(app: App, x: number, y: number): void {
   const w = app.world;
   if (!w) return;
-  if (unitAt(w, app.ctl, x, y)) { selectAt(app, x, y); return; }
+  const own = unitAt(w, app.ctl, x, y);
+  if (own) {
+    const now = performance.now();
+    if (app.lastTap.id === own.id && now - app.lastTap.t < 350) { selectTypeOnScreen(app, own.type); app.lastTap = { id: -1, t: 0 }; return; }
+    app.lastTap = { id: own.id, t: now };
+    selectAt(app, x, y);
+    return;
+  }
   if (gateAt(app, x, y)) return;
   orderAt(app, x, y);
 }

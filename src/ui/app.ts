@@ -64,6 +64,10 @@ export interface App {
   tool: Tool;
   tab: Tab;
   power: PowerKey | null;
+  /** What a tap on the ground does with the selection. */
+  stance: 'move' | 'attack' | 'guard';
+  /** Last tap, for double taps. */
+  lastTap: { id: number; t: number };
   /** Touch: one-finger drag box-selects instead of panning. */
   selectMode: boolean;
   running: boolean;
@@ -116,7 +120,7 @@ export function createApp(storage: Storage): App {
   return {
     world: null, setup: null, editor: null, curMap: BUILTIN[0], custom: null, diff: 'std', race: 'kingdom', foeRace: null,
     mset: [{ on: true, team: 0, race: null }, { on: true, team: 1, race: null }, { on: true, team: 2, race: null }, { on: false, team: 3, race: null }, { on: false, team: 4, race: null }],
-    ctl: 0, brush: 'inf', bbrush: 'stk', tool: 'cmd', tab: 'units', power: null, selectMode: false, running: false, paused: false, speed: 1, overlay: false, terrOpen: false, seenEvents: 0, rivals: 1, lastSave: 0, selection: new Set(), drag: null, msg: '', msgT: 0,
+    ctl: 0, brush: 'inf', bbrush: 'stk', tool: 'cmd', tab: 'units', power: null, stance: 'move', lastTap: { id: -1, t: 0 }, selectMode: false, running: false, paused: false, speed: 1, overlay: false, terrOpen: false, seenEvents: 0, rivals: 1, lastSave: 0, selection: new Set(), drag: null, msg: '', msgT: 0,
     cv, ctx, bg: document.createElement('canvas'), W: 160, H: 224,
     cam: makeCamera(), dpr: 1, layout: detectLayout(), minimap: makeMinimapCache(), hover: null, mouse: null, placing: null,
     keys: new Set(), spaceT: 0, spaceDragged: false, groups: new Map(), settings: loadSettings(storage), storage,

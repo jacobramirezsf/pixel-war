@@ -51,6 +51,9 @@ canvas{image-rendering:pixelated;image-rendering:crisp-edges;display:block}
 #queue button i{position:absolute;left:0;bottom:0;height:2px;background:#f2d34a}
 #queue button.head{border-color:#f2d34a}
 #cmdrow{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+#cmdrow .st{border-color:#3a3d4a;color:#b9bccb}
+#cmdrow .st.on{background:#7dff7d;border-color:#7dff7d;color:#141520}
+#bAttack.on{background:#ff9a9a;border-color:#ff9a9a}
 #cmdrow button{min-width:0;padding:4px 2px;font-size:11px}
 #tabs{display:flex;gap:6px}
 #tabs .tab{flex:1;min-height:36px;font-size:11px;border-color:#2a2d3a;color:#8a8d9e;background:#101219}

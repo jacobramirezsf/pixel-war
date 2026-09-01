@@ -170,8 +170,13 @@ export function updateUI(app: App): void {
   show(B('tstrip'), app.tab === 'tools'); show(B('estrip'), app.tab === 'edit');
   // Command row: context sensitive.
   const hasSel = selectedUnits(app).length > 0;
-  show(B('bSelect'), live && !edit && !toolOn);
-  show(B('bAll'), live && !edit && !toolOn); show(B('bCharge'), live && !edit && !toolOn); show(B('bHold'), live && !edit && !toolOn && hasSel); show(B('bRetreat'), live && !edit && !toolOn && hasSel);
+  // No selection: pan toggle, select all, charge. With a selection: the stances and retreat.
+  show(B('bSelect'), live && !edit && !toolOn && !hasSel);
+  show(B('bAll'), live && !edit && !toolOn);
+  show(B('bCharge'), live && !edit && !toolOn && !hasSel);
+  for (const [id, st] of [['bMove', 'move'], ['bAttack', 'attack'], ['bGuard', 'guard']] as const) { show(B(id), live && !edit && !toolOn && hasSel); B(id).classList.toggle('on', app.stance === st); }
+  show(B('bRetreat'), live && !edit && !toolOn && hasSel);
+  show(B('bHold'), false);
   show(B('bCancel'), toolOn || (edit && app.tool === 'erase'));
   const pw = app.power;
   B('bCancel').textContent = 'CANCEL ' + (app.tool === 'power' && pw ? POWERS[pw].name : app.tool === 'build' ? BLD[app.bbrush].name : app.tool.toUpperCase());

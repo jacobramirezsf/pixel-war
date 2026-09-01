@@ -122,7 +122,7 @@ export function count(w: World, team: number): number {
 // ---------- snapshot and restore ----------
 
 type SnapRef = { kind: 'unit' | 'bld' | 'base'; id: number };
-type SnapOrder = { type: 'move'; x: number; y: number } | { type: 'attack'; tgt: SnapRef | null } | { type: 'retreat' };
+type SnapOrder = { type: 'move'; x: number; y: number } | { type: 'attack'; tgt: SnapRef | null; x?: number; y?: number } | { type: 'guard'; x: number; y: number } | { type: 'retreat' };
 
 interface SnapUnit {
   id: number; team: number; type: UnitKey; x: number; y: number; hp: number; cd: number;
@@ -167,8 +167,11 @@ function ref(t: Target): SnapRef {
 function snapOrder(o: Order | null): SnapOrder | null {
   if (!o) return null;
   if (o.type === 'move') return { type: 'move', x: o.x, y: o.y };
+  if (o.type === 'guard') return { type: 'guard', x: o.x, y: o.y };
   if (o.type === 'retreat') return { type: 'retreat' };
-  return { type: 'attack', tgt: o.tgt ? ref(o.tgt) : null };
+  const a: SnapOrder = { type: 'attack', tgt: o.tgt ? ref(o.tgt) : null };
+  if (o.x !== undefined) { a.x = o.x; a.y = o.y; }
+  return a;
 }
 
 /** Plain-data copy of the whole world. Safe to keep, serialize, or restore from. */
@@ -237,7 +240,10 @@ export function restore(s: Snapshot): World {
   s.units.forEach((su, i) => {
     const o = su.order;
     if (!o) return;
-    units[i].order = o.type === 'move' ? { type: 'move', x: o.x, y: o.y } : o.type === 'retreat' ? { type: 'retreat' } : { type: 'attack', tgt: resolve(o.tgt) };
+    if (o.type === 'move') units[i].order = { type: 'move', x: o.x, y: o.y };
+    else if (o.type === 'guard') units[i].order = { type: 'guard', x: o.x, y: o.y };
+    else if (o.type === 'retreat') units[i].order = { type: 'retreat' };
+    else { const a: Order = { type: 'attack', tgt: resolve(o.tgt) }; if (o.x !== undefined) { a.x = o.x; a.y = o.y; } units[i].order = a; }
   });
   return {
     map, mode: s.mode, phase: s.phase, nP: s.nP, slots, diff: s.diff, cap: s.cap,

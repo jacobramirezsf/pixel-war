@@ -15,7 +15,7 @@ export const HOTKEYS: [string, string][] = [
   ['Ctrl+1-9', 'save the selection as a group'],
   ['1-9', 'recall a group when the strip is closed'],
   ['Tab', 'cycle unit types in the selection'],
-  ['Ctrl+A', 'select all'], ['C', 'charge'], ['H', 'hold'], ['Backspace', 'retreat to base'],
+  ['Ctrl+A', 'select all'], ['C', 'charge'], ['M A G', 'stance: move, attack, guard, then right click'], ['H', 'hold'], ['Backspace', 'retreat to base'],
   ['F', 'focus your base'], ['Space', 'pause, or hold to drag the view'],
   ['Q W E R T G', 'powers, then click the target'],
   ['B', 'build tab'], ['Y', 'set the rally point'], ['L', 'territory overlay (Conquest)'], ['[ and ]', 'slower, faster'], ['Esc', 'cancel tool, clear selection'],
@@ -116,6 +116,7 @@ export function wireHotkeys(app: App): void {
     const lk = k.toLowerCase();
     if (lk === 'tab') { e.preventDefault(); cycleType(app); }
     else if (lk === 'c') charge(app);
+    else if (lk === 'm' || lk === 'g' || (lk === 'a' && !e.ctrlKey && !e.metaKey)) { app.stance = lk === 'm' ? 'move' : lk === 'g' ? 'guard' : 'attack'; app.ui.updateUI(); say(app, 'Stance: ' + app.stance, 1); }
     else if (lk === 'h') hold(app);
     else if (lk === 'f') focusBase(app);
     else if (lk === 'y') { app.tool = app.tool === 'rally' ? 'cmd' : 'rally'; app.ui.updateUI(); }

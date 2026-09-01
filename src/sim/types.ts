@@ -120,7 +120,10 @@ export type Target = Unit | Building | Settlement;
 
 export type Order =
   | { type: 'move'; x: number; y: number }
-  | { type: 'attack'; tgt: Target | null }
+  /** Attack a target, or attack-move: head for (x, y) when set, fighting whatever comes into reach. */
+  | { type: 'attack'; tgt: Target | null; x?: number; y?: number }
+  /** Hold a post: engage what comes within reach, never stray far, return when it is over. */
+  | { type: 'guard'; x: number; y: number }
   /** Disengage and walk home. No attacking on the way, not even when blocked. */
   | { type: 'retreat' };
 
@@ -337,7 +340,8 @@ export type Action =
   | { type: 'upgrade'; payload: { id: number } }
   | { type: 'rally'; payload: { x: number; y: number } | null }
   | { type: 'move'; payload: { ids: number[]; x: number; y: number } }
-  | { type: 'attack'; payload: { ids: number[]; target: TargetRef | null } }
+  | { type: 'attack'; payload: { ids: number[]; target: TargetRef | null; x?: number; y?: number } }
+  | { type: 'guard'; payload: { ids: number[]; x: number; y: number } }
   | { type: 'hold'; payload: { ids: number[] } }
   | { type: 'retreat'; payload: { ids: number[] } }
   | { type: 'gate'; payload: { id: number } }
