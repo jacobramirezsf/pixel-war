@@ -9,7 +9,7 @@ import { TEAM } from '../data/teams.ts';
 import { addBld, canBuild, passableFor } from './buildings.ts';
 import { rnd } from './rng.ts';
 import type { Building, Tech, Unit, World } from './types.ts';
-import { say } from './world.ts';
+import { allied, say } from './world.ts';
 import { mkUnit } from './units.ts';
 import { wonderDone } from './wonder.ts';
 
@@ -89,13 +89,26 @@ export function castleNear(w: World, slot: number, x: number, y: number, r = 96)
   return w.blds.some((b) => b.team === slot && b.type === 'castle' && b.buildT <= 0 && Math.hypot(b.x - x, b.y - y) < r);
 }
 
-/** Spawn beside a building, on the side facing the map center. */
+function hostileNear(w: World, team: number, x: number, y: number, r: number): boolean {
+  for (const u of w.units) if (u.hp > 0 && !allied(w, u.team, team) && TYPES[u.type].dmg > 0 && Math.hypot(u.x - x, u.y - y) < r) return true;
+  return false;
+}
+
+/**
+ * Spawn beside a building, on the side facing the map center. When enemies stand at that door,
+ * recruits muster at the hall instead of walking out one at a time into them.
+ */
 function spawnAt(w: World, b: Building, unit: UnitKey): Unit | null {
   const D = BLD[b.type];
   const cx = (w.map.cols * 8) / 2, cy = (w.map.rows * 8) / 2;
   const dx = Math.sign(cx - b.x) || 1, dy = Math.sign(cy - b.y) || 1;
   const rx = (D.w * 8) / 2 + 6, ry = (D.h * 8) / 2 + 6;
-  const tries: [number, number][] = [[b.x, b.y + dy * ry], [b.x + dx * rx, b.y], [b.x + dx * rx, b.y + dy * ry], [b.x - dx * rx, b.y], [b.x, b.y - dy * ry]];
+  let tries: [number, number][] = [[b.x, b.y + dy * ry], [b.x + dx * rx, b.y], [b.x + dx * rx, b.y + dy * ry], [b.x - dx * rx, b.y], [b.x, b.y - dy * ry]];
+  const home = w.slots[b.team].settlements.find((h) => h.hp > 0);
+  if (home && hostileNear(w, b.team, tries[0][0], tries[0][1], 30) && !hostileNear(w, b.team, home.x, home.y, 30)) {
+    const hx = Math.sign(cx - home.x) || 1, hy = Math.sign(cy - home.y) || 1;
+    tries = [[home.x, home.y + hy * 14], [home.x + hx * 18, home.y], [home.x - hx * 18, home.y], [home.x, home.y - hy * 14]];
+  }
   for (const [x, y] of tries) {
     const px = x + rnd(w.rng, -3, 3), py = y + rnd(w.rng, -3, 3);
     if (passableFor(w, b.team, px, py)) { const u = mkUnit(w, b.team, unit, px, py); w.units.push(u); return u; }

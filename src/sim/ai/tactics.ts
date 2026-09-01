@@ -51,6 +51,11 @@ export function order(w: World, slot: number, units: readonly Unit[], target: Ta
   applyCommand(w, cmd(w, slot, { type: 'attack', payload: { ids: units.map((u) => u.id), target: target ? refOf(target) : null } }), true);
 }
 
+export function attackMove(w: World, slot: number, units: readonly Unit[], x: number, y: number): void {
+  if (!units.length) return;
+  applyCommand(w, cmd(w, slot, { type: 'attack', payload: { ids: units.map((u) => u.id), target: null, x, y } }), true);
+}
+
 export function moveTo(w: World, slot: number, units: readonly Unit[], x: number, y: number): void {
   if (!units.length) return;
   applyCommand(w, cmd(w, slot, { type: 'move', payload: { ids: units.map((u) => u.id), x, y } }), true);

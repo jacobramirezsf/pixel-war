@@ -18,7 +18,7 @@ import type { BldKey } from '../../data/buildings.ts';
 import { TILE } from '../map.ts';
 import { pickUnit, roleMix } from './composition.ts';
 import { PROFILES, type AiProfile } from './profiles.ts';
-import { hostileValueNear, mineTargets, moveTo, nearestHostileBase, order, ownValueNear, pullBack, rallyPoint } from './tactics.ts';
+import { attackMove, hostileValueNear, mineTargets, moveTo, nearestHostileBase, order, ownValueNear, pullBack, rallyPoint } from './tactics.ts';
 
 export interface Assessment {
   own: Unit[];
@@ -84,7 +84,9 @@ function shop(w: World, slot: number, a: Assessment, P: AiProfile): void {
   // Saving: a unit picked against what twenty seconds of income can carry, bought when the gold
   // is there. Cheap fillers only while a threat is at the door. Better units are worth the wait.
   const income = w.mode === 'conquest' ? Math.max(1, w.net[slot]) : 2 + 1.5 * w.mines.filter((m) => m.owner === slot).length;
-  const budget = Math.max(30, s.gold + income * 20 * P.income);
+  // Early, or with no army to speak of, bodies now beat a better unit later.
+  const horizon = w.t < 120 || a.own.length < 5 ? 5 : 20;
+  const budget = Math.max(30, s.gold + income * horizon * P.income);
   if (s.aiWant && (!canTrain(w, slot, s.aiWant) || TYPES[s.aiWant].cost > budget + 40)) s.aiWant = null;
   // Queue a few ahead, never more: gold in the queue cannot answer a raid.
   for (let n = 0; n < 4 && queuedCount(w, slot) < 4; n++) {
@@ -235,16 +237,21 @@ export function decide(w: World, slot: number): void {
   const per = Math.min(1, P.react / 3);
   // Defend: units at home hold their ground behind the towers and engage what comes into reach.
   // Units out holding mines come back when the base is the bigger fight.
-  const homeValue = a.threatAt ? ownValueNear(w, slot, a.threatAt.x, a.threatAt.y, 64) : 0;
-  if (a.threatAt && a.threat > 0 && (a.threat >= 40 || a.threat > homeValue * 0.5)) {
-    const t = a.threatAt;
+  const homeT = a.threatAt ?? home;
+  const homeValue = ownValueNear(w, slot, homeT.x, homeT.y, 64);
+  // What is coming, not only what is already inside the walls.
+  const approaching = hostileValueNear(w, slot, homeT.x, homeT.y, 130);
+  if ((a.threatAt && a.threat > 0 && (a.threat >= 40 || a.threat > homeValue * 0.5)) || approaching >= 40) {
+    const t = homeT;
     const rallyT = rallyPoint(w, t);
+    // A wave that just left is still close: bring it back before the base is naked.
+    const out = a.own.filter((u) => !u.held && u.order && u.order.type === 'attack' && Math.hypot(u.x - t.x, u.y - t.y) >= 60 && Math.hypot(u.x - t.x, u.y - t.y) < 240);
+    if (out.length && approaching > homeValue * 0.8) { attackMove(w, slot, out, rallyT.x, rallyT.y); s.aiLast = w.t - P.pushEvery / 2; }
     const inside = a.own.filter((u) => Math.hypot(u.x - t.x, u.y - t.y) < 60);
     // Strong enough at home: sally and hit the attackers before they pick the towers apart.
     // The whole approaching force counts, not just what is already inside the walls, so a few
     // scouts do not pull the garrison out into the open ahead of the main push.
     // Otherwise hold behind the towers and let what comes into reach be dealt with.
-    const approaching = hostileValueNear(w, slot, t.x, t.y, 130);
     // Once the enemy is at the gates, holding back protects nothing: everything at home engages.
     const atGates = hostileValueNear(w, slot, t.x, t.y, 44) > 0;
     if (atGates || (homeValue >= 0.7 * a.threat && homeValue >= 0.9 * approaching)) {
@@ -269,7 +276,7 @@ export function decide(w: World, slot: number): void {
   // Reinforce: while a push is alive, fresh units go straight to it.
   if (P.reinforces && w.t - s.aiLast < 45 && a.own.some((u) => !u.held && u.order && u.order.type === 'attack')) {
     const target = nearestHostileBase(w, slot, home.x, home.y);
-    if (target && a.held.length) { for (const u of a.held) u.held = false; order(w, slot, a.held, target); }
+    if (target && a.held.length) { for (const u of a.held) u.held = false; attackMove(w, slot, a.held, target.x, target.y); }
   }
   // Retreat: units losing a local fight pull back to heal.
   if (P.retreats) {
@@ -279,16 +286,20 @@ export function decide(w: World, slot: number): void {
   // Expand: two idle units to the nearest free mine nobody of ours is already holding.
   const mines = mineTargets(w, slot);
   // Free mines and enemy mines held by a scout or two both count. Send enough to take it.
+  // Free mines first; a lightly held enemy mine is worth contesting when the held army outweighs
+  // its guard by half again. Sitting at home while the enemy holds every mine loses the game slowly.
+  const heldNow = a.held.reduce((v, u) => v + TYPES[u.type].cost, 0);
   const free = mines
-    .filter((m) => m.guard <= 40 && ownValueNear(w, slot, m.m.x, m.m.y, 20) === 0)
-    .sort((x, y) => Math.hypot(x.m.x - home.x, x.m.y - home.y) - Math.hypot(y.m.x - home.x, y.m.y - home.y));
+    .filter((m) => (m.guard <= 40 || m.guard * 1.5 < heldNow) && ownValueNear(w, slot, m.m.x, m.m.y, 20) === 0)
+    .sort((x, y) => (x.guard > 40 ? 1 : 0) - (y.guard > 40 ? 1 : 0) || Math.hypot(x.m.x - home.x, x.m.y - home.y) - Math.hypot(y.m.x - home.x, y.m.y - home.y));
   const early = w.t < 120 && a.held.length >= 2;
   if (free.length && (early || a.held.length >= P.minWave / 2 + 2) && rand(w.rng) < (early ? 1 : P.expands * per)) {
-    const need = free[0].guard > 0 ? 3 : 2;
-    const party = a.held.slice(0, need);
+    const m = free[0];
+    const party: Unit[] = [];
+    let v = 0;
+    for (const u of a.held) { if (party.length >= (m.guard > 0 ? 3 : 2) && v >= m.guard * 1.5) break; party.push(u); v += TYPES[u.type].cost; }
     for (const u of party) u.held = false;
-    if (free[0].guard > 0) order(w, slot, party, null);
-    moveTo(w, slot, party, free[0].m.x, free[0].m.y);
+    if (m.guard > 0) attackMove(w, slot, party, m.m.x, m.m.y); else moveTo(w, slot, party, m.m.x, m.m.y);
     return;
   }
   // Harass: fast units raid an enemy mine nobody is standing on.
@@ -313,17 +324,20 @@ export function decide(w: World, slot: number): void {
   const opposition = Math.max(60, defense, rivalValue);
   const ready = a.held.length >= P.minWave && heldValue >= P.massRatio * opposition;
   const overdue = a.held.length >= Math.max(3, P.minWave / 2) && w.t - s.aiLast > P.pushEvery && heldValue >= 0.9 * opposition;
-  if (target && (ready || overdue)) {
+  // No wave leaves while a force is already bearing down on home.
+  if (target && (ready || overdue) && approaching < heldValue * 0.5) {
     const wave = a.held.slice();
     for (const u of wave) u.held = false;
     const prong = P.multiProng && wave.length >= 8 ? mines.filter((m) => m.guard > 0 && m.guard < heldValue / 3).sort((x, y) => x.guard - y.guard)[0] : undefined;
+    // The wave attack-moves onto the target: it fights what it meets on the way and arrives in
+    // a loose order, melee first, so it does not string out into a column of exact-target chasers.
     if (prong) {
       const third = Math.floor(wave.length / 3);
       const flank = wave.slice(0, third);
       order(w, slot, flank, null);
       moveTo(w, slot, flank, prong.m.x, prong.m.y);
-      order(w, slot, wave.slice(third), target);
-    } else order(w, slot, wave, target);
+      attackMove(w, slot, wave.slice(third), target.x, target.y);
+    } else attackMove(w, slot, wave, target.x, target.y);
     s.aiLast = w.t;
     s.aiWant = null;
     return;

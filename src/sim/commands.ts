@@ -47,6 +47,24 @@ export function cmd(w: World, slot: number, a: Action): Command {
  * Apply one command now. Returns false when it was refused. `quiet` suppresses
  * player-facing messages, which the AI uses so its purchases do not spam the HUD.
  */
+/**
+ * Mixed groups keep a loose order without a formation: ranged and support units stop a little
+ * short of the point, siege shorter still, so the melee arrive first. Returns the per-unit pullback.
+ */
+function lineBack(us: readonly Unit[], x: number, y: number): (u: Unit) => { x: number; y: number } {
+  let cx = 0, cy = 0;
+  for (const u of us) { cx += u.x; cy += u.y; }
+  cx /= us.length; cy /= us.length;
+  const dx = x - cx, dy = y - cy, d = Math.hypot(dx, dy);
+  if (d < 20 || us.length < 3) return () => ({ x: 0, y: 0 });
+  const nx = dx / d, ny = dy / d;
+  return (u) => {
+    const T = TYPES[u.type];
+    const k = T.role === 'siege' ? 18 : T.range >= 20 || T.role === 'support' ? 11 : 0;
+    return { x: nx * k, y: ny * k };
+  };
+}
+
 export function applyCommand(w: World, c: Command, quiet = false): boolean {
   const say = (t: string, d?: number): void => { if (!quiet) worldSay(w, t, d); };
   const slot = c.slot, s = w.slots[slot];
@@ -184,9 +202,10 @@ export function applyCommand(w: World, c: Command, quiet = false): boolean {
       const us = ownUnits(w, slot, c.payload.ids);
       if (!us.length) return false;
       const W = mapW(w), H = mapH(w), { x, y } = c.payload;
+      const back = lineBack(us, x, y);
       us.forEach((u, i) => {
-        const a = i * 2.4, r = Math.sqrt(i) * 3.4;
-        u.order = { type: 'move', x: clamp(x + Math.cos(a) * r, 4, W - 4), y: clamp(y + Math.sin(a) * r, 4, H - 4) };
+        const a = i * 2.4, r = Math.sqrt(i) * 3.4, b = back(u);
+        u.order = { type: 'move', x: clamp(x + Math.cos(a) * r - b.x, 4, W - 4), y: clamp(y + Math.sin(a) * r - b.y, 4, H - 4) };
       });
       w.fx.push({ k: 'ping', x, y, t: 0.4 });
       return true;
@@ -197,9 +216,10 @@ export function applyCommand(w: World, c: Command, quiet = false): boolean {
       const tgt = resolveRef(w, c.payload.target);
       if (c.payload.target && (!tgt || allied(w, tgt.team, slot))) return false;
       const dest = c.payload.x !== undefined && c.payload.y !== undefined ? { x: clamp(c.payload.x, 4, mapW(w) - 4), y: clamp(c.payload.y, 4, mapH(w) - 4) } : null;
+      const back = dest ? lineBack(us, dest.x, dest.y) : () => ({ x: 0, y: 0 });
       us.forEach((u, i) => {
         const o: import('./types.ts').Order = { type: 'attack', tgt };
-        if (dest && !tgt) { const a = i * 2.4, r = Math.sqrt(i) * 3.4; o.x = clamp(dest.x + Math.cos(a) * r, 4, mapW(w) - 4); o.y = clamp(dest.y + Math.sin(a) * r, 4, mapH(w) - 4); }
+        if (dest && !tgt) { const a = i * 2.4, r = Math.sqrt(i) * 3.4, b = back(u); o.x = clamp(dest.x + Math.cos(a) * r - b.x, 4, mapW(w) - 4); o.y = clamp(dest.y + Math.sin(a) * r - b.y, 4, mapH(w) - 4); }
         u.order = o;
       });
       if (dest && !tgt) w.fx.push({ k: 'mark', x: dest.x, y: dest.y, r: 6, t: 0.5, c: '#ff9a9a' });

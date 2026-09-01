@@ -34,10 +34,11 @@ test('an exact target is attacked even when others are closer', () => {
   const w = arena();
   const a = mkUnit(w, 0, 'xbw', 60, 150);
   w.units.push(a);
-  const near = mkUnit(w, 1, 'shd', 60, 125), far = mkUnit(w, 1, 'sct', 60, 118);
+  const near = mkUnit(w, 1, 'shd', 60, 128), far = mkUnit(w, 1, 'sct', 60, 122);
   w.units.push(near, far);
   assert.ok(act(w, 0, { type: 'attack', payload: { ids: [a.id], target: { kind: 'unit', id: far.id } } }));
-  run(w, 3);
+  // Judge at the first hit: once the scout is dead the crossbow is free to pick a new target.
+  for (let i = 0; i < 180 && far.hp >= TYPES.sct.hp; i++) ticks(w, 1);
   assert.ok(far.hp < TYPES.sct.hp, 'the scout was hit');
   assert.equal(near.hp, TYPES.shd.hp, 'the shield was not');
 });

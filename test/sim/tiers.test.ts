@@ -40,5 +40,5 @@ test('a line or heavy unit beats the soldiers its gold buys, at every tier', () 
 test('scaling leaves the cheapest units alone', () => {
   assert.equal(TYPES.inf.hp, 40);
   assert.equal(TYPES.inf.dmg, 8);
-  assert.ok(TYPES.gnt.hp > 400 && TYPES.gnt.dmg > 45, 'giant ' + TYPES.gnt.hp + '/' + TYPES.gnt.dmg);
+  assert.ok(TYPES.gnt.hp > 400 && TYPES.gnt.dmg > 40, 'giant ' + TYPES.gnt.hp + '/' + TYPES.gnt.dmg);
 });

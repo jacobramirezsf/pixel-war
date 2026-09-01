@@ -81,24 +81,24 @@ const ARCH: Record<string, Base> = {
   sct: { name: 'SCOUT',    role: 'scout',   cost: 10,  hp: 20,  dmg: 5,  range: 6,  speed: 36, cd: 0.5,  aggro: 30 },
   inf: { name: 'SOLDIER',  role: 'line',    cost: 20,  hp: 40,  dmg: 8,  range: 7,  speed: 24, cd: 0.7,  aggro: 30 },
   spr: { name: 'SPEAR',    role: 'line',    cost: 25,  hp: 45,  dmg: 10, range: 12, speed: 22, cd: 0.9,  aggro: 30 },
-  arc: { name: 'ARCHER',   role: 'ranged',  cost: 30,  hp: 24,  dmg: 6,  range: 36, speed: 22, cd: 0.9,  aggro: 44 },
+  arc: { name: 'ARCHER',   role: 'ranged',  cost: 30,  hp: 26,  dmg: 7,  range: 36, speed: 22, cd: 0.9,  aggro: 44 },
   wrk: { name: 'WORKER',   role: 'support', cost: 25,  hp: 25,  dmg: 2,  range: 6,  speed: 26, cd: 0.6,  aggro: 24, repair: 8 },
   bmb: { name: 'BOMBER',   role: 'siege',   cost: 30,  hp: 25,  dmg: 45, range: 5,  speed: 30, cd: 0.1,  aggro: 36, splash: 14, suicide: true, bldDmg: 2 },
-  shd: { name: 'SHIELD',   role: 'line',    cost: 35,  hp: 90,  dmg: 6,  range: 7,  speed: 16, cd: 0.9,  aggro: 28, armor: 3 },
-  flm: { name: 'FLAMER',   role: 'line',    cost: 35,  hp: 35,  dmg: 5,  range: 14, speed: 20, cd: 0.25, aggro: 30, splash: 6, shot: '#ff8c2a' },
+  shd: { name: 'SHIELD',   role: 'line',    cost: 35,  hp: 90,  dmg: 8,  range: 7,  speed: 16, cd: 0.9,  aggro: 28, armor: 3 },
+  flm: { name: 'FLAMER',   role: 'line',    cost: 35,  hp: 35,  dmg: 5,  range: 14, speed: 20, cd: 0.3,  aggro: 30, splash: 6, shot: '#ff8c2a' },
   brk: { name: 'BERSERK',  role: 'line',    cost: 40,  hp: 50,  dmg: 13, range: 7,  speed: 28, cd: 0.45, aggro: 34 },
-  xbw: { name: 'CROSSBOW', role: 'ranged',  cost: 40,  hp: 30,  dmg: 16, range: 32, speed: 18, cd: 1.6,  aggro: 40 },
+  xbw: { name: 'CROSSBOW', role: 'ranged',  cost: 40,  hp: 32,  dmg: 18, range: 32, speed: 18, cd: 1.6,  aggro: 40 },
   med: { name: 'MEDIC',    role: 'support', cost: 40,  hp: 30,  dmg: 0,  range: 26, speed: 22, cd: 0.8,  aggro: 40, heal: 7 },
-  drn: { name: 'DRONE',    role: 'air',     cost: 45,  hp: 20,  dmg: 7,  range: 30, speed: 44, cd: 0.7,  aggro: 40, fly: true },
+  drn: { name: 'DRONE',    role: 'air',     cost: 45,  hp: 24,  dmg: 9,  range: 30, speed: 44, cd: 0.7,  aggro: 40, fly: true },
   asn: { name: 'ASSASSIN', role: 'fast',    cost: 45,  hp: 28,  dmg: 30, range: 6,  speed: 40, cd: 1.4,  aggro: 40 },
   kni: { name: 'KNIGHT',   role: 'fast',    cost: 50,  hp: 80,  dmg: 14, range: 8,  speed: 34, cd: 0.8,  aggro: 36 },
-  ban: { name: 'BANNER',   role: 'special', cost: 50,  hp: 50,  dmg: 4,  range: 7,  speed: 22, cd: 0.9,  aggro: 28, aura: 18 },
+  ban: { name: 'BANNER',   role: 'special', cost: 50,  hp: 70,  dmg: 6,  range: 7,  speed: 22, cd: 0.9,  aggro: 28, aura: 18 },
   wiz: { name: 'WIZARD',   role: 'special', cost: 55,  hp: 26,  dmg: 12, range: 40, speed: 18, cd: 1.2,  aggro: 46, splash: 9, shot: '#b06cff' },
   tnk: { name: 'TANK',     role: 'heavy',   cost: 60,  hp: 130, dmg: 20, range: 14, speed: 14, cd: 1.3,  aggro: 34 },
   mor: { name: 'MORTAR',   role: 'siege',   cost: 60,  hp: 40,  dmg: 24, range: 56, speed: 12, cd: 2.4,  aggro: 60, splash: 12, minRange: 20, shot: '#f2d34a', bldDmg: 2 },
-  snp: { name: 'SNIPER',   role: 'ranged',  cost: 70,  hp: 22,  dmg: 40, range: 64, speed: 16, cd: 2.6,  aggro: 70 },
-  mch: { name: 'MECH',     role: 'special', cost: 90,  hp: 200, dmg: 22, range: 9,  speed: 12, cd: 1.0,  aggro: 30, splash: 8, armor: 2 },
-  gnt: { name: 'GIANT',    role: 'special', cost: 150, hp: 400, dmg: 45, range: 10, speed: 9,  cd: 1.6,  aggro: 30, splash: 10, armor: 4 },
+  snp: { name: 'SNIPER',   role: 'ranged',  cost: 70,  hp: 26,  dmg: 40, range: 64, speed: 16, cd: 2.6,  aggro: 70 },
+  mch: { name: 'MECH',     role: 'special', cost: 90,  hp: 150, dmg: 16, range: 9,  speed: 12, cd: 1.0,  aggro: 30, splash: 8, armor: 2 },
+  gnt: { name: 'GIANT',    role: 'special', cost: 150, hp: 300, dmg: 32, range: 10, speed: 9,  cd: 1.7,  aggro: 30, splash: 10, armor: 3 },
 };
 
 /** Kingdom build order, the prototype's key order. */
@@ -153,10 +153,10 @@ const round5 = (v: number): number => Math.max(5, Math.round(v / 5) * 5);
 /**
  * Tier scaling. The prototype's numbers grow about linearly with cost, so a 150 gold giant is
  * worth four 20 gold soldiers. Power should grow faster than price: a unit costing k times a
- * soldier gets k^0.35 more hit points and k^0.25 more damage on top of its listed numbers.
+ * soldier gets k^0.22 more hit points and k^0.15 more damage on top of its listed numbers.
  */
-export const TIER_HP_EXP = 0.35;
-export const TIER_DMG_EXP = 0.25;
+export const TIER_HP_EXP = 0.22;
+export const TIER_DMG_EXP = 0.15;
 export function tierScale(cost: number): { hp: number; dmg: number } {
   const k = Math.max(1, cost / 20);
   return { hp: Math.pow(k, TIER_HP_EXP), dmg: Math.pow(k, TIER_DMG_EXP) };
@@ -213,7 +213,7 @@ function variant(race: RaceKey, arch: string): UnitDef {
 
 const SPECIALS: Record<Exclude<RaceKey, 'kingdom'>, (Omit<UnitDef, 'race' | 'sz' | 'r'>)[]> = {
   horde: [
-    { key: 'h_chief', name: 'WARCHIEF', role: 'special', cost: 55, hp: 70, dmg: 9, range: 8, speed: 24, cd: 0.8, aggro: 30, speedAura: 20,
+    { key: 'h_chief', name: 'WARCHIEF', role: 'special', cost: 55, hp: 90, dmg: 11, range: 8, speed: 24, cd: 0.8, aggro: 30, speedAura: 20,
       sprite: ['N.DDDD.N', 'NDDTTDDN', '.KKKKKK.', '.KTTTTK.', 'RTTTTTTR', 'RTDDDDTR', '..D..D..', '.DD..DD.'] },
     { key: 'h_sap', name: 'SAPPER', role: 'siege', cost: 35, hp: 40, dmg: 6, range: 6, speed: 26, cd: 0.7, aggro: 30, vsBld: 5,
       sprite: ['..DDD.G.', '..DTD.GG', '..KKK.G.', '.TTTT.X.', '.TTTTXX.', '.TDDT.X.', '..D..D..', '.DD..DD.'] },
@@ -223,17 +223,17 @@ const SPECIALS: Record<Exclude<RaceKey, 'kingdom'>, (Omit<UnitDef, 'race' | 'sz'
       sprite: ['...KKKK...', '..KDKKDK..', '..KKKKKK..', '.KKTTTTKK.', 'KKKTTTTKKK', 'K.KTTTTK.K', '..KKKKKK..', '..KK..KK..', '..KK..KK..', '.DDD..DDD.'] },
   ],
   undead: [
-    { key: 'u_necro', name: 'NECROMANCER', role: 'special', cost: 60, hp: 30, dmg: 8, range: 34, speed: 18, cd: 1.2, aggro: 44, raise: 30, shot: '#b06cff',
+    { key: 'u_necro', name: 'NECROMANCER', role: 'special', cost: 60, hp: 42, dmg: 9, range: 34, speed: 18, cd: 1.2, aggro: 44, raise: 30, shot: '#b06cff',
       sprite: ['..PPPP.G', '..PNNP.G', '..NDDN.G', '.PPPPP.G', '.PTTTP.G', '.PPPPP.G', '.PPPPP..', '.PP..PP.'] },
     { key: 'u_ghoul', name: 'GHOUL', role: 'line', cost: 30, hp: 45, dmg: 9, range: 6, speed: 30, cd: 0.7, aggro: 34, lifesteal: 0.5,
       sprite: ['..GGG...', '.GDGDG..', '.GGGGG..', '..TTT.G.', '.GTTTGG.', '.GGGGG..', '..G..G..', '.GG..GG.'] },
-    { key: 'u_bansh', name: 'BANSHEE', role: 'ranged', cost: 45, hp: 26, dmg: 7, range: 30, speed: 26, cd: 1.0, aggro: 42, slow: 2, fly: true, shot: '#dde2ec',
+    { key: 'u_bansh', name: 'BANSHEE', role: 'ranged', cost: 45, hp: 30, dmg: 9, range: 30, speed: 26, cd: 1.0, aggro: 42, slow: 2, fly: true, shot: '#dde2ec',
       sprite: ['..WWWW..', '.WWDDWW.', '.WWWWWW.', '..WTTW..', '.WWTTWW.', '.W.WW.W.', '..W..W..', '.W....W.'] },
-    { key: 'u_coloss', name: 'BONE COLOSSUS', role: 'heavy', cost: 120, hp: 260, dmg: 32, range: 10, speed: 10, cd: 1.5, aggro: 30, armor: 2, split: { unit: 'u_inf', n: 3 },
+    { key: 'u_coloss', name: 'BONE COLOSSUS', role: 'heavy', cost: 120, hp: 230, dmg: 30, range: 10, speed: 10, cd: 1.5, aggro: 30, armor: 2, split: { unit: 'u_inf', n: 3 },
       sprite: ['....NNNN....', '...NDNNDN...', '...NNNNNN...', '..NNTTTTNN..', '.NNNTTTTNNN.', 'NN.NTTTTN.NN', '...NNNNNN...', '...N.NN.N...', '...NN..NN...', '...NN..NN...', '..NNN..NNN..', '..DD....DD..'] },
   ],
   forge: [
-    { key: 'f_bulw', name: 'BULWARK', role: 'special', cost: 70, hp: 160, dmg: 8, range: 8, speed: 12, cd: 1.0, aggro: 28, armor: 3, guardAura: 20,
+    { key: 'f_bulw', name: 'BULWARK', role: 'special', cost: 70, hp: 160, dmg: 13, range: 8, speed: 12, cd: 1.0, aggro: 28, armor: 3, guardAura: 20,
       sprite: ['..IIIIII..', '.IMMMMMMI.', '.IMTTTTMI.', 'IIMTTTTMII', 'IIMMMMMMII', 'IIMMCCMMII', '.IMMMMMMI.', '..IIIIII..', '..II..II..', '..II..II..'] },
     { key: 'f_rail', name: 'RAILGUN', role: 'ranged', cost: 85, hp: 36, dmg: 26, range: 60, speed: 12, cd: 2.2, aggro: 66, pierce: true, shot: '#67e8f9',
       sprite: ['..IIII.C', '..IMMI.C', '..MMMM.C', '.TTTTIIC', '.TTTTIIC', '.IDDI..C', '..I..I..', '.II..II.'] },
@@ -245,11 +245,11 @@ const SPECIALS: Record<Exclude<RaceKey, 'kingdom'>, (Omit<UnitDef, 'race' | 'sz'
   wild: [
     { key: 'w_shade', name: 'SHADE', role: 'fast', cost: 55, hp: 30, dmg: 24, range: 6, speed: 38, cd: 1.2, aggro: 40, stealth: true, woodland: true,
       sprite: ['..DDDD..', '.DDDDDD.', '.DDLLDD.', '..DDDD..', '.DDTTDD.', '.DDDDDD.', '..D..D..', '.DD..DD.'] },
-    { key: 'w_druid', name: 'DRUID', role: 'ranged', cost: 50, hp: 32, dmg: 6, range: 32, speed: 22, cd: 1.1, aggro: 42, root: 1.5, shot: '#4caf50', woodland: true,
+    { key: 'w_druid', name: 'DRUID', role: 'ranged', cost: 50, hp: 36, dmg: 9, range: 32, speed: 22, cd: 1.1, aggro: 42, root: 1.5, shot: '#4caf50', woodland: true,
       sprite: ['..LLLL.X', '..LSSL.X', '..SSSS.L', '.LLLLL.X', '.LTTTL.X', '.LLLLL.X', '.LL.LL..', '.DD..DD.'] },
     { key: 'w_treant', name: 'TREANT', role: 'heavy', cost: 100, hp: 220, dmg: 28, range: 10, speed: 10, cd: 1.5, aggro: 30, armor: 2, treeArmor: 3, regen: 2, woodland: true,
       sprite: ['..LLLLLLLL..', '.LLLLLLLLLL.', 'LLLXXXXXXLLL', '.LLXDXXDXLL.', '..XXXXXXXX..', '..XXTTTTXX..', '.XXXTTTTXXX.', 'X.XXXXXXXX.X', '...XXXXXX...', '...XX..XX...', '...XX..XX...', '..XXX..XXX..'] },
-    { key: 'w_sprite', name: 'SPRITE', role: 'fast', cost: 40, hp: 22, dmg: 11, range: 8, speed: 34, cd: 0.8, aggro: 38, blink: 28, fly: true, woodland: true,
+    { key: 'w_sprite', name: 'SPRITE', role: 'fast', cost: 40, hp: 30, dmg: 12, range: 8, speed: 34, cd: 0.8, aggro: 38, blink: 28, fly: true, woodland: true,
       sprite: ['C..DD..C', '.CCSSCC.', '..CSSC..', '.CTTTTC.', 'C.TTTT.C', '..DDDD..', '..D..D..', '........'] },
   ],
 };
