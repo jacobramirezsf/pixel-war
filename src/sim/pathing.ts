@@ -47,7 +47,8 @@ export function dijk(cols: number, rows: number, starts: number | number[], cost
         const ni = ny * cols + nx, c = costFn(ni);
         if (c === Infinity) continue;
         if (dx && dy && (costFn(cy * cols + nx) === Infinity || costFn(ny * cols + cx) === Infinity)) continue;
-        const nd = dist[cur] + c * (dx && dy ? 1.414 : 1);
+        // dist is float32: push the value it will actually hold, or the pop-time staleness check drops the node.
+        const nd = Math.fround(dist[cur] + c * (dx && dy ? 1.414 : 1));
         if (nd < dist[ni]) { dist[ni] = nd; push(nd, ni); }
       }
   }

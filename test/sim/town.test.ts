@@ -96,7 +96,7 @@ test('cheats: unlimited gold, instant production, and no cooldowns', () => {
   assert.ok(act(w, 0, { type: 'power', payload: { power: 'heal', x: w.units[0].x, y: w.units[0].y } }));
   ticks(w, 1);
   assert.ok(act(w, 0, { type: 'power', payload: { power: 'heal', x: w.units[0].x, y: w.units[0].y } }), 'no cooldown');
-  assert.ok(act(w, 0, { type: 'cheats', payload: { gold: false, resources: false, instant: false, build: false, powers: false } }));
+  assert.ok(act(w, 0, { type: 'cheats', payload: { gold: false, resources: false, instant: false, build: false, powers: false, reveal: false } }));
   assert.ok(Number.isFinite(w.slots[0].gold));
 });
 

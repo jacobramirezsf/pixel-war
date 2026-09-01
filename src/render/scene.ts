@@ -6,6 +6,7 @@ import { TILE, type MapDef } from '../sim/map.ts';
 import { BLD } from '../data/buildings.ts';
 import type { Building, Mine, Settlement, World } from '../sim/types.ts';
 import { emptyTown, BASE_HP, mapH } from '../sim/world.ts';
+import { computeVision } from '../sim/vision.ts';
 import { maxHp, rank } from '../sim/units.ts';
 import { drawBldSpr, drawSprite } from './atlas.ts';
 import { snapped, type Camera } from './camera.ts';
@@ -208,6 +209,34 @@ function tintLayer(w: World): HTMLCanvasElement | null {
   return c;
 }
 
+/** Unexplored tiles are black; explored but unseen ones are dimmed. Only the tiles in view are touched. */
+function drawFog(ctx: CanvasRenderingContext2D, w: World, fog: Uint8Array, seen: Uint8Array, r: { x0: number; y0: number; x1: number; y1: number }): void {
+  const cols = w.map.cols, rows = w.map.rows;
+  const x0 = Math.max(0, (r.x0 / TILE) | 0), y0 = Math.max(0, (r.y0 / TILE) | 0), x1 = Math.min(cols - 1, (r.x1 / TILE) | 0), y1 = Math.min(rows - 1, (r.y1 / TILE) | 0);
+  for (let pass = 0; pass < 2; pass++) {
+    ctx.fillStyle = pass === 0 ? 'rgba(6,7,12,.5)' : '#07080c';
+    for (let ty = y0; ty <= y1; ty++) {
+      let run = -1;
+      for (let tx = x0; tx <= x1 + 1; tx++) {
+        const i = ty * cols + tx;
+        const on = tx <= x1 && (pass === 0 ? seen[i] === 1 && fog[i] === 0 : seen[i] === 0);
+        if (on && run < 0) run = tx;
+        else if (!on && run >= 0) { ctx.fillRect(run * TILE, ty * TILE, (tx - run) * TILE, TILE); run = -1; }
+      }
+    }
+  }
+}
+
+let visBuf: Uint8Array | null = null;
+
+/** Current sight for the viewer, or null without fog. Recomputed each frame; shared with the minimap. */
+export function frameVision(w: World, viewer: number): Uint8Array | null {
+  if (!w.seen || w.cheats.reveal) return null;
+  const n = w.map.cols * w.map.rows;
+  if (!visBuf || visBuf.length !== n) visBuf = new Uint8Array(n);
+  return computeVision(w, viewer, visBuf);
+}
+
 export function drawWorld(ctx: CanvasRenderingContext2D, bg: HTMLCanvasElement, w: World, v: ViewState): void {
   const { drag, alpha, cam } = v;
   const r = beginView(ctx, cam, v.dpr, v.shake);
@@ -215,11 +244,16 @@ export function drawWorld(ctx: CanvasRenderingContext2D, bg: HTMLCanvasElement, 
   ctx.drawImage(bg, 0, 0);
   if (w.regionOf && (v.overlay || w.regions.some((r) => r.contested))) { const t = tintLayer(w); if (t) ctx.drawImage(t, 0, 0); }
   const H = mapH(w);
-  for (const m of w.mines) if (vis(m.x, m.y)) drawMine(ctx, m);
-  for (const s of w.slots) for (const b of s.settlements) if (vis(b.x, b.y, 24)) drawBase(ctx, b, H);
-  for (const b of w.blds) if (b.kind !== 'tower' && vis(b.x, b.y)) drawBld(ctx, b);
-  for (const b of w.blds) if (b.kind === 'tower' && vis(b.x, b.y)) drawBld(ctx, b);
-  const us = w.units.filter((u) => vis(u.x, u.y)).sort((a, b) => a.y - b.y);
+  const fog = frameVision(w, v.viewer), seen = fog ? w.seen : null, cols = w.map.cols;
+  const own = (team: number): boolean => w.slots[team].ally === w.slots[v.viewer].ally;
+  const tileOf = (x: number, y: number): number => ((y / TILE) | 0) * cols + ((x / TILE) | 0);
+  const inSight = (x: number, y: number): boolean => !fog || fog[tileOf(x, y)] === 1;
+  const known = (x: number, y: number): boolean => !seen || seen[tileOf(x, y)] === 1;
+  for (const m of w.mines) if (vis(m.x, m.y) && known(m.x, m.y)) drawMine(ctx, m);
+  for (const s of w.slots) for (const b of s.settlements) if (vis(b.x, b.y, 24) && (own(b.team) || known(b.x, b.y))) drawBase(ctx, b, H);
+  for (const b of w.blds) if (b.kind !== 'tower' && vis(b.x, b.y) && (own(b.team) || known(b.x, b.y))) drawBld(ctx, b);
+  for (const b of w.blds) if (b.kind === 'tower' && vis(b.x, b.y) && (own(b.team) || known(b.x, b.y))) drawBld(ctx, b);
+  const us = w.units.filter((u) => vis(u.x, u.y) && (own(u.team) || inSight(u.x, u.y))).sort((a, b) => a.y - b.y);
   for (const u of us) {
     const T = TYPES[u.type], sz = T.sz, h = sz / 2;
     const hidden = !unitVisible(u);
@@ -275,6 +309,7 @@ export function drawWorld(ctx: CanvasRenderingContext2D, bg: HTMLCanvasElement, 
     ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.strokeRect(rally.x - 3.5, rally.y - 2.5, 7, 4);
   }
   drawFx(ctx, w.fx, { damageNumbers: v.damageNumbers });
+  if (fog && seen) drawFog(ctx, w, fog, seen, r);
   if (v.ghost) { ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.beginPath(); ctx.arc(v.ghost.x, v.ghost.y, v.ghost.r, 0, 7); ctx.stroke(); }
   if (v.place) {
     const p = v.place;

@@ -5,7 +5,7 @@ export type WorldSize = 'small' | 'standard' | 'large';
 export const WORLD_SIZES: Record<WorldSize, { name: string; grid: number; text: string }> = {
   small:    { name: 'SMALL',    grid: 3, text: 'Nine regions. Neighbors close by.' },
   standard: { name: 'STANDARD', grid: 4, text: 'Sixteen regions. Room for a second town.' },
-  large:    { name: 'LARGE',    grid: 5, text: 'Twenty-five regions. Long marches, several fronts.' },
+  large:    { name: 'LARGE',    grid: 5, text: 'Twenty-five wide regions. Long marches, several fronts.' },
 };
 
 export type FeatKey = 'kingdom' | 'greatCity' | 'empire' | 'conqueror' | 'greatPower' | 'survivor';

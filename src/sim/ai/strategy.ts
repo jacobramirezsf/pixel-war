@@ -75,14 +75,27 @@ function shop(w: World, slot: number, a: Assessment, P: AiProfile): void {
     if (s.gold >= TYPES[cheap].cost) buy(w, slot, cheap, true);
     return;
   }
-  // Spend down to a small reserve. Several purchases per decision when the treasury allows.
   const home = s.settlements.find((b) => b.hp > 0);
   const tgt = home ? nearestHostileBase(w, slot, home.x, home.y) : null;
   const fortified = !!tgt && w.blds.filter((b) => b.kind === 'tower' && !allied(w, b.team, slot) && Math.hypot(b.x - tgt.x, b.y - tgt.y) < 60).length >= 2;
+  // Saving: a unit picked against what twenty seconds of income can carry, bought when the gold
+  // is there. Cheap fillers only while a threat is at the door. Better units are worth the wait.
+  const income = w.mode === 'conquest' ? Math.max(1, w.net[slot]) : 2 + 1.5 * w.mines.filter((m) => m.owner === slot).length;
+  const budget = Math.max(30, s.gold + income * 20 * P.income);
+  if (s.aiWant && (!canTrain(w, slot, s.aiWant) || TYPES[s.aiWant].cost > budget + 40)) s.aiWant = null;
   // Queue a few ahead, never more: gold in the queue cannot answer a raid.
   for (let n = 0; n < 4 && queuedCount(w, slot) < 4; n++) {
-    const k = pickUnit(w.rng, race, w.t, s.gold, enemyMix, P.counter, (u) => !!canTrain(w, slot, u), fortified);
-    if (!k || s.gold < TYPES[k].cost) break;
+    const k = s.aiWant ?? pickUnit(w.rng, race, w.t, budget, enemyMix, P.counter, (u) => !!canTrain(w, slot, u), fortified);
+    if (!k) break;
+    if (s.gold < TYPES[k].cost) {
+      // Under attack, buy the best thing the gold covers now. Otherwise save for the pick.
+      if (a.threat > 0 && s.gold >= 20) {
+        const now = pickUnit(w.rng, race, w.t, s.gold, enemyMix, P.counter, (u) => !!canTrain(w, slot, u) || TYPES[u].cost > s.gold, fortified);
+        if (now && s.gold >= TYPES[now].cost) buy(w, slot, now, true);
+      } else s.aiWant = k;
+      break;
+    }
+    s.aiWant = null;
     if (!buy(w, slot, k, true)) break;
   }
 }
@@ -210,8 +223,13 @@ export function decide(w: World, slot: number): void {
     const rallyT = rallyPoint(w, t);
     const inside = a.own.filter((u) => Math.hypot(u.x - t.x, u.y - t.y) < 60);
     // Strong enough at home: sally and hit the attackers before they pick the towers apart.
+    // The whole approaching force counts, not just what is already inside the walls, so a few
+    // scouts do not pull the garrison out into the open ahead of the main push.
     // Otherwise hold behind the towers and let what comes into reach be dealt with.
-    if (homeValue >= 0.7 * a.threat) {
+    const approaching = hostileValueNear(w, slot, t.x, t.y, 130);
+    // Once the enemy is at the gates, holding back protects nothing: everything at home engages.
+    const atGates = hostileValueNear(w, slot, t.x, t.y, 44) > 0;
+    if (atGates || (homeValue >= 0.7 * a.threat && homeValue >= 0.9 * approaching)) {
       let nearest: Unit | null = null, nd = Infinity;
       for (const e of a.enemy) { const d = Math.hypot(e.x - t.x, e.y - t.y); if (d < nd) { nd = d; nearest = e; } }
       const sally = inside.filter((u) => !(u.order && u.order.type === 'retreat'));

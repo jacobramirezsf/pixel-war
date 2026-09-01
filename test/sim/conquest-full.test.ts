@@ -28,6 +28,9 @@ test('unrest climbs in an undermanned border region and the region revolts', () 
   const cap = w.regions[w.capitals[0]];
   const nb = w.regions.find((r) => cap.adj.includes(r.id))!;
   nb.owner = 0;
+  // A hostile neighbor is what asks for a garrison.
+  const foe = w.regions.find((r) => nb.adj.includes(r.id) && r.id !== cap.id && r.owner < 0)!;
+  foe.owner = 1;
   for (const u of w.units) if (u.team === 0) u.hp = 0;
   nb.unrest = 90;
   let revolted = false;

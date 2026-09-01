@@ -8,7 +8,7 @@ import { BUILTIN, type EditorTool } from '../data/maps.ts';
 import { roster, type UnitKey } from '../data/units.ts';
 import type { PowerKey } from '../data/powers.ts';
 import type { Storage } from '../platform/storage.ts';
-import { fitZoom, makeCamera, setMap, setViewport, type Camera } from '../render/camera.ts';
+import { centerOn, fitZoom, makeCamera, setMap, setViewport, type Camera } from '../render/camera.ts';
 import { makeMinimapCache, type MinimapCache } from '../render/minimap.ts';
 import { buildBg } from '../render/terrain.ts';
 import type { DragRect } from '../render/scene.ts';
@@ -162,6 +162,9 @@ export function homeZoom(app: App): void {
   app.cam.x = 0;
   app.cam.y = 0;
   setViewport(app.cam, app.cam.vw, app.cam.vh);
+  // Open on the player's home when there is one.
+  const home = app.world?.slots[app.ctl]?.settlements.find((b) => b.hp > 0);
+  if (home) centerOn(app.cam, home.x, home.y, false);
 }
 
 export function loadMap(app: App, map: MapDef): void {

@@ -10,6 +10,26 @@ import type { Building, Cheats, Command, Fx, GameEvent, Mode, Order, Outcome, Pe
 
 export const BASE_HP = 400;
 
+/** Explored map as a run-length string: pairs of run lengths, unseen first. */
+export function packSeen(a: Uint8Array): string {
+  const runs: number[] = [];
+  let cur = 0, n = 0;
+  for (let i = 0; i < a.length; i++) {
+    const v = a[i] ? 1 : 0;
+    if (v === cur) n++; else { runs.push(n); cur = v; n = 1; }
+  }
+  runs.push(n);
+  return a.length + ':' + runs.join(',');
+}
+
+export function unpackSeen(s: string): Uint8Array {
+  const [len, body] = s.split(':');
+  const out = new Uint8Array(+len);
+  let i = 0, v = 0;
+  for (const r of body.split(',')) { const n = +r; if (v) out.fill(1, i, i + n); i += n; v ^= 1; }
+  return out;
+}
+
 export function emptyTown(): import('./types.ts').TownStats {
   return { residents: 0, housing: 0, jobs: 0, employed: 0, income: 0, state: 'stable', safeT: 999, growT: 0, peak: 0 };
 }
@@ -69,7 +89,7 @@ export function reset(map: MapDef, cfg?: Partial<WorldConfig>): World {
     fxRng: makeRng((cfg?.seed ?? 1) ^ 0x5f3759df),
     regions: [],
     regionOf: null,
-    rules: { town: true, ages: false, civilians: false, upkeep: false, connection: false, garrison: false, unrest: false, materials: false, population: false, diplomacy: false, veterancy: false },
+    rules: { town: true, ages: false, civilians: false, fog: false, upkeep: false, connection: false, garrison: false, unrest: false, materials: false, population: false, diplomacy: false, veterancy: false },
     net: Array.from({ length: nP }, () => 0),
     broke: Array.from({ length: nP }, () => 0),
     capitals: Array.from({ length: nP }, () => -1),
@@ -78,7 +98,8 @@ export function reset(map: MapDef, cfg?: Partial<WorldConfig>): World {
     mapDirty: false,
     strikes: [],
     instant: !!cfg?.instant,
-    cheats: { gold: false, resources: false, instant: false, build: false, powers: false, ...(cfg?.cheats ?? {}) },
+    cheats: Object.assign({ gold: false, resources: false, instant: false, build: false, powers: false, reveal: false }, cfg?.cheats ?? {}),
+    seen: null,
     feats: [],
     eventT: 180,
     pending: null,
@@ -166,7 +187,7 @@ export interface Snapshot {
   queue: Command[]; log: Command[]; fxRng: Rng;
   regions: Region[]; regionOf: number[] | null; rules: Rules; net: number[]; broke: number[]; capitals: number[];
   events: GameEvent[]; neutral: number; strikes: Strike[]; instant: boolean; cheats: Cheats;
-  feats: import('../data/realm.ts').FeatKey[]; eventT: number; pending: Pending | null; day: number;
+  seen?: string; feats: import('../data/realm.ts').FeatKey[]; eventT: number; pending: Pending | null; day: number;
 }
 
 const copyCmd = (c: Command): Command => JSON.parse(JSON.stringify(c)) as Command;
@@ -219,7 +240,7 @@ export function snapshot(w: World): Snapshot {
     rules: { ...w.rules }, net: w.net.slice(), broke: w.broke.slice(), capitals: w.capitals.slice(),
     events: w.events.map((e) => ({ ...e })), neutral: w.neutral, strikes: w.strikes.map((k) => ({ ...k })), instant: w.instant,
     cheats: { ...w.cheats },
-    feats: w.feats.slice(), eventT: w.eventT, pending: w.pending ? { ...w.pending } : null, day: w.day,
+    ...(w.seen ? { seen: packSeen(w.seen) } : {}), feats: w.feats.slice(), eventT: w.eventT, pending: w.pending ? { ...w.pending } : null, day: w.day,
   };
 }
 
@@ -270,11 +291,11 @@ export function restore(s: Snapshot): World {
     snap: s.snap ? { units: s.snap.units.map((u) => ({ ...u })), blds: s.snap.blds.map((b) => ({ ...b })) } : null,
     queue: s.queue.map(copyCmd), log: s.log.map(copyCmd), fxRng: { s: s.fxRng.s },
     regions: (s.regions ?? []).map((r) => ({ ...r, adj: r.adj.slice() })), regionOf: s.regionOf ? Uint8Array.from(s.regionOf) : null,
-    rules: Object.assign({ town: false, ages: false, civilians: false, upkeep: false, connection: false, garrison: false, unrest: false, materials: false, population: false, diplomacy: false, veterancy: false }, s.rules ?? {}),
+    rules: Object.assign({ town: false, ages: false, civilians: false, fog: false, upkeep: false, connection: false, garrison: false, unrest: false, materials: false, population: false, diplomacy: false, veterancy: false }, s.rules ?? {}),
     net: (s.net ?? slots.map(() => 0)).slice(), broke: (s.broke ?? slots.map(() => 0)).slice(), capitals: (s.capitals ?? slots.map(() => -1)).slice(),
     events: (s.events ?? []).map((e) => ({ ...e })), neutral: s.neutral ?? -1, mapDirty: false, strikes: (s.strikes ?? []).map((k) => ({ ...k })), instant: !!s.instant,
-    cheats: Object.assign({ gold: false, resources: false, instant: false, build: false, powers: false }, s.cheats ?? {}),
-    feats: (s.feats ?? []).slice(), eventT: s.eventT ?? 180, pending: s.pending ? { ...s.pending } : null, day: s.day ?? 0,
+    cheats: Object.assign({ gold: false, resources: false, instant: false, build: false, powers: false, reveal: false }, s.cheats ?? {}),
+    seen: s.seen ? unpackSeen(s.seen) : null, feats: (s.feats ?? []).slice(), eventT: s.eventT ?? 180, pending: s.pending ? { ...s.pending } : null, day: s.day ?? 0,
   };
 }
 

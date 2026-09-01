@@ -18,12 +18,14 @@ export interface Camera {
   /** Fling velocity in screen pixels per second. */
   vx: number;
   vy: number;
+  /** Smallest zoom for this map: 1 normally, 0.5 when the map would not fit the view otherwise. */
+  minZoom: number;
 }
 
 export const ZOOM_MAX = 6;
 
 export function makeCamera(): Camera {
-  return { x: 0, y: 0, zoom: 2, vw: 320, vh: 480, mapW: 160, mapH: 224, tx: null, ty: null, tz: null, vx: 0, vy: 0 };
+  return { x: 0, y: 0, zoom: 2, vw: 320, vh: 480, mapW: 160, mapH: 224, tx: null, ty: null, tz: null, vx: 0, vy: 0, minZoom: 1 };
 }
 
 export function setViewport(cam: Camera, vw: number, vh: number): void {
@@ -36,13 +38,22 @@ export function setMap(cam: Camera, mapW: number, mapH: number): void {
   cam.mapW = mapW;
   cam.mapH = mapH;
   cam.tx = cam.ty = null;
+  // Big worlds may zoom out to half scale so the whole map can be seen at once.
+  cam.minZoom = mapW > cam.vw * 1.2 || mapH > cam.vh * 1.2 ? 0.5 : 1;
   clampCam(cam);
+}
+
+/** Whole zoom steps, plus the half step on big maps. */
+export function snapZoom(cam: Camera, z: number): number {
+  if (z < 0.75 && cam.minZoom < 1) return 0.5;
+  return Math.max(1, Math.min(ZOOM_MAX, Math.round(z)));
 }
 
 /** Largest integer zoom that fits the map width (mobile) or both dimensions (desktop). */
 export function fitZoom(cam: Camera, mode: 'width' | 'both'): number {
   const zw = Math.floor(cam.vw / cam.mapW), zh = Math.floor(cam.vh / cam.mapH);
   const z = mode === 'width' ? zw : Math.min(zw, zh);
+  if (z < 1) return cam.minZoom;
   return Math.max(1, Math.min(ZOOM_MAX, z));
 }
 
@@ -59,7 +70,7 @@ export function clampCam(cam: Camera): void {
 
 /** Change zoom to a whole step keeping the world point under screen point (ax, ay) fixed. */
 export function setZoom(cam: Camera, z: number, ax = cam.vw / 2, ay = cam.vh / 2): void {
-  z = Math.max(1, Math.min(ZOOM_MAX, Math.round(z)));
+  z = snapZoom(cam, z);
   if (z === cam.zoom) return;
   zoomTo(cam, z, ax, ay);
   cam.tz = null;
@@ -67,7 +78,7 @@ export function setZoom(cam: Camera, z: number, ax = cam.vw / 2, ay = cam.vh / 2
 
 /** Any zoom, fractional allowed. Pinches use this, then settle on a whole step. */
 export function zoomTo(cam: Camera, z: number, ax = cam.vw / 2, ay = cam.vh / 2): void {
-  z = Math.max(1, Math.min(ZOOM_MAX, z));
+  z = Math.max(cam.minZoom, Math.min(ZOOM_MAX, z));
   const wx = cam.x + ax / cam.zoom, wy = cam.y + ay / cam.zoom;
   cam.zoom = z;
   cam.x = wx - ax / z;
@@ -78,7 +89,7 @@ export function zoomTo(cam: Camera, z: number, ax = cam.vw / 2, ay = cam.vh / 2)
 
 /** After a pinch: glide to the nearest whole zoom so pixels are crisp at rest. */
 export function settleZoom(cam: Camera): void {
-  cam.tz = Math.max(1, Math.min(ZOOM_MAX, Math.round(cam.zoom)));
+  cam.tz = snapZoom(cam, cam.zoom);
 }
 
 /** Give the camera a push, in screen pixels per second. It coasts and slows on its own. */

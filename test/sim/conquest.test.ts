@@ -119,6 +119,8 @@ test('save, reload, and continue identically', () => {
 
 test('the rival expands and taking its capital is a feat', () => {
   const w = conquest(5);
+  // At peace, as a Realm starts: this is about expansion, not surviving a siege unattended.
+  setTruce(w, 0, 1, true);
   const home = w.slots[0].settlements[0];
   for (let i = 0; i < 8; i++) w.units.push(mkUnit(w, 0, 'kni', home.x + i * 8 - 28, home.y - 24));
   run(w, 240);

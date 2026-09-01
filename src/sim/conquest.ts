@@ -451,8 +451,9 @@ export function conquestTick(w: World, dt: number, mcount: number[]): void {
     r.garrison = byRegion.get(allyOf[r.owner] + ':' + r.id) ?? 0;
     let hostileAdj = 0;
     for (const a of r.adj) { const o = w.regions[a].owner; if (o >= 0 && allyOf[o] !== allyOf[r.owner] && !w.slots[o].truce[r.owner]) hostileAdj++; }
-    // Interior regions need little. Every hostile neighbor asks for a real garrison.
-    let need = 20 + 60 * hostileAdj;
+    // Security follows what can be seen: every hostile neighbor asks for a real garrison.
+    // Interior regions and a realm at peace need none.
+    let need = 60 * hostileAdj;
     const strong = (reg: number, tiers: Tier[]): boolean => settlementsIn(w, reg).some((b) => tiers.includes(b.tier) && b.buildT <= 0 && b.team === r.owner);
     const fortNear = strong(r.id, ['fortress', 'city']) || r.adj.some((a) => strong(a, ['fortress', 'city'])) || castleNear(w, r.owner, r.cx, r.cy, 110);
     const cityTwo = r.adj.some((a) => w.regions[a].adj.some((b) => strong(b, ['city'])));

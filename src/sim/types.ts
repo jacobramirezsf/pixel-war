@@ -28,6 +28,8 @@ export interface Cheats {
   instant: boolean;
   build: boolean;
   powers: boolean;
+  /** Whole map explored and in sight. */
+  reveal: boolean;
 }
 export type Phase = 'play' | 'edit';
 export type Outcome = 'win' | 'lose' | null;
@@ -112,6 +114,8 @@ export interface Rules {
   ages: boolean;
   /** Villagers live in towns, take jobs, and flee raids. Realm only. */
   civilians: boolean;
+  /** Fog of war for the player. Realm only. */
+  fog: boolean;
   upkeep: boolean;
   connection: boolean;
   garrison: boolean;
@@ -358,6 +362,8 @@ export interface World {
   /** Production finishes at once. A game option, set at start. */
   instant: boolean;
   cheats: Cheats;
+  /** Explored tiles for the player, or null without fog. */
+  seen: Uint8Array | null;
   /** Realm accomplishments earned so far, in order. */
   feats: import('../data/realm.ts').FeatKey[];
   /** Seconds until the next clocked event. */

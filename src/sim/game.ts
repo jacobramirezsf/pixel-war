@@ -6,6 +6,7 @@ import { buildFort } from './buildings.ts';
 import { prebuildTown } from './town.ts';
 import { seedResidents } from './civ.ts';
 import { WORLD_SIZES } from '../data/realm.ts';
+import { realmMap, shapeRealm } from './realmgen.ts';
 import { makeRegions, mkNeutralSlot, populateWorld, regionAt, TIERS } from './conquest.ts';
 import { cloneMap, finishMap, type MapDef } from './map.ts';
 import { gen, mkBases } from './mapgen.ts';
@@ -39,6 +40,12 @@ export function prepareMap(map: MapDef, nP: number): MapDef {
 
 /** Conquest worlds: 40x40 with nine regions for one rival, larger grids for more. */
 export function conquestMap(seed: number, rivals = 1, worldSize?: import('../data/realm.ts').WorldSize): { map: MapDef; grid: number } {
+  const grid = worldSize ? WORLD_SIZES[worldSize].grid : rivals <= 1 ? 3 : rivals === 2 ? 4 : 5;
+  return realmMap(seed, grid, rivals);
+}
+
+/** The older symmetric-noise conquest map. Kept for tests that pin it. */
+export function legacyConquestMap(seed: number, rivals = 1, worldSize?: import('../data/realm.ts').WorldSize): { map: MapDef; grid: number } {
   const grid = worldSize ? WORLD_SIZES[worldSize].grid : rivals <= 1 ? 3 : rivals === 2 ? 4 : 5;
   // Sixteen tiles a region leaves room for a town.
   const size = grid * 16;
@@ -87,14 +94,17 @@ export function newConquest(cfg?: GameConfig): World {
   const { map, grid } = conquestMap(seed, rivals, cfg?.size);
   const allies = Array.from({ length: rivals + 1 }, (_, i) => i);
   const races = allies.map((i) => cfg?.races?.[i] ?? 'kingdom');
+  // Regions come first so the generator can shape the land around them before the world copies it.
+  const rng = makeRng(seed ^ 0x9e3779b9);
+  const { regions, regionOf } = makeRegions(map, rng, grid);
+  shapeRealm(map, regions, rng, map.bases);
   const w = reset(map, { allies, diff: cfg?.diff ?? 'std', seed, ai: allies.map((i) => i !== 0), races, diffs: cfg?.diffs, instant: cfg?.instant, cheats: cfg?.cheats });
   w.mode = 'conquest';
   w.cap = 80;
-  w.rules = { town: true, ages: true, civilians: true, upkeep: true, connection: true, garrison: true, unrest: true, materials: true, population: true, diplomacy: true, veterancy: true, ...(cfg?.rules ?? {}) };
-  const rng = makeRng(seed ^ 0x9e3779b9);
-  const { regions, regionOf } = makeRegions(map, rng, grid);
+  w.rules = { town: true, ages: true, civilians: true, fog: true, upkeep: true, connection: true, garrison: true, unrest: true, materials: true, population: true, diplomacy: true, veterancy: true, ...(cfg?.rules ?? {}) };
   w.regions = regions;
   w.regionOf = regionOf;
+  w.seen = new Uint8Array(map.cols * map.rows);
   for (let i = 0; i < w.nP; i++) {
     const b = w.slots[i].settlements[0];
     b.tier = 'village';

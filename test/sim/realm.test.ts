@@ -23,7 +23,7 @@ test('rivals start at peace, days tick, and beating every rival is a feat, not t
 test('world size sets the grid regardless of rival count', () => {
   assert.equal(realm(1, 'small').map.cols, 48);
   assert.equal(realm(1, 'standard').map.cols, 64);
-  assert.equal(realm(1, 'large').map.cols, 80);
+  assert.equal(realm(1, 'large').map.cols, 90);
   assert.equal(realm(1, 'large').regions.length, 25);
 });
 

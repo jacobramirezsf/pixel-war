@@ -72,10 +72,12 @@ export function pickUnit(rng: Rng, race: RaceKey, t: number, gold: number, enemy
   const list = roster(race).filter((k) => !exclude(k) && !TYPES[k].repair);
   if (!list.length) return null;
   const rw = roleWeights(t, enemy, strength, fortified);
-  const budget = Math.max(30, gold + 20);
+  // `gold` is the budget the caller can carry. Within it, dearer units are favored: a unit that
+  // costs five soldiers is worth more than five soldiers, and one body is easier to keep alive.
+  const budget = Math.max(30, gold);
   const wts = list.map((k) => {
     const T = TYPES[k];
-    const fit = T.cost > budget ? 0.05 : 1 - (T.cost / budget) * 0.5;
+    const fit = T.cost > budget ? 0.03 : 0.35 + 0.65 * Math.min(1, T.cost / budget);
     return (rw[T.role] ?? 0.5) * fit;
   });
   let r = rand(rng) * wts.reduce((a, b) => a + b, 0);

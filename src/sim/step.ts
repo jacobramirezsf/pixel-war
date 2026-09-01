@@ -15,6 +15,7 @@ import { conquestTick, grossIncome } from './conquest.ts';
 import { powersTick } from './powers.ts';
 import { townTick } from './town.ts';
 import { civTick, isCiv } from './civ.ts';
+import { visionTick } from './vision.ts';
 import { rand, rnd } from './rng.ts';
 import { fillGrid, forNear, gridOf, nearestHostileWithin } from './spatial.ts';
 import type { Building, Target, Unit, World } from './types.ts';
@@ -214,6 +215,7 @@ export function step(w: World): void {
     powersTick(w, dt);
     townTick(w, dt);
     civTick(w);
+    visionTick(w);
     if (w.cheats.gold) w.slots[0].gold = Infinity;
     if (w.cheats.resources) w.slots[0].mat = 99999;
     if (w.cheats.powers) w.slots[0].powerCd = {};

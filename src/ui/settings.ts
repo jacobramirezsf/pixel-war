@@ -13,10 +13,10 @@ export interface Settings {
   autoPause: boolean;
   /** Units finish the moment they are bought. */
   instant: boolean;
-  cheats: { gold: boolean; resources: boolean; instant: boolean; build: boolean; powers: boolean };
+  cheats: import('../sim/types.ts').Cheats;
 }
 
-export const DEFAULT_SETTINGS: Settings = { edgePan: false, hints: true, damageNumbers: false, volume: 0.7, muted: false, colorblind: false, autoPause: true, instant: false, cheats: { gold: false, resources: false, instant: false, build: false, powers: false } };
+export const DEFAULT_SETTINGS: Settings = { edgePan: false, hints: true, damageNumbers: false, volume: 0.7, muted: false, colorblind: false, autoPause: true, instant: false, cheats: { gold: false, resources: false, instant: false, build: false, powers: false, reveal: false } };
 
 export function loadSettings(s: Storage): Settings {
   const saved = getJSON<Partial<Settings>>(s, 'settings', {});
