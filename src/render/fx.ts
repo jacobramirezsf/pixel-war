@@ -25,7 +25,8 @@ export function drawFx(ctx: CanvasRenderingContext2D, fx: readonly Fx[], opt: Fx
     }
     else if (f.k === 'ping') { const r = Math.round(f.t * 14) + 1; ctx.strokeStyle = '#7dff7d'; ctx.strokeRect(f.x - r + 0.5, f.y - r + 0.5, r * 2, r * 2); }
     else if (f.k === 'boom') {
-      const p = 1 - f.t / 0.25, rr = f.r * (0.3 + 0.7 * p), seed = (f.x * 13 + f.y * 7) | 0;
+      // Progress against the effect's own life. Big blasts live longer than the default quarter second.
+      const p = Math.max(0, Math.min(1, 1 - f.t / (f.d ?? 0.25))), rr = Math.max(0, f.r * (0.3 + 0.7 * p)), seed = (f.x * 13 + f.y * 7) | 0;
       ctx.fillStyle = 'rgba(255,140,42,' + (0.5 * (1 - p)).toFixed(2) + ')';
       ctx.beginPath(); ctx.arc(f.x, f.y, rr, 0, 7); ctx.fill();
       ctx.strokeStyle = '#ffd27a'; ctx.stroke();

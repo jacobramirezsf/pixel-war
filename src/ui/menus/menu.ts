@@ -8,7 +8,7 @@ import { decodeMap, encodeMap } from '../../sim/map.ts';
 import type { Mode } from '../../sim/types.ts';
 import { allied, count } from '../../sim/world.ts';
 import { hideOverlay, openEditor, say, setEditorMap, startGame, type App } from '../app.ts';
-import { clearSlot, continueRealm, hasSave, latestSlot, saveRealm, SLOTS, slotMeta, startRealm } from '../conquest.ts';
+import { clearSlot, continueRealm, hasSave, latestSlot, saveRealm, SLOTS, slotHealthy, slotMeta, startRealm } from '../conquest.ts';
 import { WORLD_SIZES, type WorldSize } from '../../data/realm.ts';
 import { showHelp, showSettings, showStats } from './settings.ts';
 import { recordGame } from '../stats.ts';
@@ -63,7 +63,7 @@ export function showMenu(app: App): void {
     });
   on($('mMap'), 'click', () => showMaps(app));
   const mc = document.getElementById('mCont');
-  if (mc) on(mc, 'click', () => { if (!continueRealm(app)) { say(app, 'Save could not be read', 2); showConquest(app); } });
+  if (mc) on(mc, 'click', () => { if (!continueRealm(app)) { say(app, 'That save could not be read. Pick another slot or clear it.', 3); showConquest(app); } });
   on($('mSettings'), 'click', () => showSettings(app, () => showMenu(app)));
   on($('mHelp'), 'click', () => showHelp(() => showMenu(app)));
   on($('mStats'), 'click', () => showStats(app, () => showMenu(app)));
@@ -83,6 +83,7 @@ function slotCard(app: App, n: number): string {
   const m = slotMeta(app, n);
   if (!m) return '<button class="pick dim" data-start="' + n + '">SLOT ' + n + ': EMPTY<span>start a new realm here</span></button>';
   const when = m.savedAt ? new Date(m.savedAt).toLocaleDateString() : '';
+  if (!slotHealthy(app, n)) return '<div class="slotrow"><button class="pick name dim" disabled>SLOT ' + n + ': DAMAGED<span>this save cannot be read. Clear it to reuse the slot.</span></button><button class="sm" data-clear="' + n + '">CLEAR</button></div>';
   const rel = m.rivals ? (m.wars ? m.wars + ' at war' : 'at peace') : 'no rivals left';
   return '<div class="slotrow"><button class="pick name" data-cont="' + n + '">SLOT ' + n + ': ' + RACES[m.race].name + ', DAY ' + m.day
     + '<span>' + m.towns + ' town' + (m.towns === 1 ? '' : 's') + ' · ' + m.regions + ' regions · ' + m.people + ' people · ' + m.army + ' soldiers · ' + rel + (m.feats ? ' · ' + m.feats + ' feat' + (m.feats === 1 ? '' : 's') : '') + (m.cheats ? ' · <b class="warn">CHEATS</b>' : '') + (when ? ' · ' + when : '') + '</span></button>'

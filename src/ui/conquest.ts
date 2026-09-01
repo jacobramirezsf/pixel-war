@@ -6,11 +6,12 @@ import { TYPES } from '../data/units.ts';
 import type { RaceKey } from '../data/races.ts';
 import type { WorldSize } from '../data/realm.ts';
 import { getJSON, setJSON } from '../platform/storage.ts';
-import { hideOverlay, loadMap, randomRace, type App } from './app.ts';
+import { hideOverlay, loadMap, randomRace, say, type App } from './app.ts';
 
 export const SLOTS = [1, 2, 3];
 const key = (n: number): string => 'realm-' + n;
 const metaKey = (n: number): string => 'realm-meta-' + n;
+const prevKey = (n: number): string => 'realm-prev-' + n;
 
 /** What a slot card shows. Real-world time is UI metadata only. */
 export interface SlotMeta {
@@ -58,7 +59,12 @@ export function saveRealm(app: App): boolean {
   const w = app.world;
   if (!w || w.mode !== 'conquest' || w.over) return false;
   const n = app.slot;
-  app.storage.set(key(n), serialize(snapshot(w)));
+  let text: string;
+  try { text = serialize(snapshot(w)); } catch (e) { console.error('save failed', e); return false; }
+  // Keep the save before this one. A damaged save falls back to it on load.
+  const old = app.storage.get(key(n));
+  if (old) app.storage.set(prevKey(n), old);
+  try { app.storage.set(key(n), text); } catch (e) { console.error('save write failed', e); return false; }
   const s = w.slots[0];
   let wars = 0;
   for (let i = 1; i < w.nP; i++) if (!w.slots[i].neutral && w.slots[i].alive && !s.truce[i]) wars++;
@@ -79,6 +85,7 @@ export function saveRealm(app: App): boolean {
 export function clearSlot(app: App, n: number): void {
   app.storage.remove(key(n));
   app.storage.remove(metaKey(n));
+  app.storage.remove(prevKey(n));
 }
 
 function enter(app: App): void {
@@ -114,13 +121,32 @@ export function startRealm(app: App, slot: number, size: WorldSize = app.size): 
   saveRealm(app);
 }
 
+/** Load a slot. A damaged current save falls back to the previous one; a slot that cannot load at all stays as it is. */
 export function continueRealm(app: App, slot = latestSlot(app)): boolean {
-  const text = slot > 0 ? app.storage.get(key(slot)) : null;
-  if (!text) return false;
-  try { app.world = restore(deserialize(text)); } catch { return false; }
-  app.slot = slot;
-  enter(app);
-  return true;
+  if (slot <= 0) return false;
+  const tries: [string, string | null][] = [['current', app.storage.get(key(slot))], ['previous', app.storage.get(prevKey(slot))]];
+  for (const [which, text] of tries) {
+    if (!text) continue;
+    try {
+      const w = restore(deserialize(text));
+      app.world = w;
+      app.slot = slot;
+      enter(app);
+      if (which === 'previous') { app.storage.set(key(slot), text); say(app, 'The latest save was damaged. Loaded the one before it.', 4); }
+      return true;
+    } catch (e) { console.error('load ' + which + ' failed', e); }
+  }
+  return false;
+}
+
+/** Can the slot's save be read at all? Cheap check for the slot card. */
+export function slotHealthy(app: App, n: number): boolean {
+  for (const k of [key(n), prevKey(n)]) {
+    const text = app.storage.get(k);
+    if (!text) continue;
+    try { deserialize(text); return true; } catch { /* next */ }
+  }
+  return false;
 }
 
 /** Autosave every two minutes of play, and whenever the page goes to the background. */

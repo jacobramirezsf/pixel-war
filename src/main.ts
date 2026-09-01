@@ -7,7 +7,7 @@ import { drawEditor, drawWorld } from './render/scene.ts';
 import { buildBg } from './render/terrain.ts';
 import { step } from './sim/step.ts';
 import { DT } from './sim/world.ts';
-import { createApp, fit, loadMap, issueAction } from './ui/app.ts';
+import { createApp, fit, loadMap, issueAction, say } from './ui/app.ts';
 import { startBench } from './ui/bench.ts';
 import { autosaveTick, wireAutosave } from './ui/conquest.ts';
 import { watchEvents } from './ui/territory.ts';
@@ -59,7 +59,20 @@ const MINI = (): number => (app.layout === 'desktop' ? 160 : 72);
 
 let last = 0, acc = 0, overShown = false;
 const MAX_STEPS = 5;
+let frameErrors = 0;
+
+/** A thrown frame must never end the game. Log it, keep the loop alive, and after a run of them pause with a note. */
 function loop(ts: number): void {
+  try { frame(ts); }
+  catch (e) {
+    frameErrors++;
+    if (frameErrors === 1 || frameErrors % 300 === 0) console.error('frame error', e);
+    if (frameErrors === 120 && app.world) { app.paused = true; say(app, 'Something went wrong drawing the game. Paused; your save is safe. Try MENU.', 5); }
+  }
+  requestAnimationFrame(loop);
+}
+
+function frame(ts: number): void {
   // Fixed timestep: accumulate real time, step whole ticks, interpolate the remainder at render.
   const frame = Math.min(0.25, (ts - last) / 1000 || 0);
   last = ts;
@@ -92,7 +105,7 @@ function loop(ts: number): void {
     drawMinimap($<HTMLCanvasElement>('mini'), app.minimap, app.editor.map, null, app.cam, MINI(), app.dpr);
   }
   renderHud(app);
-  requestAnimationFrame(loop);
+  frameErrors = 0;
 }
 
 loadMap(app, app.curMap);

@@ -318,7 +318,7 @@ export type Fx =
   | { k: 'hit'; x: number; y: number; t: number }
   | { k: 'die'; x: number; y: number; t: number }
   | { k: 'ping'; x: number; y: number; t: number }
-  | { k: 'boom'; x: number; y: number; r: number; t: number }
+  | { k: 'boom'; x: number; y: number; r: number; t: number; d?: number }
   | { k: 'heal'; x: number; y: number; t: number }
   | { k: 'fix'; x: number; y: number; t: number }
   | { k: 'txt'; x: number; y: number; t: number; str: string; c: string }

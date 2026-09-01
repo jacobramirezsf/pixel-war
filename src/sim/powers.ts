@@ -203,7 +203,8 @@ export function powersTick(w: World, dt: number): void {
     if (k.t > 0) { rest.push(k); continue; }
     // A barrage hits everyone in the circle, including the caster's own units. Aim well.
     const shooter = { ent: 'unit', team: k.team } as unknown as Unit;
-    w.fx.push({ k: 'boom', x: k.x, y: k.y, r: k.r, t: k.kind === 'nuke' ? 0.6 : k.kind === 'meteor' ? 0.4 : 0.25 });
+    const life = k.kind === 'nuke' ? 0.6 : k.kind === 'meteor' ? 0.4 : 0.25;
+    w.fx.push({ k: 'boom', x: k.x, y: k.y, r: k.r, t: life, d: life });
     explode(w, shooter, k.x, k.y, k.r, k.dmg, null, true);
     for (const u of w.units) if (u.hp > 0 && allied(w, u.team, k.team) && Math.hypot(u.x - k.x, u.y - k.y) <= k.r) damage(w, u, k.kind ? k.dmg : Math.round(k.dmg * 0.6), true);
     if (k.kind === 'nuke') {
