@@ -3,6 +3,7 @@
 import type { DiffKey } from '../data/difficulty.ts';
 import type { RaceKey } from '../data/races.ts';
 import { buildFort } from './buildings.ts';
+import { prebuildTown } from './town.ts';
 import { makeRegions, mkNeutralSlot, populateWorld, regionAt, TIERS } from './conquest.ts';
 import { cloneMap, finishMap, type MapDef } from './map.ts';
 import { gen, mkBases } from './mapgen.ts';
@@ -59,6 +60,8 @@ export function newGame(map: MapDef, mode: Mode, cfg?: GameConfig): World {
     if (mode === 'rich') { w.slots[0].gold = Infinity; w.cap = 60; }
     for (let i = 0; i < w.nP; i++) if (w.slots[i].ai) { const d = slotDiff(w, i); buildFort(w, i, d.wall, d.twr, d.extra); }
   }
+  // Everyone starts with a barracks and a range standing, so the roster is open from the first tick.
+  for (let i = 0; i < w.nP; i++) { w.slots[i].age = 2; prebuildTown(w, i); }
   w.flowDirty = true;
   finishSetup(w, mode);
   return w;
@@ -84,7 +87,7 @@ export function newConquest(cfg?: GameConfig): World {
   const w = reset(map, { allies, diff: cfg?.diff ?? 'std', seed, ai: allies.map((i) => i !== 0), races, diffs: cfg?.diffs, instant: cfg?.instant, cheats: cfg?.cheats });
   w.mode = 'conquest';
   w.cap = 80;
-  w.rules = { town: true, upkeep: true, connection: true, garrison: true, unrest: true, materials: true, population: true, diplomacy: true, veterancy: true, ...(cfg?.rules ?? {}) };
+  w.rules = { town: true, ages: true, upkeep: true, connection: true, garrison: true, unrest: true, materials: true, population: true, diplomacy: true, veterancy: true, ...(cfg?.rules ?? {}) };
   const rng = makeRng(seed ^ 0x9e3779b9);
   const { regions, regionOf } = makeRegions(map, rng, grid);
   w.regions = regions;
@@ -111,6 +114,7 @@ export function newConquest(cfg?: GameConfig): World {
   w.net.push(0); w.broke.push(0); w.capitals.push(-1);
   w.score = w.slots.map(() => 0);
   populateWorld(w, rng);
+  for (let i = 0; i < w.nP; i++) if (!w.slots[i].neutral) prebuildTown(w, i, ['barracks']);
   w.flowDirty = true;
   say(w, 'Settle the region next door, then hold it. Watch your net income.', 4);
   return w;

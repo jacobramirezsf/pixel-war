@@ -44,14 +44,11 @@ test('houses have a footprint, take time to build, and raise the population cap'
 test('line units need a barracks and then train there', () => {
   const w = conquest();
   w.slots[0].gold = 2000;
-  assert.match(canTrain(w, 0, 'inf') ?? '', /barracks/);
-  assert.ok(!act(w, 0, { type: 'buy', payload: { unit: 'inf' } }));
+  assert.match(canTrain(w, 0, 'arc') ?? '', /range/);
+  assert.ok(!act(w, 0, { type: 'buy', payload: { unit: 'arc' } }));
   assert.equal(canTrain(w, 0, 'wrk'), null, 'workers train at the settlement');
-  const p = spot(w, 'barracks');
-  assert.ok(act(w, 0, { type: 'build', payload: { x: p.x, y: p.y, bld: 'barracks' } }));
-  run(w, BLD.barracks.buildT! + 1);
   const bk = ownBlds(w, 0, 'barracks')[0];
-  assert.ok(bk);
+  assert.ok(bk, 'a barracks stands from the start');
   assert.ok(act(w, 0, { type: 'buy', payload: { unit: 'inf' } }));
   assert.equal(bk.queue.length, 1);
   run(w, 3);
@@ -65,11 +62,8 @@ test('the age follows the settlement tier and gates buildings', () => {
   w.slots[0].gold = 5000;
   w.slots[0].mat = 5000;
   assert.equal(ageOf(w, 0), 0);
-  w.slots[0].age = 1;
-  assert.throws(() => spot(w, 'range'), /no spot/, 'a range needs a barracks first');
-  w.slots[0].age = 0;
   const p = spot(w, 'house');
-  assert.match(canBuild(w, Math.round(p.x / TILE - 1.5), Math.round(p.y / TILE - 1), 0, 'range') ?? '', /age|barracks/);
+  assert.match(canBuild(w, Math.round(p.x / TILE - 1.5), Math.round(p.y / TILE - 1), 0, 'range') ?? '', /age/);
   assert.ok(act(w, 0, { type: 'ageUp', payload: null }));
   const cap = w.slots[0].settlements[0];
   assert.equal(cap.tier, 'town');
@@ -82,7 +76,6 @@ test('blacksmith research needs a smith and adds damage', () => {
   const w = conquest();
   w.slots[0].gold = 5000;
   w.slots[0].mat = 5000;
-  assert.match(canTrain(w, 0, 'inf') ?? 'x', /barracks/);
   assert.ok(!act(w, 0, { type: 'research', payload: { tech: 'melee' } }));
   act(w, 0, { type: 'ageUp', payload: null });
   run(w, TIERS.town.buildT + 1);
@@ -97,7 +90,7 @@ test('cheats: unlimited gold, instant production, and no cooldowns', () => {
   const w = newGame(BUILTIN[0], 'skirmish', { seed: 1, cheats: { gold: true, instant: true, powers: true } });
   ticks(w, 1);
   assert.equal(w.slots[0].gold, Infinity);
-  assert.ok(act(w, 0, { type: 'buy', payload: { unit: 'gnt' } }));
+  assert.ok(act(w, 0, { type: 'buy', payload: { unit: 'shd' } }));
   ticks(w, 1);
   assert.equal(w.units.filter((u) => u.team === 0).length, 1);
   assert.ok(act(w, 0, { type: 'power', payload: { power: 'heal', x: w.units[0].x, y: w.units[0].y } }));

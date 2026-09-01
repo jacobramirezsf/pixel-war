@@ -77,8 +77,10 @@ export interface Region {
 }
 
 export interface Rules {
-  /** Town build-out: placed buildings, villagers, ages. */
+  /** Town build-out: placed buildings that train units. On in every mode. */
   town: boolean;
+  /** Ages gate buildings by settlement tier. Realm only; elsewhere everything is unlocked. */
+  ages: boolean;
   upkeep: boolean;
   connection: boolean;
   garrison: boolean;

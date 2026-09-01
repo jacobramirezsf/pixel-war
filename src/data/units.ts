@@ -148,6 +148,26 @@ const PREFIX: Record<Exclude<RaceKey, 'kingdom'>, string> = { horde: 'h_', undea
 
 const round5 = (v: number): number => Math.max(5, Math.round(v / 5) * 5);
 
+/**
+ * Tier scaling. The prototype's numbers grow about linearly with cost, so a 150 gold giant is
+ * worth four 20 gold soldiers. Power should grow faster than price: a unit costing k times a
+ * soldier gets k^0.35 more hit points and k^0.25 more damage on top of its listed numbers.
+ */
+export const TIER_HP_EXP = 0.35;
+export const TIER_DMG_EXP = 0.25;
+export function tierScale(cost: number): { hp: number; dmg: number } {
+  const k = Math.max(1, cost / 20);
+  return { hp: Math.pow(k, TIER_HP_EXP), dmg: Math.pow(k, TIER_DMG_EXP) };
+}
+
+function scaled<T extends { cost: number; hp: number; dmg: number; heal?: number }>(d: T): T {
+  const t = tierScale(d.cost);
+  d.hp = Math.round(d.hp * t.hp);
+  d.dmg = Math.round(d.dmg * t.dmg);
+  if (d.heal) d.heal = Math.round(d.heal * t.dmg);
+  return d;
+}
+
 function recolor(grid: readonly string[], map: Record<string, string>): string[] {
   return grid.map((row) => row.split('').map((ch) => map[ch] ?? ch).join(''));
 }
@@ -184,7 +204,7 @@ function variant(race: RaceKey, arch: string): UnitDef {
   if (armor !== undefined && armor > 0) d.armor = armor; else delete d.armor;
   if (b.heal) d.heal = Math.round(b.heal * m.dmg);
   if (R.woodland) d.woodland = true;
-  return d;
+  return scaled(d);
 }
 
 // ---------- specials, four per race, mechanics unique to that race ----------
@@ -242,7 +262,7 @@ for (const race of RACE_KEYS) {
   if (race === 'kingdom') continue;
   const list: UnitDef[] = [];
   for (const arch of SHARED) if (arch !== RACES[race].omit) list.push(variant(race, arch));
-  for (const s of SPECIALS[race]) list.push({ ...s, race, sz: s.sprite.length, r: s.sprite.length / 2 - 1 });
+  for (const s of SPECIALS[race]) list.push(scaled({ ...s, race, sz: s.sprite.length, r: s.sprite.length / 2 - 1 }));
   list.sort((a, b) => a.cost - b.cost || a.name.localeCompare(b.name));
   for (const d of list) { TYPES[d.key] = d; ROSTER[race].push(d.key); }
 }

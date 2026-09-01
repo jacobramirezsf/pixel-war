@@ -6,20 +6,22 @@ import { TYPES } from '../../src/data/units.ts';
 import { mkUnit, buildTime } from '../../src/sim/units.ts';
 import { act, buy, game, run, ticks } from './helpers.ts';
 
-test('units take time to build, queue in order, and refund on cancel', () => {
+test('units take time to build, queue at their building, and refund on cancel', () => {
   const w = game('skirmish');
   w.slots[0].gold = 200;
   assert.ok(buy(w, 0, 'sct'));
   assert.ok(buy(w, 0, 'arc'));
-  assert.equal(w.slots[0].queue.length, 2);
+  const range = w.blds.find((b) => b.team === 0 && b.type === 'range')!;
+  assert.equal(w.slots[0].queue.length, 1, 'scout at the settlement');
+  assert.equal(range.queue.length, 1, 'archer at the range');
   assert.equal(w.slots[0].gold, 160);
   assert.equal(w.units.filter((u) => u.team === 0).length, 0, 'nothing spawns instantly');
   run(w, buildTime('sct') + 0.1);
   assert.equal(w.units.filter((u) => u.team === 0 && u.type === 'sct').length, 1);
   const before = w.slots[0].gold;
-  assert.ok(act(w, 0, { type: 'cancel', payload: { index: 0 } }));
+  assert.ok(act(w, 0, { type: 'cancel', payload: { index: 0, building: range.id } }));
   assert.equal(Math.round(w.slots[0].gold - before), 30, 'archer refunded');
-  assert.equal(w.slots[0].queue.length, 0);
+  assert.equal(range.queue.length, 0);
 });
 
 test('new units walk to the rally point', () => {

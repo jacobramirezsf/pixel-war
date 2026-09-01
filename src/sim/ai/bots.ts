@@ -9,6 +9,7 @@ import { TILE } from '../map.ts';
 import { idsOf, unitsOf } from '../queries.ts';
 import type { Command, World } from '../types.ts';
 import { primaryBase } from '../world.ts';
+import { queuedCount } from '../town.ts';
 
 export const BOT_PERIOD = 30;
 
@@ -35,7 +36,7 @@ function nearestMine(w: World, slot: number): { x: number; y: number } | null {
 /** Spend down a list in order, buying whatever is affordable. */
 function spend(w: World, slot: number, list: UnitKey[]): Command[] {
   const out: Command[] = [];
-  if (w.slots[slot].queue.length >= 4) return out;
+  if (queuedCount(w, slot) >= 4) return out;
   let gold = w.slots[slot].gold;
   for (const k of list) if (gold >= TYPES[k].cost) { out.push(buy(w, slot, k)); gold -= TYPES[k].cost; }
   return out;

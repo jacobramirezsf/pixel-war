@@ -30,6 +30,13 @@ export const buildAt = (w: World, slot: number, x: number, y: number, bld: impor
 export const chargeAll = (w: World, slot: number): boolean => act(w, slot, { type: 'attack', payload: { ids: idsOf(unitsOf(w, slot)), target: null } });
 export const moveAll = (w: World, slot: number, x: number, y: number): boolean => act(w, slot, { type: 'move', payload: { ids: idsOf(unitsOf(w, slot)), x, y } });
 
+/** Remove every building, for tests that lay out their own walls. */
+export function clearBlds(w: World): void {
+  w.blds = [];
+  w.bmap.clear();
+  w.flowDirty = true;
+}
+
 /** Step for `seconds` of sim time or until the game ends. Returns elapsed seconds. */
 export function run(w: World, seconds: number, fn?: (t: number) => void): number {
   const n = Math.round(seconds / DT);

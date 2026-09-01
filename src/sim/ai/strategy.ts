@@ -10,7 +10,7 @@ import { rand } from '../rng.ts';
 import type { Settlement, Unit, World } from '../types.ts';
 import { allied, slotDiff } from '../world.ts';
 import { canAbsorb, canSettle, NEXT_TIER, popCap, popUsed, TIERS } from '../conquest.ts';
-import { canResearch, ownBlds } from '../town.ts';
+import { canResearch, canTrain, findSpot, ownBlds, queuedCount } from '../town.ts';
 import type { BldKey } from '../../data/buildings.ts';
 import { TILE } from '../map.ts';
 import { pickUnit, roleMix } from './composition.ts';
@@ -71,7 +71,7 @@ function shop(w: World, slot: number, a: Assessment, P: AiProfile): void {
   }
   // Opening: the first two units are the cheapest fast things on the roster, bound for the mines.
   if (w.t < 25 && a.own.length + s.queue.length < 2 && w.mines.length) {
-    const cheap = roster(race).filter((k) => !TYPES[k].repair && TYPES[k].speed >= 28).sort((x, y) => TYPES[x].cost - TYPES[y].cost)[0] ?? roster(race)[0];
+    const cheap = roster(race).filter((k) => !TYPES[k].repair && TYPES[k].speed >= 28 && !canTrain(w, slot, k)).sort((x, y) => TYPES[x].cost - TYPES[y].cost)[0] ?? roster(race)[0];
     if (s.gold >= TYPES[cheap].cost) buy(w, slot, cheap, true);
     return;
   }
@@ -80,8 +80,8 @@ function shop(w: World, slot: number, a: Assessment, P: AiProfile): void {
   const tgt = home ? nearestHostileBase(w, slot, home.x, home.y) : null;
   const fortified = !!tgt && w.blds.filter((b) => b.kind === 'tower' && !allied(w, b.team, slot) && Math.hypot(b.x - tgt.x, b.y - tgt.y) < 60).length >= 2;
   // Queue a few ahead, never more: gold in the queue cannot answer a raid.
-  for (let n = 0; n < 4 && s.queue.length < 3; n++) {
-    const k = pickUnit(w.rng, race, w.t, s.gold, enemyMix, P.counter, () => false, fortified);
+  for (let n = 0; n < 4 && queuedCount(w, slot) < 4; n++) {
+    const k = pickUnit(w.rng, race, w.t, s.gold, enemyMix, P.counter, (u) => !!canTrain(w, slot, u), fortified);
     if (!k || s.gold < TYPES[k].cost) break;
     if (!buy(w, slot, k, true)) break;
   }
@@ -143,14 +143,9 @@ function expandTerritory(w: World, slot: number, a: Assessment): boolean {
 /** Try to place a building somewhere around a point. Returns true when it went down. */
 function placeNear(w: World, slot: number, type: BldKey, x: number, y: number): boolean {
   const D = BLD[type];
-  for (let ring = 2; ring <= 9; ring++)
-    for (let k = 0; k < 12; k++) {
-      const ang = (k / 12) * Math.PI * 2 + ring * 0.4;
-      const px = x + Math.cos(ang) * ring * TILE, py = y + Math.sin(ang) * ring * TILE;
-      const tx = Math.round(px / TILE - D.w / 2), ty = Math.round(py / TILE - D.h / 2);
-      if (!canBuild(w, tx, ty, slot, type)) { applyCommand(w, cmd(w, slot, { type: 'build', payload: { x: tx * TILE + (D.w * TILE) / 2, y: ty * TILE + (D.h * TILE) / 2, bld: type } }), true); return true; }
-    }
-  return false;
+  const spot = findSpot(w, slot, type, x, y);
+  if (!spot) return false;
+  return applyCommand(w, cmd(w, slot, { type: 'build', payload: { x: spot.tx * TILE + (D.w * TILE) / 2, y: spot.ty * TILE + (D.h * TILE) / 2, bld: type } }), true);
 }
 
 /**
@@ -164,23 +159,24 @@ function buildTown(w: World, slot: number, a: Assessment): boolean {
   if (!home) return false;
   const have = (t: BldKey): number => w.blds.filter((b) => b.team === slot && b.type === t).length;
   const afford = (t: BldKey): boolean => s.gold >= BLD[t].cost + 40 && (!w.rules.materials || s.mat >= (BLD[t].mat ?? 0));
+  const realm = w.mode === 'conquest';
   const spare = popCap(w, slot) - popUsed(w, slot);
-  if (spare <= 3 && afford('house') && have('house') < 8) return placeNear(w, slot, 'house', home.x, home.y);
+  if (realm && spare <= 3 && afford('house') && have('house') < 8) return placeNear(w, slot, 'house', home.x, home.y);
   if (!have('barracks') && afford('barracks')) return placeNear(w, slot, 'barracks', home.x, home.y);
-  if (have('farm') < 3 && afford('farm') && w.t > 60) return placeNear(w, slot, 'farm', home.x, home.y);
+  if (realm && have('farm') < 3 && afford('farm') && w.t > 60) return placeNear(w, slot, 'farm', home.x, home.y);
   if (s.age >= 1) {
     if (!have('range') && afford('range')) return placeNear(w, slot, 'range', home.x, home.y);
-    if (!have('stable') && afford('stable') && have('range')) return placeNear(w, slot, 'stable', home.x, home.y);
-    if (!have('smith') && afford('smith') && have('range')) return placeNear(w, slot, 'smith', home.x, home.y);
-    if (have('farm') < 6 && afford('farm')) return placeNear(w, slot, 'farm', home.x, home.y);
-    if (!have('market') && afford('market')) return placeNear(w, slot, 'market', home.x, home.y);
+    if (!have('stable') && afford('stable') && have('range') && w.t > 60) return placeNear(w, slot, 'stable', home.x, home.y);
+    if (!have('smith') && afford('smith') && have('range') && w.t > 120) return placeNear(w, slot, 'smith', home.x, home.y);
+    if (realm && have('farm') < 6 && afford('farm')) return placeNear(w, slot, 'farm', home.x, home.y);
+    if (realm && !have('market') && afford('market')) return placeNear(w, slot, 'market', home.x, home.y);
     if (ownBlds(w, slot, 'smith').length && s.gold > 400) {
       for (const t of ['melee', 'ranged', 'armor'] as const) if (!canResearch(w, slot, t)) { applyCommand(w, cmd(w, slot, { type: 'research', payload: { tech: t } }), true); return true; }
     }
   }
   if (s.age >= 2) {
-    if (!have('siege') && afford('siege')) return placeNear(w, slot, 'siege', home.x, home.y);
-    if (!have('castle') && afford('castle') && s.gold > 500) {
+    if (!have('siege') && afford('siege') && w.t > 150) return placeNear(w, slot, 'siege', home.x, home.y);
+    if (!have('castle') && afford('castle') && s.gold > 500 && w.t > 200) {
       const border = s.settlements.find((b) => b.hp > 0 && w.regions[b.region]?.adj.some((x) => { const o = w.regions[x].owner; return o >= 0 && !allied(w, o, slot); })) ?? home;
       return placeNear(w, slot, 'castle', border.x, border.y);
     }

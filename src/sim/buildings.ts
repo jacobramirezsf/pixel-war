@@ -118,7 +118,8 @@ export function canBuild(w: World, tx: number, ty: number, team: number, type: B
     if (why) return why;
   }
   if (w.rules.town) {
-    if ((D.age ?? 0) > w.slots[team].age) return 'needs the ' + ['village', 'town', 'city'][D.age ?? 0] + ' age';
+    const age = w.rules.ages ? w.slots[team].age : 2;
+    if ((D.age ?? 0) > age) return 'needs the ' + ['village', 'town', 'city'][D.age ?? 0] + ' age';
     if (D.max && w.blds.filter((b) => b.team === team && b.type === type).length >= D.max) return 'you have enough of those';
     if (D.trains && type !== 'barracks' && D.kind === 'town' && !w.blds.some((b) => b.team === team && b.type === 'barracks' && b.buildT <= 0)) return 'build a barracks first';
     // Inside your own territory, or next to your Town Hall's region.

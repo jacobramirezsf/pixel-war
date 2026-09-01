@@ -50,7 +50,7 @@ test('smite, heal, haste, freeze, reinforce', () => {
 test('instant production skips the queue time', () => {
   const w = newGame(BUILTIN[0], 'skirmish', { seed: 1, instant: true });
   w.slots[0].gold = 200;
-  buy(w, 0, 'gnt');
+  buy(w, 0, 'shd');
   ticks(w, 1);
   assert.equal(w.units.filter((u) => u.team === 0).length, 1);
   assert.equal(w.slots[0].queue.length, 0);

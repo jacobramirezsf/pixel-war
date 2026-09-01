@@ -6,7 +6,7 @@ import { TYPES, type UnitKey } from '../data/units.ts';
 import { TIER_AGE } from './conquest.ts';
 import { PROFILES } from './ai/profiles.ts';
 import { TEAM } from '../data/teams.ts';
-import { passableFor } from './buildings.ts';
+import { addBld, canBuild, passableFor } from './buildings.ts';
 import { rnd } from './rng.ts';
 import type { Building, Tech, Unit, World } from './types.ts';
 import { say } from './world.ts';
@@ -15,8 +15,9 @@ import { mkUnit } from './units.ts';
 export const RESEARCH_COST = [120, 240];
 export const TECH_NAMES: Record<Tech, string> = { melee: 'BLADES', ranged: 'BOWS', armor: 'ARMOR' };
 
-/** The age a faction plays at: its best finished settlement. */
+/** The age a faction plays at: its best finished settlement. Without the ages rule, everything is open. */
 export function ageOf(w: World, slot: number): number {
+  if (!w.rules.ages) return 2;
   let a = 0;
   for (const b of w.slots[slot].settlements) if (b.hp > 0 && b.buildT <= 0) a = Math.max(a, TIER_AGE[b.tier]);
   return a;
@@ -131,6 +132,35 @@ export function townTick(w: World, dt: number): void {
     if (rally && !q.held) u.order = { type: 'move', x: rally.x, y: rally.y };
     if (b.team === 0) w.fx.push({ k: 'txt', x: u.x, y: u.y - 8, t: 0.9, str: TYPES[q.unit].name, c: TEAM[b.team] });
   }
+}
+
+/** Try to place a building somewhere around a point. Returns the building, or null. */
+export function findSpot(w: World, slot: number, type: BldKey, x: number, y: number, maxRing = 9): { tx: number; ty: number } | null {
+  const D = BLD[type];
+  const cx = (w.map.cols * 8) / 2, cy = (w.map.rows * 8) / 2;
+  const toward = Math.atan2(cy - y, cx - x);
+  for (let ring = 2; ring <= maxRing; ring++)
+    for (let k = 0; k < 12; k++) {
+      // Sweep from the side facing the map center outward.
+      const ang = toward + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * (Math.PI / 6);
+      const px = x + Math.cos(ang) * ring * 8, py = y + Math.sin(ang) * ring * 8;
+      const tx = Math.round(px / 8 - D.w / 2), ty = Math.round(py / 8 - D.h / 2);
+      if (!canBuild(w, tx, ty, slot, type)) return { tx, ty };
+    }
+  return null;
+}
+
+/** Starting buildings beside a slot's base, finished at once. */
+export function prebuildTown(w: World, slot: number, types: BldKey[] = ['barracks', 'range']): void {
+  const b = w.slots[slot].settlements[0];
+  if (!b) return;
+  const saveAge = w.slots[slot].age;
+  w.slots[slot].age = 2;
+  for (const t of types) {
+    const spot = findSpot(w, slot, t, b.x, b.y, 12);
+    if (spot) addBld(w, slot, t, spot.tx, spot.ty);
+  }
+  w.slots[slot].age = saveAge;
 }
 
 /** Queued units across the settlement and every training building. */
