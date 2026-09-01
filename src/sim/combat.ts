@@ -174,11 +174,13 @@ export function damage(w: World, t: Target, dmg: number, ranged = false, by: Uni
     if (ranged && guarded(w, t)) dmg = Math.max(1, dmg - 3);
     t.flash = 0.12;
   }
+  const wasAlive = t.hp > 0;
   t.hp -= dmg;
   w.fx.push({ k: 'dmg', x: t.x, y: t.y - 6, t: 0.6, n: dmg });
   if (t.ent === 'base') {
     if (by) t.hitBy = by.team;
-    if (t.hp <= 0) {
+    // A settlement dies once. Hits on the rubble must not pay the bounty again.
+    if (t.hp <= 0 && wasAlive) {
       t.hp = 0;
       onSettlementDeath(w, t);
       if (!hasLivingSettlement(w, t.team)) elim(w, t.team);

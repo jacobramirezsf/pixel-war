@@ -443,7 +443,7 @@ export function setTruce(w: World, a: number, b: number, on: boolean): void {
     say(w, on ? 'Peace with ' + name : name + ' is at war with you', 3);
     pushEvent(w, on ? 'truce' : 'war', on ? 'Peace with ' + name : name + ' declared war', cap?.cx ?? 0, cap?.cy ?? 0, cap?.id ?? -1);
     chronicle(w, on ? 'Peace with ' + name : 'War with ' + name);
-  }
+  } else if (!A.neutral && !B.neutral) chronicle(w, on ? 'Peace between ' + TNAME[a] + ' and ' + TNAME[b] : 'War between ' + TNAME[a] + ' and ' + TNAME[b]);
 }
 
 /** Can this pair sign a truce now? Rivals accept when not hostile or when they are weaker. */
@@ -460,7 +460,7 @@ export function setPact(w: World, a: number, b: number, on: boolean): void {
     say(w, on ? 'Alliance with ' + name : 'The alliance with ' + name + ' is over', 3);
     pushEvent(w, on ? 'truce' : 'war', on ? 'Alliance with ' + name : 'Alliance with ' + name + ' ended', cap?.cx ?? 0, cap?.cy ?? 0, cap?.id ?? -1);
     chronicle(w, on ? 'Alliance with ' + name : 'The alliance with ' + name + ' ended');
-  }
+  } else if (!A.neutral && !B.neutral) chronicle(w, (on ? 'Alliance between ' : 'The alliance ended between ') + TNAME[a] + ' and ' + TNAME[b]);
 }
 
 /** Would `to` swear an alliance with `from`? Warm enough, or a shared enemy at the door. */

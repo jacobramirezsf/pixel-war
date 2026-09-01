@@ -68,7 +68,12 @@ function shop(w: World, slot: number, a: Assessment, P: AiProfile): void {
     buy(w, slot, worker, true);
     return;
   }
-  if (P.builds && s.gold >= BLD[slotDiff(w, slot).twr].cost + 80 && (a.threat > 0 || rand(w.rng) < 0.15)) {
+  // Towers: a few at home, more when neighbors are hostile, never a forest of them.
+  const towers = w.blds.filter((b) => b.team === slot && b.kind === 'tower' && b.type !== 'castle').length;
+  let hostileAdj = 0;
+  if (w.regionOf) for (const r of w.regions) if (r.owner === slot) for (const q of r.adj) { const o = w.regions[q].owner; if (o >= 0 && !allied(w, o, slot)) { hostileAdj++; break; } }
+  const towerCap = w.mode === 'conquest' ? 3 + 2 * hostileAdj : 6;
+  if (P.builds && towers < towerCap && s.gold >= BLD[slotDiff(w, slot).twr].cost + 80 && (a.threat > 0 || rand(w.rng) < 0.15 * PERSONAS[s.race].builds)) {
     const T = slotDiff(w, slot).twr, mb = w.map.bases[slot];
     for (let k = 0; k < 12; k++) {
       const tx = mb.tx + ((rand(w.rng) * 11) | 0) - 5, ty = mb.ty + ((rand(w.rng) * 7) | 0) - 3;
@@ -164,7 +169,7 @@ function expandTerritory(w: World, slot: number, a: Assessment): boolean {
 /** Try to place a building somewhere around a point. Returns true when it went down. */
 function placeNear(w: World, slot: number, type: BldKey, x: number, y: number): boolean {
   const D = BLD[type];
-  const spot = findSpot(w, slot, type, x, y);
+  const spot = findSpot(w, slot, type, x, y, 14);
   if (!spot) return false;
   return applyCommand(w, cmd(w, slot, { type: 'build', payload: { x: spot.tx * TILE + (D.w * TILE) / 2, y: spot.ty * TILE + (D.h * TILE) / 2, bld: type } }), true);
 }
@@ -186,11 +191,24 @@ function buildTown(w: World, slot: number, a: Assessment): boolean {
   let crowded = false, idle = 0;
   for (const b of s.settlements) if (b.hp > 0) { if (b.civ.residents >= b.civ.housing - 1 && b.civ.housing < 24) crowded = true; idle += Math.max(0, b.civ.residents - b.civ.employed); }
   if (realm && (spare <= 3 || crowded) && afford('house') && have('house') < 10) return placeNear(w, slot, 'house', home.x, home.y);
-  if (realm && idle >= 2 && afford('farm') && have('farm') < 8) return placeNear(w, slot, 'farm', home.x, home.y);
+  if (realm && idle >= 2 && afford('farm') && have('farm') < 6) return placeNear(w, slot, 'farm', home.x, home.y);
   if (realm && idle >= 4 && s.age >= 1 && afford('market') && have('market') < 2) return placeNear(w, slot, 'market', home.x, home.y);
   if (!have('barracks') && afford('barracks')) return placeNear(w, slot, 'barracks', home.x, home.y);
   // The great work: a city, a full treasury, and nothing pressing.
   if (realm && ageOf(w, slot) >= 2 && !have('wonder') && s.gold >= BLD.wonder.cost + 300 && (!w.rules.materials || s.mat >= (BLD.wonder.mat ?? 0) + 50) && w.net[slot] > 3) return placeNear(w, slot, 'wonder', home.x, home.y);
+  // Second towns: every finished village gets a house, a farm, and in time a barracks of its own.
+  if (realm) {
+    for (const b of s.settlements) {
+      if (b.hp <= 0 || b.buildT > 0 || b.tier === 'outpost' || b === home) continue;
+      // Counted by distance, not region: a placement can land a tile over the border.
+      const n = (t: BldKey): number => w.blds.filter((x) => x.team === slot && x.type === t && Math.hypot(x.x - b.x, x.y - b.y) < 96).length;
+      if (!n('house') && afford('house')) return placeNear(w, slot, 'house', b.x, b.y);
+      if (!n('farm') && afford('farm')) return placeNear(w, slot, 'farm', b.x, b.y);
+      if (b.civ.residents >= b.civ.housing - 1 && n('house') < 3 && afford('house')) return placeNear(w, slot, 'house', b.x, b.y);
+      if (!n('barracks') && s.gold >= BLD.barracks.cost + 250) return placeNear(w, slot, 'barracks', b.x, b.y);
+      if (b.civ.residents > b.civ.jobs && n('farm') < 3 && afford('farm')) return placeNear(w, slot, 'farm', b.x, b.y);
+    }
+  }
   // Whatever the next tier asks for comes next: the town wants to grow.
   if (realm) {
     const cap = s.settlements.find((b) => b.hp > 0 && b.buildT <= 0 && NEXT_TIER[b.tier] && (w.capitals[slot] === b.region || b.tier === 'town'));
