@@ -13,6 +13,7 @@ import { drawBldSpr, drawSprite } from '../../render/atlas.ts';
 import { centerOn, fitZoom, setZoom } from '../../render/camera.ts';
 import { minimapToWorld } from '../../render/minimap.ts';
 import { drawTile } from '../../render/terrain.ts';
+import { GROUND, type GroundKey } from '../../data/buildings.ts';
 import { matRate, popCap, popUsed } from '../../sim/conquest.ts';
 import { buildTime, maxHp } from '../../sim/units.ts';
 import { allied, count } from '../../sim/world.ts';
@@ -25,6 +26,8 @@ import { renderCheats, updateCheatsVisibility } from '../cheats.ts';
 
 const unitBtns = {} as Record<UnitKey, HTMLButtonElement>;
 const bldBtns = {} as Record<string, HTMLButtonElement>;
+const groundBtns: Partial<Record<GroundKey, HTMLButtonElement>> = {};
+let undoBtn: HTMLButtonElement | null = null;
 const powerBtns = {} as Record<PowerKey, HTMLButtonElement>;
 const toolBtns = new Map<EditorTool, HTMLButtonElement>();
 let paintedRace = '';
@@ -60,13 +63,22 @@ function unitTap(app: App, k: UnitKey): void {
 export function buildStrips(app: App): void {
   const strip = $('strip'), bstrip = $('bstrip'), pstrip = $('pstrip'), tstrip = $('tstrip');
   for (const k of ALL_UNITS) { unitBtns[k] = mkStripBtn(strip, TYPES[k].name, TYPES[k].cost, () => unitTap(app, k)); unitBtns[k].title = TYPES[k].name; }
-  const groups: [string, string][] = [['defense', 'DEFENSE'], ['economy', 'TOWN'], ['military', 'MILITARY']];
+  const groups: [string, string][] = [['ground', 'GROUND'], ['defense', 'DEFENSE'], ['economy', 'TOWN'], ['military', 'MILITARY']];
   for (const [g, label] of groups) {
     const head = document.createElement('div');
     head.className = 'ghead';
     head.textContent = label;
     head.id = 'gh-' + g;
     bstrip.appendChild(head);
+    if (g === 'ground') {
+      for (const gk of ['road', 'clear'] as const) {
+        const G = GROUND[gk];
+        groundBtns[gk] = mkStripBtn(bstrip, G.name, G.cost, () => { app.tool = 'terrain'; app.tbrush = gk; updateUI(app); say(app, G.name + ': ' + G.hint, 3); });
+        groundBtns[gk].title = G.hint;
+      }
+      undoBtn = mkStripBtn(bstrip, 'UNDO LAST', null, () => { if (app.lastBuilt.length) { issueAction(app, { type: 'unbuild', payload: { ids: app.lastBuilt } }); app.lastBuilt = []; updateUI(app); } }, 'undo');
+      undoBtn.title = 'Take back the last thing placed, full refund';
+    }
     for (const k of BORDER.filter((x) => BLD[x].group === g)) {
       const D = BLD[k];
       bldBtns[k] = mkStripBtn(bstrip, D.name, D.cost, () => { app.tool = 'build'; app.bbrush = k; updateUI(app); say(app, D.name + (D.hint ? ': ' + D.hint : '') + ' Drag to place, release to build.', 3); });
@@ -133,6 +145,14 @@ function paintStrip(app: App): void {
     const sc = Math.max(1, Math.floor(28 / Math.max(D.w, D.h) / 8));
     drawBldSpr(cc, k, app.ctl, Math.floor((30 - D.w * 8 * sc) / 2), D.kind === 'tower' && D.w === 1 ? 12 : Math.floor((30 - D.h * 8 * sc) / 2) + 2, sc);
   }
+  for (const gk of ['road', 'clear'] as const) {
+    const b = groundBtns[gk];
+    if (!b) continue;
+    const cc = (b.firstChild as HTMLCanvasElement).getContext('2d')!;
+    cc.clearRect(0, 0, 30, 30);
+    if (gk === 'road') { drawTile(cc, 0, 3, 3, 3, 0.3); drawTile(cc, 1, 3, 3, 3, 0.4); }
+    else { drawTile(cc, 2, 3, 3, 3, 0.3); cc.strokeStyle = '#ff6b6b'; cc.lineWidth = 2; cc.beginPath(); cc.moveTo(6, 6); cc.lineTo(24, 24); cc.moveTo(24, 6); cc.lineTo(6, 24); cc.stroke(); }
+  }
   paintedRace = race + app.ctl;
 }
 
@@ -192,7 +212,7 @@ export function updateUI(app: App): void {
   show(B('bCancel'), toolOn || armed || (edit && app.tool === 'erase'));
   document.body.classList.toggle('armed', armed);
   const pw = app.power;
-  B('bCancel').textContent = 'CANCEL ' + (armed ? app.stance.toUpperCase() : app.tool === 'power' && pw ? POWERS[pw].name : app.tool === 'build' ? BLD[app.bbrush].name : app.tool === 'sell' ? 'REMOVE' : app.tool.toUpperCase());
+  B('bCancel').textContent = 'CANCEL ' + (armed ? app.stance.toUpperCase() : app.tool === 'power' && pw ? POWERS[pw].name : app.tool === 'build' ? BLD[app.bbrush].name : app.tool === 'sell' ? 'REMOVE' : app.tool === 'terrain' ? GROUND[app.tbrush].name : app.tool.toUpperCase());
   contextAction(app);
   const act = app.act;
   show(B('bAct'), live && !edit && !toolOn && !!act);
@@ -249,6 +269,8 @@ export function updateUI(app: App): void {
     if (sand) bldBtns[k].classList.remove('dis');
   }
   show(B('gh-economy'), town); show(B('gh-military'), town); show(B('gh-defense'), town);
+  for (const gk of ['road', 'clear'] as const) groundBtns[gk]?.classList.toggle('on', app.tool === 'terrain' && app.tbrush === gk);
+  if (undoBtn) show(undoBtn, app.lastBuilt.length > 0 && !!w && w.blds.some((b) => app.lastBuilt.includes(b.id)));
   show(B('bGrow'), conq); show(B('bTech1'), town); show(B('bTech2'), town); show(B('bTech3'), town);
   if (w && conq) {
     const towns = w.slots[app.ctl].settlements;

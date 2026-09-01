@@ -7,6 +7,7 @@ import { BLD } from '../data/buildings.ts';
 import type { Building, Mine, Settlement, World } from '../sim/types.ts';
 import { emptyTown, BASE_HP, mapH } from '../sim/world.ts';
 import { computeVision } from '../sim/vision.ts';
+import { WORK } from '../data/buildings.ts';
 import { maxHp, rank } from '../sim/units.ts';
 import { drawBldSpr, drawSprite } from './atlas.ts';
 import { snapped, type Camera } from './camera.ts';
@@ -344,6 +345,14 @@ export function drawWorld(ctx: CanvasRenderingContext2D, bg: HTMLCanvasElement, 
     ctx.fillStyle = '#dde2ec'; ctx.fillRect(rally.x, rally.y - 8, 1, 9);
     ctx.fillStyle = TEAM[v.viewer]; ctx.fillRect(rally.x + 1, rally.y - 8, 4, 3);
     ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.strokeRect(rally.x - 3.5, rally.y - 2.5, 7, 4);
+  }
+  // Works under way: a dashed square with a filling bar.
+  for (const k of w.works) {
+    const x = k.tx * TILE, y = k.ty * TILE;
+    if (!vis(x, y)) continue;
+    ctx.strokeStyle = 'rgba(242,211,74,.8)'; ctx.setLineDash([2, 2]); ctx.strokeRect(x + 0.5, y + 0.5, TILE - 1, TILE - 1); ctx.setLineDash([]);
+    const total = k.kind === 'road' ? WORK.roadT : w.map.tiles[k.ty * w.map.cols + k.tx] === 4 ? WORK.rockT : WORK.treeT;
+    ctx.fillStyle = '#f2d34a'; ctx.fillRect(x + 1, y + TILE - 2, Math.round((TILE - 2) * (1 - k.t / total)), 1);
   }
   drawFx(ctx, w.fx, { damageNumbers: v.damageNumbers });
   if (fog && seen) drawFog(ctx, w, fog, seen, r);

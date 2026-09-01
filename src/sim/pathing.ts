@@ -1,6 +1,7 @@
 // Dijkstra distance fields and flow-field movement.
 
 import { blocked, TILE, clamp, type MapDef } from './map.ts';
+import { WORK } from '../data/buildings.ts';
 import type { Unit, World } from './types.ts';
 import { allied } from './world.ts';
 
@@ -72,9 +73,10 @@ export function computeFlow(w: World): void {
   const m = w.map;
   const costFor = (team: number) => (i: number): number => {
     const t = m.tiles[i];
-    if (blocked(t)) return Infinity;
-    const c = t === 2 ? 2 : 1;
     const b = w.bmap.get(i);
+    if (b && b.kind === 'bridge') return 1;
+    if (blocked(t)) return Infinity;
+    const c = t === 2 ? 2 : t === 1 ? WORK.roadCost : 1;
     if (!b) return c;
     if (b.kind === 'trap') return c + (allied(w, b.team, team) ? 0 : 1.5);
     if (b.kind === 'gate') return allied(w, b.team, team) ? c : c + (b.locked ? 6 + b.hp / 30 : 1.5);
@@ -98,9 +100,10 @@ export function computeHome(w: World): void {
   const m = w.map;
   const costFor = (team: number) => (i: number): number => {
     const t = m.tiles[i];
-    if (blocked(t)) return Infinity;
-    const c = t === 2 ? 2 : 1;
     const b = w.bmap.get(i);
+    if (b && b.kind === 'bridge') return 1;
+    if (blocked(t)) return Infinity;
+    const c = t === 2 ? 2 : t === 1 ? WORK.roadCost : 1;
     if (!b || b.kind === 'trap') return c;
     if (b.kind === 'gate') return allied(w, b.team, team) || !b.locked ? c : Infinity;
     return Infinity;

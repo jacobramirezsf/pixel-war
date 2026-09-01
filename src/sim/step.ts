@@ -16,6 +16,8 @@ import { powersTick, zonesTick } from './powers.ts';
 import { townTick } from './town.ts';
 import { civTick, isCiv } from './civ.ts';
 import { visionTick } from './vision.ts';
+import { worksTick } from './works.ts';
+import { WORK } from '../data/buildings.ts';
 import { rand, rnd } from './rng.ts';
 import { fillGrid, forNear, gridOf, nearestHostileWithin } from './spatial.ts';
 import type { Building, Target, Unit, World } from './types.ts';
@@ -216,6 +218,7 @@ export function step(w: World): void {
     zonesTick(w, dt);
     townTick(w, dt);
     civTick(w);
+    worksTick(w, dt);
     visionTick(w);
     if (cheat(w, 0, 'gold')) w.slots[0].gold = Infinity;
     if (w.cheats.resources) w.slots[0].mat = 99999;
@@ -379,7 +382,7 @@ export function step(w: World): void {
     }
     u.moving = !!mv && slow > 0;
     if (mv && u.hp > 0 && slow > 0) {
-      const sp = T.speed * dt * slow * (!T.fly && !T.woodland && onTree ? 0.5 : 1);
+      const sp = T.speed * dt * slow * (!T.fly && !T.woodland && onTree ? 0.5 : 1) * (!T.fly && tileAt(w.map, u.x, u.y) === 1 ? WORK.roadSpeed : 1);
       const bx = u.x, by = u.y;
       u.blk = tryMove(w, u, mv, sp, T.fly);
       u.run += Math.hypot(u.x - bx, u.y - by);

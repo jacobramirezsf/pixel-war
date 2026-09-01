@@ -17,8 +17,10 @@ export function bldAtPx(w: World, x: number, y: number): Building | null {
 
 /** Terrain plus buildings. Traps are passable, own or open gates are passable, walls are not. */
 export function passableFor(w: World, team: number, x: number, y: number): boolean {
-  if (!passable(w.map, x, y)) return false;
   const b = bldAtPx(w, x, y);
+  // A bridge is a road over water for everyone.
+  if (b && b.kind === 'bridge') return true;
+  if (!passable(w.map, x, y)) return false;
   if (!b || b.kind === 'trap') return true;
   if (b.kind === 'gate') return allied(w, b.team, team) || !b.locked;
   return false;
@@ -74,6 +76,20 @@ export function gateDir(w: World, tx: number, ty: number): 'h' | 'v' {
 }
 
 function cellBlock(w: World, tx: number, ty: number, team: number, type: BldKey): string | null {
+  if (type === 'bridge') {
+    // Water only, touching a bank or another bridge on one of four sides.
+    const m = w.map;
+    if (tx < 0 || ty < 0 || tx >= m.cols || ty >= m.rows) return 'map edge';
+    if (m.tiles[ty * m.cols + tx] !== 3) return 'bridges go on water';
+    if (bldAt(w, tx, ty)) return 'something is there';
+    const touch = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => {
+      const x = tx + dx, y = ty + dy;
+      if (x < 0 || y < 0 || x >= m.cols || y >= m.rows) return false;
+      const b = bldAt(w, x, y);
+      return m.tiles[y * m.cols + x] !== 3 || (!!b && b.kind === 'bridge');
+    });
+    return touch ? null : 'start from a bank';
+  }
   const m = w.map;
   if (tx < 1 || ty < 1 || tx >= m.cols - 1 || ty >= m.rows - 1) return 'map edge';
   const t = m.tiles[ty * m.cols + tx];
@@ -130,7 +146,7 @@ export function canBuild(w: World, tx: number, ty: number, team: number, type: B
       const r = w.regionOf[Math.min(w.map.rows - 1, (cy / TILE) | 0) * w.map.cols + Math.min(w.map.cols - 1, (cx / TILE) | 0)];
       const reg = w.regions[r];
       const own = reg.owner === team || w.slots[team].settlements.some((s) => s.hp > 0 && s.region === r);
-      if (!own && !cheat(w, team, 'territory')) return 'outside your territory';
+      if (!own && !cheat(w, team, 'territory') && type !== 'bridge') return 'outside your territory';
       if (type === 'farm' && !w.slots[team].settlements.some((s) => s.hp > 0 && Math.hypot(s.x - cx, s.y - cy) < 72)) return 'farms go near a Town Hall';
     }
   }

@@ -179,7 +179,8 @@ export function placeRelease(app: App): void {
   if (!app.placing || app.tool !== 'build') return;
   const { x, y } = app.placing;
   app.placing = null;
-  issueAction(app, { type: 'build', payload: { x, y, bld: app.bbrush } });
+  const w = app.world!;
+  if (issueAction(app, { type: 'build', payload: { x, y, bld: app.bbrush } })) app.lastBuilt = [w.blds[w.blds.length - 1].id];
 }
 
 /** The footprint preview for the HUD: where the building would go and whether it fits. */
@@ -200,12 +201,20 @@ export function toolAt(app: App, x: number, y: number, ts: ToolState, first: boo
   if (!w) return false;
   if (app.tool === 'build') {
     const D = BLD[app.bbrush];
-    // Footprint buildings: drag to aim, release to place. Walls paint as you drag.
+    if (first) app.lastBuilt = [];
+    // Footprint buildings: drag to aim, release to place. Walls and bridges paint as you drag.
     if (D.w > 1 || D.h > 1 || D.kind === 'town') { app.placing = { x, y }; return true; }
     const tx = clamp((x / TILE) | 0, 0, w.map.cols - 1), ty = clamp((y / TILE) | 0, 0, w.map.rows - 1), i = ty * w.map.cols + tx;
     if (ts.lt === i) return true;
     ts.lt = i;
-    issueAction(app, { type: 'build', payload: { x, y, bld: app.bbrush } });
+    if (issueAction(app, { type: 'build', payload: { x, y, bld: app.bbrush } })) app.lastBuilt.push(w.blds[w.blds.length - 1].id);
+    return true;
+  }
+  if (app.tool === 'terrain') {
+    const tx = clamp((x / TILE) | 0, 0, w.map.cols - 1), ty = clamp((y / TILE) | 0, 0, w.map.rows - 1), i = ty * w.map.cols + tx;
+    if (ts.lt === i) return true;
+    ts.lt = i;
+    issueAction(app, { type: 'terrain', payload: { x, y, kind: app.tbrush } });
     return true;
   }
   if (app.tool === 'sell') {
@@ -271,6 +280,6 @@ export function usesTool(app: App): boolean {
 /** Tools that paint while dragging. Everything else applies on a tap and lets a drag pan. */
 export function dragTool(app: App): boolean {
   if (app.editor) return true;
-  if (app.tool === 'build' || app.tool === 'sell') return true;
+  if (app.tool === 'build' || app.tool === 'sell' || app.tool === 'terrain') return true;
   return app.world?.phase === 'edit' && (app.tool === 'place' || app.tool === 'erase');
 }

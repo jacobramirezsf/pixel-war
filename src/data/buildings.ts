@@ -7,9 +7,9 @@ import type { Role } from './units.ts';
 
 export type BldKey =
   | 'brb' | 'stk' | 'wal' | 'stw' | 'gat' | 'twr' | 'stt' | 'trt'
-  | 'house' | 'farm' | 'market' | 'smith' | 'barracks' | 'range' | 'stable' | 'siege' | 'castle' | 'wonder';
-export type BldKind = 'trap' | 'wall' | 'gate' | 'tower' | 'town';
-export type BldGroup = 'defense' | 'economy' | 'military';
+  | 'house' | 'farm' | 'market' | 'smith' | 'barracks' | 'range' | 'stable' | 'siege' | 'castle' | 'wonder' | 'bridge';
+export type BldKind = 'trap' | 'wall' | 'gate' | 'tower' | 'town' | 'bridge';
+export type BldGroup = 'defense' | 'economy' | 'military' | 'ground';
 
 export interface BldDef {
   name: string;
@@ -45,6 +45,7 @@ export interface BldDef {
 }
 
 export const BLD: Record<BldKey, BldDef> = {
+  bridge: { name: 'BRIDGE',      cost: 20,  hp: 200, kind: 'bridge', group: 'ground', w: 1, h: 1, mat: 10, age: 0, buildT: 6, hint: 'Drag across narrow water from a bank. Anyone can cross it, and anyone can break it.' },
   brb: { name: 'BARBED',     cost: 4,   hp: 40,  kind: 'trap', group: 'defense', w: 1, h: 1, age: 0, buildT: 2 },
   stk: { name: 'PALISADE',   cost: 6,   hp: 60,  kind: 'wall', group: 'defense', w: 1, h: 1, age: 0, buildT: 3 },
   wal: { name: 'STONE WALL', cost: 15,  hp: 220, kind: 'wall', group: 'defense', w: 1, h: 1, armor: 2, mat: 15, age: 1, buildT: 6 },
@@ -81,3 +82,12 @@ export function trainerFor(role: Role): BldKey | null {
 
 /** Cap on buildings per team. */
 export const BUILD_CAP = 120;
+
+/** Ground works: not buildings, changes to the land itself. Painted like walls. */
+export type GroundKey = 'road' | 'clear';
+export const GROUND: Record<GroundKey, { name: string; cost: number; hint: string }> = {
+  road:  { name: 'ROAD',  cost: 2, hint: 'Drag a path. Units move a quarter faster on it and prefer it.' },
+  clear: { name: 'CLEAR', cost: 3, hint: 'Drag over trees or rock on your land to clear it. Takes a moment.' },
+};
+/** Seconds a work takes and what it costs beyond gold. */
+export const WORK = { roadT: 2, treeT: 6, rockT: 12, rockGold: 6, rockMat: 5, roadSpeed: 1.25, roadCost: 0.75 };

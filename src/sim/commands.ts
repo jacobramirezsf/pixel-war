@@ -15,6 +15,7 @@ import { seedResidents } from './civ.ts';
 import { wonderBegun, wonderDone } from './wonder.ts';
 import { allied, cheat, chronicle, count, mapH, mapW, say as worldSay } from './world.ts';
 import { runCheat } from './cheats.ts';
+import { startWork, unroad } from './works.ts';
 import { castPower } from './powers.ts';
 import { canResearch, canTrain, pickTrainer, queuedCount, RESEARCH_COST, TECH_NAMES } from './town.ts';
 
@@ -357,8 +358,32 @@ export function applyCommand(w: World, c: Command, quiet = false): boolean {
       if (bld === 'wonder') { wonderBegun(w, nb); if (nb.buildT <= 0) wonderDone(w, nb); }
       return true;
     }
+    case 'terrain': {
+      if (editing) return false;
+      const tx = clamp((c.payload.x / TILE) | 0, 0, mapW(w) / TILE - 1), ty = clamp((c.payload.y / TILE) | 0, 0, mapH(w) / TILE - 1);
+      return startWork(w, slot, tx, ty, c.payload.kind);
+    }
+    case 'unbuild': {
+      // Undo of the last placement: full refund in what was paid, building gone.
+      let n = 0;
+      for (const id of c.payload.ids) {
+        const b = w.blds.find((x) => x.id === id && x.team === slot);
+        if (!b) continue;
+        const D = BLD[b.type];
+        removeBld(w, b);
+        if (w.mode !== 'sand') { if (w.mode === 'conquest' && w.rules.materials && !D.town) s.mat += D.cost; else { s.gold += D.cost; if (w.mode === 'conquest' && w.rules.materials && D.mat) s.mat += D.mat; } }
+        n++;
+      }
+      if (n) say('Undone', 0.8);
+      return n > 0;
+    }
     case 'sell': {
       const b = c.payload.id != null ? w.blds.find((x) => x.id === c.payload.id) : bldAtPx(w, c.payload.x, c.payload.y);
+      if (!b && c.payload.id == null) {
+        // No building: a road tile under the point comes up instead.
+        const tx = (c.payload.x / TILE) | 0, ty = (c.payload.y / TILE) | 0;
+        if (unroad(w, slot, tx, ty)) { say('Road removed', 0.6); return true; }
+      }
       if (!b || b.team !== slot) { if (c.payload.id != null) say('Tap one of your buildings', 1); return false; }
       removeBld(w, b);
       // Half back, in what it cost: materials for walls and towers in a Realm, gold otherwise.

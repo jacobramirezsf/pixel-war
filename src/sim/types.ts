@@ -56,6 +56,15 @@ export interface Cheats {
 
 export type CheatOp = 'gold' | 'mat' | 'heal' | 'revive' | 'finish' | 'queues' | 'clearNear' | 'clearAll' | 'destroy' | 'spawn' | 'army' | 'raid' | 'bandits' | 'settle' | 'peace' | 'totalWar' | 'rebuild' | 'maxCity' | 'research';
 
+/** A change to the land under way. */
+export interface Work {
+  tx: number;
+  ty: number;
+  kind: 'road' | 'clear';
+  team: number;
+  t: number;
+}
+
 /** A timed area effect left by a power. */
 export interface Zone {
   kind: 'fortify' | 'sanctuary' | 'golden';
@@ -406,6 +415,8 @@ export interface World {
   cheats: Cheats;
   /** Area effects from powers. */
   zones: Zone[];
+  /** Ground works in progress: roads being laid, trees and rock being cleared. */
+  works: Work[];
   /** Explored tiles for the player, or null without fog. */
   seen: Uint8Array | null;
   /** The realm's story: major moments, bounded. */
@@ -451,6 +462,8 @@ export type Action =
   | { type: 'gate'; payload: { id: number } }
   | { type: 'build'; payload: { x: number; y: number; bld: BldKey } }
   | { type: 'sell'; payload: { x: number; y: number; id?: number } }
+  | { type: 'terrain'; payload: { x: number; y: number; kind: import('../data/buildings.ts').GroundKey } }
+  | { type: 'unbuild'; payload: { ids: number[] } }
   | { type: 'place'; payload: { unit: UnitKey; x: number; y: number } }
   | { type: 'erase'; payload: { x: number; y: number } }
   | { type: 'clear'; payload: null }
