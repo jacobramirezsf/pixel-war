@@ -19,7 +19,7 @@ export interface DragRect {
   h: number;
 }
 
-function drawBase(ctx: CanvasRenderingContext2D, b: Settlement, H: number): void {
+function drawBase(ctx: CanvasRenderingContext2D, b: Settlement, H: number, capital = false): void {
   const x = b.x - 12, y = b.y - 8;
   if (b.tier === 'ruin') {
     ctx.fillStyle = '#5a5d6a'; ctx.fillRect(x + 2, y + 8, 6, 8); ctx.fillRect(x + 14, y + 4, 4, 12); ctx.fillRect(x + 8, y + 12, 12, 4);
@@ -45,11 +45,24 @@ function drawBase(ctx: CanvasRenderingContext2D, b: Settlement, H: number): void
     if (b.buildT > 0) { ctx.fillStyle = '#f2d34a'; ctx.fillRect(x, y - 12, 24, 1); }
     return;
   }
+  if (b.tier === 'town' && b.hp > 0) {
+    // A town: the hall gains a wing on each side and a taller roof.
+    ctx.fillStyle = '#4f5464'; ctx.fillRect(x - 5, y + 5, 6, 11); ctx.fillRect(x + 23, y + 5, 6, 11);
+    ctx.fillStyle = '#6e7480'; ctx.fillRect(x - 5, y + 5, 6, 1); ctx.fillRect(x + 23, y + 5, 6, 1);
+    ctx.fillStyle = '#3a3f4e'; ctx.fillRect(x - 3, y + 9, 2, 2); ctx.fillRect(x + 25, y + 9, 2, 2);
+    ctx.fillStyle = '#7a8093'; ctx.fillRect(x + 4, y - 3, 16, 3);
+  }
   if ((b.tier === 'fortress' || b.tier === 'city') && b.hp > 0) {
-    // A fortress gets a second story and corner towers.
-    ctx.fillStyle = '#4a4f5e'; ctx.fillRect(x - 3, y - 2, 30, 20);
-    ctx.fillStyle = '#6e7480'; ctx.fillRect(x - 3, y - 2, 4, 6); ctx.fillRect(x + 23, y - 2, 4, 6); ctx.fillRect(x - 3, y + 12, 4, 6); ctx.fillRect(x + 23, y + 12, 4, 6);
-    if (b.tier === 'city') { ctx.fillStyle = '#9aa0ae'; ctx.fillRect(x + 2, y - 6, 20, 5); ctx.fillStyle = '#f2d34a'; ctx.fillRect(x + 10, y - 8, 4, 2); }
+    // A fortress gets a second story and corner towers. A city stands taller again, in pale stone with a gold roof.
+    const city = b.tier === 'city';
+    ctx.fillStyle = city ? '#5a6070' : '#4a4f5e'; ctx.fillRect(x - 5, y - 4, 34, 22);
+    ctx.fillStyle = city ? '#8a90a0' : '#6e7480'; ctx.fillRect(x - 5, y - 6, 5, 8); ctx.fillRect(x + 24, y - 6, 5, 8); ctx.fillRect(x - 5, y + 12, 5, 6); ctx.fillRect(x + 24, y + 12, 5, 6);
+    if (city) {
+      ctx.fillStyle = '#9aa0ae'; ctx.fillRect(x + 1, y - 9, 22, 6);
+      ctx.fillStyle = '#b9bccb'; ctx.fillRect(x + 4, y - 12, 16, 3);
+      ctx.fillStyle = '#f2d34a'; ctx.fillRect(x + 9, y - 14, 6, 2); ctx.fillRect(x + 11, y - 16, 2, 2);
+      ctx.fillStyle = '#2c2f3a'; for (let i = -3; i < 27; i += 5) ctx.fillRect(x + i, y - 2, 2, 3);
+    }
   }
   if (b.hp <= 0) {
     ctx.fillStyle = '#2c2f3a'; ctx.fillRect(x, y + 6, 24, 10);
@@ -64,6 +77,11 @@ function drawBase(ctx: CanvasRenderingContext2D, b: Settlement, H: number): void
   ctx.fillStyle = '#141520'; ctx.fillRect(b.x - 2, b.y < H / 2 ? y + 2 : y + 9, 4, 7);
   ctx.fillStyle = '#dde2ec'; ctx.fillRect(x + 21, y - 5, 1, 7);
   ctx.fillStyle = TEAM[b.team]; ctx.fillRect(x + 22, y - 5, 3, 3);
+  if (capital) {
+    // The crown: a taller gold standard on the left.
+    ctx.fillStyle = '#dde2ec'; ctx.fillRect(x + 1, y - 9, 1, 11);
+    ctx.fillStyle = '#f2d34a'; ctx.fillRect(x + 2, y - 9, 5, 3); ctx.fillRect(x + 2, y - 11, 1, 2); ctx.fillRect(x + 4, y - 11, 1, 2); ctx.fillRect(x + 6, y - 11, 1, 2);
+  }
   ctx.fillStyle = '#111'; ctx.fillRect(x, y - 9, 24, 2);
   ctx.fillStyle = TEAM[b.team]; ctx.fillRect(x, y - 9, Math.round((24 * b.hp) / b.max), 2);
   if (b.buildT > 0) {
@@ -250,7 +268,7 @@ export function drawWorld(ctx: CanvasRenderingContext2D, bg: HTMLCanvasElement, 
   const inSight = (x: number, y: number): boolean => !fog || fog[tileOf(x, y)] === 1;
   const known = (x: number, y: number): boolean => !seen || seen[tileOf(x, y)] === 1;
   for (const m of w.mines) if (vis(m.x, m.y) && known(m.x, m.y)) drawMine(ctx, m);
-  for (const s of w.slots) for (const b of s.settlements) if (vis(b.x, b.y, 24) && (own(b.team) || known(b.x, b.y))) drawBase(ctx, b, H);
+  for (const s of w.slots) for (const b of s.settlements) if (vis(b.x, b.y, 24) && (own(b.team) || known(b.x, b.y))) drawBase(ctx, b, H, w.capitals[b.team] === b.region && b.region >= 0);
   for (const b of w.blds) if (b.kind !== 'tower' && vis(b.x, b.y) && (own(b.team) || known(b.x, b.y))) drawBld(ctx, b);
   for (const b of w.blds) if (b.kind === 'tower' && vis(b.x, b.y) && (own(b.team) || known(b.x, b.y))) drawBld(ctx, b);
   const us = w.units.filter((u) => vis(u.x, u.y) && (own(u.team) || inSight(u.x, u.y))).sort((a, b) => a.y - b.y);

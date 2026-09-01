@@ -5,6 +5,11 @@ import type { MapDef } from '../../src/sim/map.ts';
 import { idsOf, unitsOf } from '../../src/sim/queries.ts';
 import { step } from '../../src/sim/step.ts';
 import type { Action, Mode, World } from '../../src/sim/types.ts';
+import { NEXT_TIER } from '../../src/sim/conquest.ts';
+import { GROW } from '../../src/data/realm.ts';
+import { buildingsOf, seedResidents } from '../../src/sim/civ.ts';
+import { addBld } from '../../src/sim/buildings.ts';
+import { findSpot } from '../../src/sim/town.ts';
 import { DT } from '../../src/sim/world.ts';
 
 export { DT, applyCommand, cmd };
@@ -54,4 +59,26 @@ export function ticks(w: World, n: number): void {
 /** Fires exactly once per `period` seconds of sim time, judged in whole ticks. */
 export function every(t: number, period: number): boolean {
   return Math.round(t / DT) % Math.round(period / DT) === 0;
+}
+
+/** Give a settlement everything the next tier asks for: buildings placed outright, villagers seeded. */
+export function readyToGrow(w: World, slot: number, b: import('../../src/sim/types.ts').Settlement): void {
+  const to = NEXT_TIER[b.tier];
+  const need = to ? GROW[to] : undefined;
+  if (!need) return;
+  const placed: import('../../src/data/buildings.ts').BldKey[] = [];
+  const has = (k: import('../../src/data/buildings.ts').BldKey): boolean => buildingsOf(w, b).some((x) => x.type === k) || placed.includes(k);
+  const put = (k: import('../../src/data/buildings.ts').BldKey): void => {
+    const spot = findSpot(w, slot, k, b.x, b.y, 30);
+    if (!spot) throw new Error('no room for ' + k);
+    addBld(w, slot, k, spot.tx, spot.ty);
+    placed.push(k);
+  };
+  const houses = buildingsOf(w, b).filter((x) => x.type === 'house').length;
+  for (let i = houses; i < need.houses; i++) put('house');
+  for (const k of need.all) if (!has(k)) put(k);
+  for (const g of need.any) if (!g.some(has)) put(g[0]);
+  const people = w.units.filter((u) => u.hp > 0 && u.home === b.id).length;
+  if (people < need.people) { seedResidents(w, b, need.people - people); b.civ.residents = need.people; }
+  ticks(w, 1);
 }

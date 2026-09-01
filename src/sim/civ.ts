@@ -14,7 +14,7 @@ import { mkUnit } from './units.ts';
 export const isCiv = (u: Unit): boolean => TYPES[u.type].role === 'civ';
 
 /** The settlement a building belongs to: same region, or the nearest within reach when there are no regions. */
-function settlementFor(w: World, b: { x: number; y: number; team: number }, homes: Settlement[]): Settlement | null {
+export function settlementFor(w: World, b: { x: number; y: number; team: number }, homes: Settlement[]): Settlement | null {
   if (w.regionOf) {
     const r = regionAt(w, b.x, b.y);
     let best: Settlement | null = null, bd = Infinity;
@@ -24,6 +24,12 @@ function settlementFor(w: World, b: { x: number; y: number; team: number }, home
   let best: Settlement | null = null, bd = CIV.reach;
   for (const s of homes) { const d = Math.hypot(s.x - b.x, s.y - b.y); if (d < bd) { bd = d; best = s; } }
   return best;
+}
+
+/** Finished buildings that belong to a settlement. */
+export function buildingsOf(w: World, s: Settlement): Building[] {
+  const homes = w.slots[s.team].settlements.filter((b) => b.hp > 0 && b.tier !== 'outpost');
+  return w.blds.filter((b) => b.team === s.team && b.buildT <= 0 && settlementFor(w, b, homes) === s);
 }
 
 /** Gold per second from staffed jobs across a slot's towns. Cached by the pass. */

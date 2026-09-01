@@ -386,7 +386,7 @@ export type Action =
   | { type: 'truce'; payload: { slot: number; offer: boolean } }
   | { type: 'power'; payload: { power: PowerKey; x: number; y: number } }
   | { type: 'research'; payload: { tech: Tech } }
-  | { type: 'ageUp'; payload: null }
+  | { type: 'ageUp'; payload: { id?: number } | null }
   | { type: 'bldRally'; payload: { id: number; x: number; y: number } }
   | { type: 'cheats'; payload: Cheats }
   | { type: 'choose'; payload: { yes: boolean } }

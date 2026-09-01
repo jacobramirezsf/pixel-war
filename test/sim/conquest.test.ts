@@ -9,7 +9,7 @@ import { newGame } from '../../src/sim/game.ts';
 import { minesHeld } from '../../src/sim/economy.ts';
 import { deserialize, restore, serialize, snapshot, stateString } from '../../src/sim/world.ts';
 import { mkUnit } from '../../src/sim/units.ts';
-import { act, run, ticks } from './helpers.ts';
+import { act, readyToGrow, run, ticks } from './helpers.ts';
 
 // The slice: later systems off, no neutrals, so these tests read like the M7 document.
 const conquest = (seed = 3) => {
@@ -96,6 +96,7 @@ test('growing a village takes time, then the settlement is stronger', () => {
   const w = conquest();
   const home = w.slots[0].settlements[0];
   w.slots[0].gold = 400;
+  readyToGrow(w, 0, home);
   assert.ok(act(w, 0, { type: 'upgrade', payload: { id: home.id } }));
   assert.equal(home.tier, 'town');
   assert.ok(home.buildT > 0);

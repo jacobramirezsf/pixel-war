@@ -9,7 +9,7 @@ import { popCap, TIERS } from '../../src/sim/conquest.ts';
 import { newGame } from '../../src/sim/game.ts';
 import { ageOf, canTrain, ownBlds } from '../../src/sim/town.ts';
 import { TILE } from '../../src/sim/map.ts';
-import { act, run, ticks } from './helpers.ts';
+import { act, readyToGrow, run, ticks } from './helpers.ts';
 
 const conquest = (seed = 3) => newGame({} as never, 'conquest', { seed, rivals: 1 });
 
@@ -64,6 +64,7 @@ test('the age follows the settlement tier and gates buildings', () => {
   assert.equal(ageOf(w, 0), 0);
   const p = spot(w, 'house');
   assert.match(canBuild(w, Math.round(p.x / TILE - 1.5), Math.round(p.y / TILE - 1), 0, 'range') ?? '', /age/);
+  readyToGrow(w, 0, w.slots[0].settlements[0]);
   assert.ok(act(w, 0, { type: 'ageUp', payload: null }));
   const cap = w.slots[0].settlements[0];
   assert.equal(cap.tier, 'town');
@@ -77,6 +78,7 @@ test('blacksmith research needs a smith and adds damage', () => {
   w.slots[0].gold = 5000;
   w.slots[0].mat = 5000;
   assert.ok(!act(w, 0, { type: 'research', payload: { tech: 'melee' } }));
+  readyToGrow(w, 0, w.slots[0].settlements[0]);
   act(w, 0, { type: 'ageUp', payload: null });
   run(w, TIERS.town.buildT + 1);
   const p = spot(w, 'smith');

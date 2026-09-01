@@ -2,7 +2,7 @@
 
 import { AGE_NAMES, BLD, BORDER } from '../../data/buildings.ts';
 import { canTrain, RESEARCH_COST, TECH_NAMES } from '../../sim/town.ts';
-import { NEXT_TIER, TIERS } from '../../sim/conquest.ts';
+import { canGrow, NEXT_TIER, TIERS } from '../../sim/conquest.ts';
 import { DIFF } from '../../data/difficulty.ts';
 import { TOOLS, type EditorTool } from '../../data/maps.ts';
 import { POWER_KEYS, POWERS, type PowerKey } from '../../data/powers.ts';
@@ -233,10 +233,14 @@ export function updateUI(app: App): void {
   show(B('gh-economy'), town); show(B('gh-military'), town); show(B('gh-defense'), town);
   show(B('bGrow'), conq); show(B('bTech1'), town); show(B('bTech2'), town); show(B('bTech3'), town);
   if (w && conq) {
-    const cap = w.slots[app.ctl].settlements.find((b) => b.hp > 0 && b.buildT <= 0 && NEXT_TIER[b.tier]);
-    const to = cap ? NEXT_TIER[cap.tier] : undefined;
-    B('bGrow').textContent = to ? 'GROW: ' + to.toUpperCase() + ' ' + TIERS[to].gold + 'g' : cap ? 'GROWING' : 'CITY';
-    B('bGrow').classList.toggle('dis', !to);
+    const towns = w.slots[app.ctl].settlements;
+    const cap = towns.find((b) => b.id === app.town && b.hp > 0) ?? towns.find((b) => b.hp > 0 && b.buildT <= 0 && NEXT_TIER[b.tier]);
+    const to = cap && cap.buildT <= 0 ? NEXT_TIER[cap.tier] : undefined;
+    const why = cap && to ? canGrow(w, cap) : null;
+    const name = cap ? (w.regions[cap.region]?.name ?? 'HOME').toUpperCase() : '';
+    B('bGrow').textContent = to ? 'GROW ' + name + ' TO ' + to.toUpperCase() + ' · ' + TIERS[to].gold + 'g' : cap && cap.buildT > 0 ? name + ' IS GROWING' : name + ' IS A CITY';
+    B('bGrow').title = why ?? '';
+    B('bGrow').classList.toggle('dis', !to || !!why);
     const techs = ['melee', 'ranged', 'armor'] as const;
     techs.forEach((t, i) => { const lvl = w.slots[app.ctl].tech[t]; const b = B('bTech' + (i + 1)); b.textContent = TECH_NAMES[t] + ' ' + (lvl >= RESEARCH_COST.length ? 'MAX' : (lvl + 1) + ' · ' + RESEARCH_COST[lvl] + 'g'); b.classList.toggle('dis', lvl >= RESEARCH_COST.length); });
   }
@@ -274,7 +278,11 @@ function renderSelCard(app: App): void {
     if (!s || s.hp <= 0) { app.town = -1; el.textContent = ''; return; }
     const name = w.regions[s.region]?.name ?? 'Base', c = s.civ;
     const st = c.state;
-    el.innerHTML = '<span class="town"><b>' + name.toUpperCase() + '</b> ' + s.tier + (w.rules.civilians ? ' · <span class="st-' + st + '">' + STATE_LABEL[st] + '</span><br><span class="civ">' + c.residents + '/' + c.housing + ' people · ' + c.employed + '/' + c.jobs + ' jobs · +' + c.income.toFixed(1) + '/s</span>' : '') + '</span>';
+    const to = s.buildT <= 0 ? NEXT_TIER[s.tier] : undefined;
+    const why = to ? canGrow(w, s) : null;
+    const cap = w.capitals[app.ctl] === s.region ? ' · capital' : '';
+    const next = s.buildT > 0 ? '<br><span class="civ">growing into a ' + s.tier + '</span>' : to ? '<br><span class="civ">next: ' + to + (why ? ', ' + why : ', ready (' + TIERS[to].gold + ' gold)') + '</span>' : '';
+    el.innerHTML = '<span class="town"><b>' + name.toUpperCase() + '</b> ' + s.tier + cap + (w.rules.civilians ? ' · <span class="st-' + st + '">' + STATE_LABEL[st] + '</span><br><span class="civ">' + c.residents + '/' + c.housing + ' people · ' + c.employed + '/' + c.jobs + ' jobs · +' + c.income.toFixed(1) + '/s</span>' : '') + next + '</span>';
     return;
   }
   if (!sel.length) { if (el.textContent) el.textContent = ''; return; }

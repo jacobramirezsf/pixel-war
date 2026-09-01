@@ -82,7 +82,7 @@ export function wireCommands(app: App): void {
   on($('bTerr'), 'click', () => { app.terrOpen = !app.terrOpen; app.ui.updateUI(); });
   on($('evYes'), 'click', () => { issueAction(app, { type: 'choose', payload: { yes: true } }); app.paused = false; app.ui.updateUI(); });
   on($('evNo'), 'click', () => { issueAction(app, { type: 'choose', payload: { yes: false } }); app.paused = false; app.ui.updateUI(); });
-  on($('bGrow'), 'click', () => { if (live()) issueAction(app, { type: 'ageUp', payload: null }); });
+  on($('bGrow'), 'click', () => { if (live()) issueAction(app, { type: 'ageUp', payload: app.town >= 0 ? { id: app.town } : null }); });
   (['melee', 'ranged', 'armor'] as const).forEach((t, i) => on($('bTech' + (i + 1)), 'click', () => { if (live()) issueAction(app, { type: 'research', payload: { tech: t } }); }));
   on($('bSave'), 'click', () => { say(app, saveConquest(app) ? 'Saved to slot ' + app.slot : 'Nothing to save', 1.2); });
   on($('bLand'), 'click', () => { app.overlay = !app.overlay; app.ui.updateUI(); });

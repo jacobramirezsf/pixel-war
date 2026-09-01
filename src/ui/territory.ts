@@ -34,6 +34,20 @@ function regionCard(app: App, r: Region): string {
   return '<button class="card" data-r="' + r.id + '"><span class="name">' + r.name + '</span><span class="tier">' + tier + (inc ? ' · +' + inc.toFixed(0) + '/s' : '') + (r.mat ? ' · mat ' + r.mat.toFixed(1) + '/s' : '') + '</span><span class="flags">' + flags.join(' · ') + '</span></button>';
 }
 
+const STATE_LABEL: Record<string, string> = { growing: 'GROWING', stable: 'STABLE', attacked: 'UNDER ATTACK', recovering: 'RECOVERING' };
+
+/** One town: name, tier, people, income, state. Tap to go there. */
+function townCard(app: App, b: import('../sim/types.ts').Settlement): string {
+  const w = app.world!;
+  const r = w.regions[b.region];
+  const c = b.civ, cap = w.capitals[0] === b.region;
+  const st = b.buildT > 0 ? 'growing into a ' + b.tier : (STATE_LABEL[c.state] ?? c.state).toLowerCase();
+  const cls = c.state === 'attacked' ? 'bad' : c.state === 'recovering' ? 'warn' : '';
+  return '<button class="card town" data-town="' + b.id + '"><span class="name">' + (r?.name ?? 'Home') + (cap ? ' <b class="cap">CAPITAL</b>' : '') + '</span>'
+    + '<span class="tier">' + b.tier + ' · ' + c.residents + '/' + c.housing + ' people · +' + c.income.toFixed(1) + '/s</span>'
+    + '<span class="flags' + (cls ? ' ' + cls : '') + '">' + st + '</span></button>';
+}
+
 function eventLine(app: App, e: GameEvent): string {
   const w = app.world!;
   const age = Math.max(0, Math.round((w.tick - e.tick) / 60));
@@ -65,16 +79,20 @@ export function renderTerritory(app: App): void {
   const w = app.world;
   if (!w || w.mode !== 'conquest' || !app.terrOpen) { if (lastKey) { el.innerHTML = ''; lastKey = ''; } return; }
   const held = w.regions.filter((r) => r.owner === 0).sort((a, b) => trouble(app, b) - trouble(app, a));
-  const key = held.map((r) => r.id + ':' + Math.round(r.unrest) + ':' + Math.round(r.garrison) + '/' + Math.round(r.need) + (r.connected ? '' : '!') + (r.contested ? '?' : '')).join('|') + '#' + w.events.length + '#' + w.slots.map((s) => s.truce.join('')).join(',') + '#' + Math.floor(w.t / 10);
+  const towns = w.slots[0].settlements.filter((b) => b.hp > 0 && b.tier !== 'outpost').sort((a, b) => (b.civ.state === 'attacked' ? 1 : 0) - (a.civ.state === 'attacked' ? 1 : 0) || (w.capitals[0] === b.region ? 1 : 0) - (w.capitals[0] === a.region ? 1 : 0));
+  const key = held.map((r) => r.id + ':' + Math.round(r.unrest) + ':' + Math.round(r.garrison) + '/' + Math.round(r.need) + (r.connected ? '' : '!') + (r.contested ? '?' : '')).join('|') + '#' + towns.map((b) => b.id + b.tier + b.civ.residents + b.civ.state + b.civ.income.toFixed(1)).join('|') + '#' + w.events.length + '#' + w.slots.map((s) => s.truce.join('')).join(',') + '#' + Math.floor(w.t / 10);
   if (key === lastKey) return;
   lastKey = key;
   const events = w.events.slice(-8).reverse();
-  el.innerHTML = '<div class="thead">TERRITORY <button id="tClose" class="mini">CLOSE</button></div>'
+  el.innerHTML = '<div class="thead">KINGDOM <button id="tClose" class="mini">CLOSE</button></div>'
+    + (towns.length ? '<h3>TOWNS</h3>' + towns.map((b) => townCard(app, b)).join('') : '')
+    + '<h3>LAND</h3>'
     + (held.length ? held.map((r) => regionCard(app, r)).join('') : '<p>You hold nothing. Settle a region.</p>')
     + (events.length ? '<h3>EVENTS</h3>' + events.map((e) => eventLine(app, e)).join('') : '')
     + diplomacy(app);
   on($('tClose'), 'click', () => { app.terrOpen = false; app.ui.updateUI(); });
-  for (const b of el.querySelectorAll<HTMLButtonElement>('button.card')) on(b, 'click', () => { const r = w.regions[+b.dataset.r!]; centerOn(app.cam, r.cx, r.cy); if (app.layout === 'mobile') { app.terrOpen = false; app.ui.updateUI(); } });
+  for (const b of el.querySelectorAll<HTMLButtonElement>('button.card[data-r]')) on(b, 'click', () => { const r = w.regions[+b.dataset.r!]; centerOn(app.cam, r.cx, r.cy); if (app.layout === 'mobile') { app.terrOpen = false; app.ui.updateUI(); } });
+  for (const b of el.querySelectorAll<HTMLButtonElement>('button.card[data-town]')) on(b, 'click', () => { const t = w.slots[0].settlements.find((x) => x.id === +b.dataset.town!); if (!t) return; centerOn(app.cam, t.x, t.y); app.selection.clear(); app.town = t.id; if (app.layout === 'mobile') app.terrOpen = false; app.ui.updateUI(); });
   for (const b of el.querySelectorAll<HTMLButtonElement>('button.ev')) on(b, 'click', () => { centerOn(app.cam, +b.dataset.ex!, +b.dataset.ey!); if (app.layout === 'mobile') { app.terrOpen = false; app.ui.updateUI(); } });
   for (const b of el.querySelectorAll<HTMLButtonElement>('button[data-truce]')) on(b, 'click', () => { issueAction(app, { type: 'truce', payload: { slot: +b.dataset.truce!, offer: b.dataset.on === '1' } }); lastKey = ''; });
 }

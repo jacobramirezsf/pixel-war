@@ -8,7 +8,7 @@ import { canAbsorb, hasCity, popCap, popUsed, setTruce, TIERS } from '../../src/
 import { canBuild } from '../../src/sim/buildings.ts';
 import { newGame } from '../../src/sim/game.ts';
 import { mkUnit, rank } from '../../src/sim/units.ts';
-import { act, run, ticks } from './helpers.ts';
+import { act, readyToGrow, run, ticks } from './helpers.ts';
 
 // Rivals start at peace in a Realm. These tests want a war.
 const conquest = (seed = 3, rivals = 1) => { const w = newGame({} as never, 'conquest', { seed, rivals }); for (let i = 1; i <= rivals; i++) setTruce(w, 0, i, false); return w; };
@@ -87,9 +87,11 @@ test('population caps the army and a city unlocks advanced units', () => {
   assert.ok(bought >= 10 && bought <= 20, 'bought ' + bought);
   assert.ok(popUsed(w, 0) <= popCap(w, 0));
   const cap = w.slots[0].settlements[0];
+  readyToGrow(w, 0, cap);
   assert.ok(act(w, 0, { type: 'upgrade', payload: { id: cap.id } }));
   assert.equal(cap.tier, 'town');
   run(w, TIERS.town.buildT + 1);
+  readyToGrow(w, 0, cap);
   assert.ok(act(w, 0, { type: 'upgrade', payload: { id: cap.id } }));
   assert.equal(cap.tier, 'city');
   run(w, TIERS.city.buildT + 1);

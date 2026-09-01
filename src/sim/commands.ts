@@ -8,7 +8,7 @@ import { addBld, bldAtPx, canBuild, gateDir, passableFor, removeBld } from './bu
 import { clamp, TILE } from './map.ts';
 import type { Action, Command, Target, TargetRef, Unit, World } from './types.ts';
 import { buildTime, mkUnit } from './units.ts';
-import { absorb, ADVANCED_COST, choose, canAbsorb, canSettle, hasCity, NEXT_TIER, placeSettlement, popCap, popUsed, setTruce, startUpgrade, TIERS, truceAccepted } from './conquest.ts';
+import { absorb, ADVANCED_COST, canGrow, choose, canAbsorb, canSettle, hasCity, NEXT_TIER, placeSettlement, popCap, popUsed, setTruce, startUpgrade, TIERS, truceAccepted } from './conquest.ts';
 import { popOf } from './units.ts';
 import { seedResidents } from './civ.ts';
 import { castPower } from './powers.ts';
@@ -89,8 +89,9 @@ export function applyCommand(w: World, c: Command, quiet = false): boolean {
       return true;
     }
     case 'ageUp': {
-      // Grow the best settlement one tier. Same as upgrade, without picking a building.
-      const best = s.settlements.filter((b) => b.hp > 0 && b.buildT <= 0 && NEXT_TIER[b.tier]).sort((a, b) => (b.tier === 'town' ? 1 : 0) - (a.tier === 'town' ? 1 : 0))[0];
+      // Grow the named settlement, else the best one. Same as upgrade, without picking a building.
+      const named = c.payload?.id !== undefined ? s.settlements.find((b) => b.id === c.payload!.id && b.hp > 0) : undefined;
+      const best = named ?? s.settlements.filter((b) => b.hp > 0 && b.buildT <= 0 && NEXT_TIER[b.tier]).sort((a, b) => (b.tier === 'town' ? 1 : 0) - (a.tier === 'town' ? 1 : 0))[0];
       if (!best) { say('No settlement can grow right now', 1.5); return false; }
       return applyCommand(w, { ...c, type: 'upgrade', payload: { id: best.id } } as Command, quiet);
     }
@@ -131,6 +132,8 @@ export function applyCommand(w: World, c: Command, quiet = false): boolean {
       const b = s.settlements.find((x) => x.id === c.payload.id);
       const to = b ? NEXT_TIER[b.tier] : undefined;
       if (!b || b.hp <= 0 || !to || b.buildT > 0) { say('Pick a finished settlement of yours that can grow', 1.2); return false; }
+      const why = canGrow(w, b);
+      if (why) { say('Cannot grow to a ' + to + ': ' + why, 2.5); return false; }
       const T = TIERS[to], mat = w.rules.materials ? T.mat : 0;
       if (s.gold < T.gold) { say('Need ' + T.gold + ' gold', 1.2); return false; }
       if (s.mat < mat) { say('Need ' + mat + ' materials', 1.2); return false; }

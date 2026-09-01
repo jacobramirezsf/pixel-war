@@ -9,8 +9,10 @@ import { applyCommand, cmd } from '../commands.ts';
 import { rand } from '../rng.ts';
 import type { Settlement, Unit, World } from '../types.ts';
 import { allied, slotDiff } from '../world.ts';
-import { canAbsorb, canSettle, NEXT_TIER, popCap, popUsed, TIERS } from '../conquest.ts';
-import { canResearch, canTrain, findSpot, ownBlds, queuedCount } from '../town.ts';
+import { canAbsorb, canGrow, canSettle, NEXT_TIER, popCap, popUsed, TIERS } from '../conquest.ts';
+import { GROW } from '../../data/realm.ts';
+import { buildingsOf } from '../civ.ts';
+import { ageOf, canResearch, canTrain, findSpot, ownBlds, queuedCount } from '../town.ts';
 import type { BldKey } from '../../data/buildings.ts';
 import { TILE } from '../map.ts';
 import { pickUnit, roleMix } from './composition.ts';
@@ -138,17 +140,17 @@ function expandTerritory(w: World, slot: number, a: Assessment): boolean {
     }
     if (own.length && canAfford('fortress') && s.gold >= TIERS.fortress.gold + 120) {
       const v = s.settlements.find((b) => b.hp > 0 && b.tier === 'village' && b.buildT <= 0 && w.regions[b.region].adj.some((x) => { const o = w.regions[x].owner; return o >= 0 && !allied(w, o, slot); }));
-      if (v) { applyCommand(w, cmd(w, slot, { type: 'upgrade', payload: { id: v.id } }), true); return true; }
+      if (v && !canGrow(w, v)) { applyCommand(w, cmd(w, slot, { type: 'upgrade', payload: { id: v.id } }), true); return true; }
     }
   }
   // Grow the capital through the ages once there is a barracks to use them.
   if (w.rules.town && w.blds.some((b) => b.team === slot && b.type === 'barracks')) {
     const cap = s.settlements.find((b) => b.hp > 0 && b.buildT <= 0 && NEXT_TIER[b.tier]);
     const to = cap ? NEXT_TIER[cap.tier] : undefined;
-    if (cap && to && s.gold >= TIERS[to].gold + 120 && (!w.rules.materials || s.mat >= TIERS[to].mat)) { applyCommand(w, cmd(w, slot, { type: 'upgrade', payload: { id: cap.id } }), true); return true; }
+    if (cap && to && !canGrow(w, cap) && s.gold >= TIERS[to].gold + 120 && (!w.rules.materials || s.mat >= TIERS[to].mat)) { applyCommand(w, cmd(w, slot, { type: 'upgrade', payload: { id: cap.id } }), true); return true; }
   } else if (canAfford('city') && s.gold >= TIERS.city.gold + 150 && !s.settlements.some((b) => b.tier === 'city')) {
     const cap = s.settlements.find((b) => b.hp > 0 && b.buildT <= 0 && NEXT_TIER[b.tier] === 'city');
-    if (cap) { applyCommand(w, cmd(w, slot, { type: 'upgrade', payload: { id: cap.id } }), true); return true; }
+    if (cap && !canGrow(w, cap)) { applyCommand(w, cmd(w, slot, { type: 'upgrade', payload: { id: cap.id } }), true); return true; }
   }
   return false;
 }
@@ -181,6 +183,19 @@ function buildTown(w: World, slot: number, a: Assessment): boolean {
   if (realm && idle >= 2 && afford('farm') && have('farm') < 8) return placeNear(w, slot, 'farm', home.x, home.y);
   if (realm && idle >= 4 && s.age >= 1 && afford('market') && have('market') < 2) return placeNear(w, slot, 'market', home.x, home.y);
   if (!have('barracks') && afford('barracks')) return placeNear(w, slot, 'barracks', home.x, home.y);
+  // Whatever the next tier asks for comes next: the town wants to grow.
+  if (realm) {
+    const cap = s.settlements.find((b) => b.hp > 0 && b.buildT <= 0 && NEXT_TIER[b.tier] && (w.capitals[slot] === b.region || b.tier === 'town'));
+    const to = cap ? NEXT_TIER[cap.tier] : undefined;
+    const need = to ? GROW[to] : undefined;
+    if (cap && need) {
+      const near = buildingsOf(w, cap);
+      const has = (k: BldKey): boolean => near.some((b) => b.type === k);
+      if (near.filter((b) => b.type === 'house').length < need.houses && afford('house')) return placeNear(w, slot, 'house', cap.x, cap.y);
+      for (const k of need.all) if (!has(k) && afford(k) && !canBuild(w, 0, 0, slot, k)?.includes('age')) return placeNear(w, slot, k, cap.x, cap.y);
+      for (const g of need.any) if (!g.some(has)) { const k = g.find((x) => afford(x) && (BLD[x].age ?? 0) <= ageOf(w, slot)); if (k) return placeNear(w, slot, k, cap.x, cap.y); }
+    }
+  }
   if (realm && have('farm') < 3 && afford('farm') && w.t > 60) return placeNear(w, slot, 'farm', home.x, home.y);
   if (s.age >= 1) {
     if (!have('range') && afford('range')) return placeNear(w, slot, 'range', home.x, home.y);

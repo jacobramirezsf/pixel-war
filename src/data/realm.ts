@@ -32,3 +32,18 @@ export const FEAT_RULES = {
 
 /** Seconds in a Realm day. */
 export const DAY = 120;
+
+/** What a settlement needs before it can grow to the next tier, beyond gold and materials. */
+export interface GrowNeed {
+  people: number;
+  houses: number;
+  /** Every one of these. */
+  all: import('./buildings.ts').BldKey[];
+  /** One of each group. */
+  any: import('./buildings.ts').BldKey[][];
+}
+
+export const GROW: Partial<Record<import('../sim/types.ts').Tier, GrowNeed>> = {
+  town: { people: 6, houses: 1, all: ['barracks'], any: [['farm', 'market']] },
+  city: { people: 12, houses: 3, all: ['market', 'smith'], any: [['range', 'stable']] },
+};

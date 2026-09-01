@@ -34,11 +34,20 @@ export function keyPan(app: App, dt: number): void {
   if (dx || dy) panBy(app.cam, dx, dy);
 }
 
+/** HOME: the capital first, then each further town in turn while the camera is already on one. */
 export function focusBase(app: App): void {
   const w = app.world;
   if (!w) return;
-  const b = primaryBase(w, app.ctl);
+  const towns = w.slots[app.ctl].settlements.filter((b) => b.hp > 0);
+  if (!towns.length) return;
+  const cap = towns.find((b) => w.capitals[app.ctl] === b.region) ?? primaryBase(w, app.ctl);
+  const cx = app.cam.x + app.cam.vw / app.cam.zoom / 2, cy = app.cam.y + app.cam.vh / app.cam.zoom / 2;
+  const here = towns.findIndex((b) => Math.hypot(b.x - cx, b.y - cy) < 24);
+  const order = [cap, ...towns.filter((b) => b !== cap)];
+  const at = here >= 0 ? order.indexOf(towns[here]) : -1;
+  const b = order[(at + 1) % order.length];
   centerOn(app.cam, b.x, b.y);
+  if (order.length > 1 && w.mode === 'conquest') say(app, (w.regions[b.region]?.name ?? 'Home') + (b === cap ? ' (capital)' : ''), 1);
 }
 
 export function setGroup(app: App, n: number): void {

@@ -1,7 +1,7 @@
 // Conquest: one continuous world split into regions you claim by settling and keep by holding.
 // Regions, claims, connection, garrison, unrest, neutrals, materials, population, diplomacy.
 
-import { BLD } from '../data/buildings.ts';
+import { BLD, type BldKey } from '../data/buildings.ts';
 import { roster, TYPES } from '../data/units.ts';
 import { canPlaceSettlement } from './buildings.ts';
 import { TILE, type MapDef } from './map.ts';
@@ -10,7 +10,8 @@ import type { Region, Settlement, Slot, Tier, Unit, World } from './types.ts';
 import { mkUnit } from './units.ts';
 import { castleNear, townIncome, townPop } from './town.ts';
 import { civIncome } from './civ.ts';
-import { DAY, FEAT_RULES, FEATS, type FeatKey } from '../data/realm.ts';
+import { DAY, FEAT_RULES, FEATS, GROW, type FeatKey } from '../data/realm.ts';
+import { buildingsOf } from './civ.ts';
 import { canPlaceSettlement as placeOk } from './buildings.ts';
 import { allied, emptyTown, pushEvent, say } from './world.ts';
 
@@ -150,6 +151,26 @@ export function placeSettlement(w: World, slot: number, x: number, y: number, ti
 }
 
 /** Start an in-place upgrade. The settlement keeps its hp fraction, loses production until done. */
+export const isCapital = (w: World, b: Settlement): boolean => w.capitals[b.team] === b.region && b.hp > 0;
+
+/** Why a settlement cannot grow yet, or null. Gold and materials are checked by the command. */
+export function canGrow(w: World, b: Settlement): string | null {
+  const to = NEXT_TIER[b.tier];
+  if (!to) return 'a city is as big as it gets';
+  if (b.buildT > 0) return 'still building';
+  const need = GROW[to];
+  if (!need) return null;
+  const blds = buildingsOf(w, b);
+  const has = (k: BldKey): boolean => blds.some((x) => x.type === k);
+  const missing: string[] = [];
+  if (w.rules.civilians && b.civ.residents < need.people) missing.push(need.people + ' people (' + b.civ.residents + ')');
+  const houses = blds.filter((x) => x.type === 'house').length;
+  if (houses < need.houses) missing.push(need.houses + ' house' + (need.houses > 1 ? 's' : '') + ' (' + houses + ')');
+  for (const k of need.all) if (!has(k)) missing.push('a ' + BLD[k].name.toLowerCase());
+  for (const group of need.any) if (!group.some(has)) missing.push('a ' + group.map((k) => BLD[k].name.toLowerCase()).join(' or '));
+  return missing.length ? 'needs ' + missing.join(', ') : null;
+}
+
 export function startUpgrade(b: Settlement, to: Tier): void {
   const frac = b.hp / b.max;
   b.tier = to;
@@ -319,7 +340,18 @@ function neutralsTick(w: World, dt: number, byRegion: Map<string, number>): void
 }
 
 /** Called when a settlement dies. Camps drop loot to whoever finished them. */
+const TIER_RANK: Record<Tier, number> = { city: 5, fortress: 4, town: 3, village: 2, outpost: 1, camp: 0, ruin: 0 };
+
 export function onSettlementDeath(w: World, b: Settlement): void {
+  // The crown passes to the biggest surviving settlement.
+  if (!w.slots[b.team].neutral && w.capitals[b.team] === b.region) {
+    const heir = w.slots[b.team].settlements.filter((x) => x.hp > 0 && x !== b && x.tier !== 'outpost').sort((p, q) => TIER_RANK[q.tier] - TIER_RANK[p.tier] || q.hp - p.hp)[0];
+    if (heir) {
+      w.capitals[b.team] = heir.region;
+      if (b.team === 0) { say(w, 'The capital has fallen. ' + w.regions[heir.region].name + ' is the capital now.', 4); pushEvent(w, 'lost', 'Capital moved to ' + w.regions[heir.region].name, heir.x, heir.y, heir.region); }
+      w.flowDirty = true;
+    }
+  }
   if (!w.slots[b.team].neutral || b.tier !== 'camp' || b.hitBy < 0) return;
   const s = w.slots[b.hitBy];
   s.gold += 120;
