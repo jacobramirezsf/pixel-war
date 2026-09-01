@@ -2,6 +2,8 @@
 // Touch and mouse both end up here. Everything that changes the sim goes out as a command.
 
 import { synth } from '../../audio/synth.ts';
+import { POWERS } from '../../data/powers.ts';
+import { cheatTap } from '../cheats.ts';
 import { refOf } from '../../sim/commands.ts';
 import { BLD } from '../../data/buildings.ts';
 import { canBuild } from '../../sim/buildings.ts';
@@ -180,7 +182,14 @@ export function toolAt(app: App, x: number, y: number, ts: ToolState, first: boo
     return true;
   }
   if (app.tool === 'power') {
-    if (first && app.power) { if (issueAction(app, { type: 'power', payload: { power: app.power, x, y } })) { app.tool = 'cmd'; app.power = null; app.tab = 'units'; app.ui.updateUI(); } }
+    if (first && app.power) {
+      const ids = POWERS[app.power].selection ? selectedUnits(app).map((u) => u.id) : undefined;
+      if (issueAction(app, { type: 'power', payload: { power: app.power, x, y, ids } })) { app.tool = 'cmd'; app.power = null; app.tab = 'units'; app.ui.updateUI(); }
+    }
+    return true;
+  }
+  if (app.tool === 'cheat') {
+    if (first) cheatTap(app, x, y);
     return true;
   }
   if (app.tool === 'rally') {

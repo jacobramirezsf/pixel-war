@@ -20,6 +20,7 @@ import { ctlRace, fit, issueAction, say, selectedUnits, type App, type Tab } fro
 import { $, on, show } from '../dom.ts';
 import { focusBase } from '../input/hotkeys.ts';
 import { renderTerritory, updateTerritoryVisibility } from '../territory.ts';
+import { renderCheats, updateCheatsVisibility } from '../cheats.ts';
 
 const unitBtns = {} as Record<UnitKey, HTMLButtonElement>;
 const bldBtns = {} as Record<string, HTMLButtonElement>;
@@ -170,7 +171,7 @@ export function updateUI(app: App): void {
   // Tabs: the editor shows terrain and map, everything else units, build, powers, more.
   if (map && app.tab !== 'tools' && app.tab !== 'edit') app.tab = 'tools';
   if (!map && (app.tab === 'tools' || app.tab === 'edit')) app.tab = 'units';
-  show(B('tUnits'), !map); show(B('tBuild'), !map); show(B('tPowers'), live && !edit); show(B('tMore'), !map);
+  show(B('tUnits'), !map); show(B('tBuild'), !map); show(B('tPowers'), app.settings.powersOn && (live && !edit)); show(B('tMore'), !map);
   show(B('tTools'), map); show(B('tEdit'), map);
   for (const [id, tab] of [['tUnits', 'units'], ['tBuild', 'build'], ['tPowers', 'powers'], ['tMore', 'more'], ['tTools', 'tools'], ['tEdit', 'edit']] as const) B(id).classList.toggle('on', app.tab === tab);
   show(B('strip'), app.tab === 'units'); show(B('bstrip'), app.tab === 'build'); show(B('pstrip'), app.tab === 'powers'); show(B('more'), app.tab === 'more');
@@ -251,7 +252,15 @@ export function updateUI(app: App): void {
     const techs = ['melee', 'ranged', 'armor'] as const;
     techs.forEach((t, i) => { const lvl = w.slots[app.ctl].tech[t]; const b = B('bTech' + (i + 1)); b.textContent = TECH_NAMES[t] + ' ' + (lvl >= RESEARCH_COST.length ? 'MAX' : (lvl + 1) + ' · ' + RESEARCH_COST[lvl] + 'g'); b.classList.toggle('dis', lvl >= RESEARCH_COST.length); });
   }
-  for (const k of POWER_KEYS) powerBtns[k].classList.toggle('on', app.tool === 'power' && app.power === k);
+  for (const k of POWER_KEYS) {
+    const P = POWERS[k];
+    powerBtns[k].classList.toggle('on', app.tool === 'power' && app.power === k);
+    show(powerBtns[k], (!P.realm || w?.mode === 'conquest') && (P.group !== 'chaos' || app.settings.cheats.on));
+  }
+  show(B('bCheats'), live && !edit && app.settings.cheats.on);
+  show(B('cheatChip'), live && app.settings.cheats.on);
+  updateCheatsVisibility(app);
+  renderCheats(app);
   for (const t of TOOLS) toolBtns.get(t.k)!.classList.toggle('on', map && app.editor?.tool === t.k);
   if (paintedRace !== race + app.ctl) paintStrip(app);
   fit(app);

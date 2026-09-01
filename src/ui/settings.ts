@@ -15,9 +15,11 @@ export interface Settings {
   /** Units finish the moment they are bought. */
   instant: boolean;
   cheats: import('../sim/types.ts').Cheats;
+  /** Powers tab on or off. */
+  powersOn: boolean;
 }
 
-export const DEFAULT_SETTINGS: Settings = { edgePan: false, hints: true, damageNumbers: false, volume: 0.7, muted: false, colorblind: false, autoPause: true, instant: false, cheats: defaultCheats() };
+export const DEFAULT_SETTINGS: Settings = { edgePan: false, hints: true, damageNumbers: false, volume: 0.7, muted: false, colorblind: false, autoPause: true, instant: false, cheats: defaultCheats(), powersOn: true };
 
 export function loadSettings(s: Storage): Settings {
   const saved = getJSON<Partial<Settings>>(s, 'settings', {});

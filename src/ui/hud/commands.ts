@@ -53,6 +53,7 @@ export function cancelTool(app: App): void {
   app.tool = app.world?.phase === 'edit' ? 'place' : 'cmd';
   app.power = null;
   app.stance = 'none';
+  app.cheatTool = null;
   if (app.tab === 'build' || app.tab === 'powers') app.tab = 'units';
   app.ui.updateUI();
 }
@@ -87,6 +88,7 @@ export function wireCommands(app: App): void {
   (['melee', 'ranged', 'armor'] as const).forEach((t, i) => on($('bTech' + (i + 1)), 'click', () => { if (live()) issueAction(app, { type: 'research', payload: { tech: t } }); }));
   on($('bSave'), 'click', () => { say(app, saveConquest(app) ? 'Saved to slot ' + app.slot : 'Nothing to save', 1.2); });
   on($('bLand'), 'click', () => { app.overlay = !app.overlay; app.ui.updateUI(); });
+  on($('bCheats'), 'click', () => { app.cheatsOpen = !app.cheatsOpen; app.terrOpen = false; app.ui.updateUI(); });
   // Mobile groups: tap recalls, tap with a selection and an empty slot saves, hold saves over.
   for (const n of [1, 2, 3]) {
     const b = $('bG' + n);

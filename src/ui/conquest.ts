@@ -25,6 +25,7 @@ export interface SlotMeta {
   rivals: number;
   wars: number;
   feats: number;
+  cheats: boolean;
   savedAt: number;
 }
 
@@ -39,7 +40,7 @@ function adoptOldSave(app: App): void {
 export function slotMeta(app: App, n: number): SlotMeta | null {
   adoptOldSave(app);
   if (!app.storage.get(key(n))) return null;
-  return getJSON<SlotMeta | null>(app.storage, metaKey(n), null) ?? { race: 'kingdom', seed: 0, cols: 0, day: 0, towns: 0, regions: 0, people: 0, army: 0, rivals: 0, wars: 0, feats: 0, savedAt: 0 };
+  return getJSON<SlotMeta | null>(app.storage, metaKey(n), null) ?? { race: 'kingdom', seed: 0, cols: 0, day: 0, towns: 0, regions: 0, people: 0, army: 0, rivals: 0, wars: 0, feats: 0, cheats: false, savedAt: 0 };
 }
 
 export function hasSave(app: App): boolean {
@@ -68,7 +69,7 @@ export function saveRealm(app: App): boolean {
     people: w.units.filter((u) => u.team === 0 && u.hp > 0 && TYPES[u.type].role === 'civ').length,
     army: w.units.filter((u) => u.team === 0 && u.hp > 0 && TYPES[u.type].role !== 'civ').length,
     rivals: w.slots.filter((x, i) => i > 0 && !x.neutral && x.alive).length,
-    wars, feats: w.feats.length, savedAt: Date.now(),
+    wars, feats: w.feats.length, cheats: w.cheats.on, savedAt: Date.now(),
   };
   setJSON(app.storage, metaKey(n), meta);
   app.lastSave = performance.now();

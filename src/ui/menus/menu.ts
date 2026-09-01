@@ -85,7 +85,7 @@ function slotCard(app: App, n: number): string {
   const when = m.savedAt ? new Date(m.savedAt).toLocaleDateString() : '';
   const rel = m.rivals ? (m.wars ? m.wars + ' at war' : 'at peace') : 'no rivals left';
   return '<div class="slotrow"><button class="pick name" data-cont="' + n + '">SLOT ' + n + ': ' + RACES[m.race].name + ', DAY ' + m.day
-    + '<span>' + m.towns + ' town' + (m.towns === 1 ? '' : 's') + ' · ' + m.regions + ' regions · ' + m.people + ' people · ' + m.army + ' soldiers · ' + rel + (m.feats ? ' · ' + m.feats + ' feat' + (m.feats === 1 ? '' : 's') : '') + (when ? ' · ' + when : '') + '</span></button>'
+    + '<span>' + m.towns + ' town' + (m.towns === 1 ? '' : 's') + ' · ' + m.regions + ' regions · ' + m.people + ' people · ' + m.army + ' soldiers · ' + rel + (m.feats ? ' · ' + m.feats + ' feat' + (m.feats === 1 ? '' : 's') : '') + (m.cheats ? ' · <b class="warn">CHEATS</b>' : '') + (when ? ' · ' + when : '') + '</span></button>'
     + '<button class="sm" data-clear="' + n + '">CLEAR</button></div>';
 }
 

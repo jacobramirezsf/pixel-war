@@ -47,6 +47,12 @@ canvas{image-rendering:pixelated;image-rendering:crisp-edges;display:block}
 #terr .dip{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:6px 0;border-bottom:1px solid #1e2130}#terr .dip .acts{display:flex;gap:4px;margin-left:auto}#terr .dip .acts button{min-height:30px}
 #terr .hist{font-size:11px;color:#b9bccb;padding:3px 0}#terr .hist span{color:#f2d34a;margin-right:6px}
 #msg{cursor:pointer;pointer-events:auto}
+#cheats{position:absolute;left:8px;top:48px;width:min(360px,calc(100% - 16px));max-height:calc(100% - 60px);overflow:auto;background:rgba(10,11,16,.96);border:1px solid #3a3d4a;padding:8px;z-index:4;font-size:11px}
+#cheats h3{margin:8px 0 4px;color:#f2d34a;letter-spacing:2px;font-size:10px}
+#cheats .row.wrap{flex-wrap:wrap;gap:4px}#cheats .mini{min-height:32px}#cheats .mini.danger{border-color:#ff6b6b;color:#ff9a9a}#cheats .mini.gold{border-color:#f2d34a;color:#f2d34a}
+#cheats select{background:#0a0b10;color:#e6e6ee;border:1px solid #3a3d4a;font:inherit;min-height:32px;width:100%}
+.chips{display:flex;flex-wrap:wrap;gap:4px}.chip{font:inherit;font-size:10px;letter-spacing:1px;padding:4px 7px;min-height:28px;background:#14161f;border:1px solid #3a3d4a;color:#b9bccb}.chip.on{background:#f2d34a;border-color:#f2d34a;color:#111}
+#cheatChip{color:#ff9a9a;font-size:10px;letter-spacing:2px;margin-right:6px;align-self:center}
 #eventcard{position:absolute;left:50%;top:40%;transform:translate(-50%,-50%);width:min(320px,90%);background:rgba(10,11,16,.96);border:1px solid #f2d34a;padding:12px;z-index:5;text-align:center}
 #eventcard h3{margin:0 0 6px;color:#f2d34a;letter-spacing:3px;font-size:12px}
 #eventcard p{font-size:13px;line-height:1.5;color:#e6e6ee;margin:0 0 10px}

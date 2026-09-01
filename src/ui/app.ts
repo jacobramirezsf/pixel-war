@@ -22,7 +22,7 @@ import { $ } from './dom.ts';
 import { detectLayout, type LayoutMode } from './layout.ts';
 import { loadSettings, saveSettings as persistSettings, type Settings } from './settings.ts';
 
-export type Tool = 'cmd' | 'build' | 'sell' | 'place' | 'erase' | 'rally' | 'settle' | 'outpost' | 'upgrade' | 'absorb' | 'power';
+export type Tool = 'cmd' | 'build' | 'sell' | 'place' | 'erase' | 'rally' | 'settle' | 'outpost' | 'upgrade' | 'absorb' | 'power' | 'cheat';
 export type Tab = 'units' | 'build' | 'powers' | 'more' | 'tools' | 'edit';
 export const SPEEDS = [0.25, 0.5, 1, 2, 4];
 
@@ -71,6 +71,9 @@ export interface App {
   stance: 'none' | 'move' | 'attack' | 'guard';
   /** Selected settlement id for the town card, or -1. */
   town: number;
+  /** Armed cheat that wants a tap on the map. */
+  cheatTool: import('./cheats.ts').CheatTool | null;
+  cheatsOpen: boolean;
   /** Last tap, for double taps. */
   lastTap: { id: number; t: number };
   /** Touch: one-finger drag box-selects instead of panning. */
@@ -128,7 +131,7 @@ export function createApp(storage: Storage): App {
   return {
     world: null, setup: null, editor: null, curMap: BUILTIN[0], custom: null, diff: 'std', race: 'kingdom', foeRace: null,
     mset: [{ on: true, team: 0, race: null }, { on: true, team: 1, race: null }, { on: true, team: 2, race: null }, { on: false, team: 3, race: null }, { on: false, team: 4, race: null }],
-    ctl: 0, brush: 'inf', bbrush: 'stk', tool: 'cmd', tab: 'units', power: null, stance: 'none', town: -1, lastTap: { id: -1, t: 0 }, selectMode: false, running: false, paused: false, speed: 1, overlay: false, terrOpen: false, seenEvents: 0, rivals: 1, size: 'standard', seed: null, slot: 1, lastSave: 0, selection: new Set(), drag: null, msg: '', msgT: 0,
+    ctl: 0, brush: 'inf', bbrush: 'stk', tool: 'cmd', tab: 'units', power: null, stance: 'none', town: -1, cheatTool: null, cheatsOpen: false, lastTap: { id: -1, t: 0 }, selectMode: false, running: false, paused: false, speed: 1, overlay: false, terrOpen: false, seenEvents: 0, rivals: 1, size: 'standard', seed: null, slot: 1, lastSave: 0, selection: new Set(), drag: null, msg: '', msgT: 0,
     cv, ctx, bg: document.createElement('canvas'), W: 160, H: 224,
     cam: makeCamera(), dpr: 1, layout: detectLayout(), minimap: makeMinimapCache(), hover: null, mouse: null, placing: null,
     keys: new Set(), spaceT: 0, spaceDragged: false, groups: new Map(), settings: loadSettings(storage), storage,
