@@ -289,7 +289,7 @@ export function drawWorld(ctx: CanvasRenderingContext2D, bg: HTMLCanvasElement, 
   for (const s of w.slots) for (const b of s.settlements) if (vis(b.x, b.y, 24) && (own(b.team) || known(b.x, b.y))) drawBase(ctx, b, H, w.capitals[b.team] === b.region && b.region >= 0);
   for (const b of w.blds) if (b.kind !== 'tower' && vis(b.x, b.y) && (own(b.team) || known(b.x, b.y))) drawBld(ctx, b);
   for (const b of w.blds) if (b.kind === 'tower' && vis(b.x, b.y) && (own(b.team) || known(b.x, b.y))) drawBld(ctx, b);
-  const us = w.units.filter((u) => vis(u.x, u.y) && (own(u.team) || inSight(u.x, u.y))).sort((a, b) => a.y - b.y);
+  const us = w.units.filter((u) => u.aboard < 0 && vis(u.x, u.y) && (own(u.team) || inSight(u.x, u.y))).sort((a, b) => a.y - b.y);
   for (const u of us) {
     const T = TYPES[u.type], sz = T.sz, h = sz / 2;
     const hidden = !unitVisible(u);

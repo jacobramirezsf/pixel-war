@@ -39,6 +39,38 @@ function carveRiver(m: MapDef, rng: Rng, vertical: boolean): void {
   }
 }
 
+/** Water along the middle of one edge, a few tiles deep, with islands. */
+function carveBay(m: MapDef, rng: Rng, grid: number): void {
+  const { cols, rows, tiles } = m;
+  const side = randInt(rng, 4);
+  const depth = Math.round(cols * (0.12 + rand(rng) * 0.08)), margin = 12;
+  const span = (side < 2 ? cols : rows);
+  for (let i = margin; i < span - margin; i++) {
+    // The shore wanders; the bay is deepest in the middle.
+    const edge = Math.sin(((i - margin) / (span - 2 * margin)) * Math.PI);
+    const d = Math.round(depth * (0.35 + 0.65 * edge) + (rand(rng) - 0.5) * 2);
+    for (let k = 0; k < d; k++) {
+      const x = side === 0 ? i : side === 1 ? i : side === 2 ? k : cols - 1 - k;
+      const y = side === 0 ? k : side === 1 ? rows - 1 - k : i;
+      tiles[y * cols + x] = T.water;
+    }
+  }
+  // Islands: small blobs inside the bay.
+  const n = grid >= 7 ? 3 : 2;
+  for (let q = 0; q < n; q++) {
+    const i = margin + 8 + randInt(rng, Math.max(1, span - 2 * margin - 16)), k = 3 + randInt(rng, Math.max(1, depth - 6));
+    const r = 2 + randInt(rng, 2);
+    for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+      if (dx * dx + dy * dy > r * r) continue;
+      const ii = i + dx, kk = k + dy;
+      const x = side === 0 ? ii : side === 1 ? ii : side === 2 ? kk : cols - 1 - kk;
+      const y = side === 0 ? kk : side === 1 ? rows - 1 - kk : ii;
+      if (x < 1 || y < 1 || x >= cols - 1 || y >= rows - 1) continue;
+      if (tiles[y * cols + x] === T.water) tiles[y * cols + x] = rand(rng) < 0.2 ? T.tree : T.grass;
+    }
+  }
+}
+
 /** Long winding rock lines from a noise band, broken by passes. */
 function ridges(m: MapDef, seed: number, amount: number): void {
   const { cols, rows, tiles } = m;
@@ -70,6 +102,9 @@ export function realmMap(seed: number, grid: number, rivals: number): RealmGen {
       tiles[y * cols + x] = t;
     }
   ridges(m, seed, grid >= 4 ? 1.1 : 0.9);
+  // A bay on one edge from large worlds up: open water between two corners, with an island or two
+  // holding something worth a boat trip. The corners themselves stay dry for the capitals.
+  if (grid >= 5 && rand(rng) < 0.8) carveBay(m, rng, grid);
   // Rivers: one on small worlds, two on larger ones, crossing the map with fords.
   carveRiver(m, rng, rand(rng) < 0.5);
   if (grid >= 4) carveRiver(m, rng, rand(rng) < 0.5);
@@ -83,12 +118,44 @@ export function realmMap(seed: number, grid: number, rivals: number): RealmGen {
   return { map: m, grid, cell };
 }
 
+/** Tiles of dry land connected to (tx, ty) by four-neighbor steps, capped. Small counts mean an island. */
+export function landMass(m: MapDef, tx: number, ty: number, cap = 400): number {
+  const { cols, rows, tiles } = m;
+  if (tiles[ty * cols + tx] === T.water) return 0;
+  const seen = new Uint8Array(cols * rows);
+  const stack = [ty * cols + tx];
+  seen[stack[0]] = 1;
+  let n = 0;
+  while (stack.length && n < cap) {
+    const i = stack.pop()!;
+    n++;
+    const x = i % cols, y = (i / cols) | 0;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + dx, ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
+      const j = ny * cols + nx;
+      if (seen[j] || tiles[j] === T.water) continue;
+      seen[j] = 1;
+      stack.push(j);
+    }
+  }
+  return n;
+}
+
+/** Sea, or an island too small to be part of the mainland: reached by boat, never carved to. */
+export function offshore(m: MapDef, tx: number, ty: number): boolean {
+  return landMass(m, tx, ty) < 120;
+}
+
 /** After regions exist: clear each town site, drop a mine per region, and connect everything to the first capital. */
 export function shapeRealm(m: MapDef, regions: Region[], rng: Rng, capitals: { tx: number; ty: number }[]): void {
   const { cols, rows, tiles } = m;
   const TILE = 8;
+  const sea = new Set<number>();
   for (const r of regions) {
     const tx = Math.round(r.cx / TILE), ty = Math.round(r.cy / TILE);
+    // A center in open water stays water: that region is sea, and nothing is carved to it.
+    if (offshore(m, tx, ty)) { sea.add(r.id); continue; }
     clearArea(m, tx, ty, 5, 4);
     // A mine somewhere in the region, away from the center, on open ground.
     for (let t = 0; t < 20; t++) {
@@ -107,7 +174,7 @@ export function shapeRealm(m: MapDef, regions: Region[], rng: Rng, capitals: { t
   for (let guard = 0; guard < regions.length; guard++) {
     const d = distField(m, capitals[0].tx, capitals[0].ty);
     const reach = (p: { tx: number; ty: number }): boolean => d[p.ty * cols + p.tx] < Infinity;
-    const bad = centers.findIndex((c) => !reach(c));
+    const bad = centers.findIndex((c, i) => !sea.has(regions[i].id) && !reach(c));
     if (bad < 0) break;
     const ok = centers.filter(reach);
     const from = centers[bad];

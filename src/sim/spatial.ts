@@ -25,7 +25,7 @@ export function fillGrid(g: Grid, units: readonly Unit[]): void {
   used.length = 0;
   for (let i = 0; i < units.length; i++) {
     const u = units[i];
-    if (u.hp <= 0) continue;
+    if (u.hp <= 0 || u.aboard >= 0) continue;
     const cx = Math.max(0, Math.min(g.cols - 1, (u.x / CELL) | 0)), cy = Math.max(0, Math.min(g.rows - 1, (u.y / CELL) | 0));
     const idx = cy * g.cols + cx, cell = g.cells[idx];
     if (!cell.length) used.push(idx);

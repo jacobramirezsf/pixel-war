@@ -202,6 +202,10 @@ export type Order =
   | { type: 'attack'; tgt: Target | null; x?: number; y?: number }
   /** Hold a post or follow a target: engage what comes within reach, never stray far, come back. */
   | { type: 'guard'; x: number; y: number; tgt?: Target | null; hold?: boolean }
+  /** Walk to a transport and get in. */
+  | { type: 'board'; tgt: Unit }
+  /** A transport: go there and put everyone ashore. */
+  | { type: 'unload'; x: number; y: number; stuck: number; lx: number; ly: number }
   /** Disengage and walk home. No attacking on the way, not even when blocked. */
   | { type: 'retreat' };
 
@@ -245,6 +249,8 @@ export interface Unit {
   kills: number;
   /** Seconds of haste left: faster movement and attacks. */
   hasteT: number;
+  /** Riding inside this transport's id, or -1. */
+  aboard: number;
   /** Villagers: settlement they live in (-1 for soldiers), workplace building id (-1 none, 0 the settlement itself). */
   home: number;
   job: number;
@@ -457,6 +463,8 @@ export type Action =
   | { type: 'move'; payload: { ids: number[]; x: number; y: number } }
   | { type: 'attack'; payload: { ids: number[]; target: TargetRef | null; x?: number; y?: number; declare?: boolean } }
   | { type: 'guard'; payload: { ids: number[]; x: number; y: number; target?: TargetRef | null } }
+  | { type: 'board'; payload: { ids: number[]; transport: number } }
+  | { type: 'unload'; payload: { ids: number[]; x: number; y: number } }
   | { type: 'hold'; payload: { ids: number[] } }
   | { type: 'retreat'; payload: { ids: number[] } }
   | { type: 'gate'; payload: { id: number } }

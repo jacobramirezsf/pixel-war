@@ -33,6 +33,7 @@ export function ownBlds(w: World, slot: number, type?: BldKey): Building[] {
 /** Where a unit trains in town mode: a building type, or null for the settlement. */
 export function trainerType(unit: UnitKey): BldKey | null {
   const T = TYPES[unit];
+  if (T.trainer) return T.trainer;
   if (T.repair || T.role === 'scout') return null;
   return trainerFor(T.role);
 }
@@ -42,7 +43,7 @@ export function canTrain(w: World, slot: number, unit: UnitKey): string | null {
   if (!w.rules.town) return null;
   const t = trainerType(unit);
   if (!t) return null;
-  if (!ownBlds(w, slot, t).length) return 'needs a ' + BLD[t].name.toLowerCase();
+  if (!ownBlds(w, slot, t).length && !(t === 'dock' && ownBlds(w, slot, 'port').length)) return 'needs a ' + BLD[t].name.toLowerCase();
   return null;
 }
 
@@ -54,7 +55,7 @@ export function canTrain(w: World, slot: number, unit: UnitKey): string | null {
 export function pickTrainer(w: World, slot: number, unit: UnitKey, building?: number, near?: number): Building | null {
   const t = trainerType(unit);
   if (!t || !w.rules.town) return null;
-  const list = ownBlds(w, slot, t);
+  const list = t === 'dock' ? [...ownBlds(w, slot, 'dock'), ...ownBlds(w, slot, 'port')] : ownBlds(w, slot, t);
   if (!list.length) return null;
   if (building != null) { const b = list.find((x) => x.id === building); if (b) return b; }
   const pref = w.slots[slot].prefer[TYPES[unit].role];
@@ -121,9 +122,24 @@ function spawnAt(w: World, b: Building, unit: UnitKey): Unit | null {
     const hx = Math.sign(cx - home.x) || 1, hy = Math.sign(cy - home.y) || 1;
     tries = [[home.x, home.y + hy * 14], [home.x + hx * 18, home.y], [home.x - hx * 18, home.y], [home.x, home.y - hy * 14]];
   }
+  const T = TYPES[unit];
+  const medium = T.naval ? 'sea' : T.fly ? 'air' : 'ground';
+  if (T.naval) {
+    // Boats launch onto the water beside the dock.
+    const m = w.map;
+    for (let ring = 1; ring <= 4; ring++)
+      for (let dy = -ring; dy <= ring; dy++)
+        for (let dx = -ring; dx <= ring; dx++) {
+          if (Math.max(Math.abs(dx), Math.abs(dy)) !== ring) continue;
+          const tx = Math.round(b.x / 8) + dx, ty = Math.round(b.y / 8) + dy;
+          if (tx < 0 || ty < 0 || tx >= m.cols || ty >= m.rows || m.tiles[ty * m.cols + tx] !== 3) continue;
+          const u = mkUnit(w, b.team, unit, tx * 8 + 4, ty * 8 + 4); w.units.push(u); return u;
+        }
+    return null;
+  }
   for (const [x, y] of tries) {
     const px = x + rnd(w.rng, -3, 3), py = y + rnd(w.rng, -3, 3);
-    if (passableFor(w, b.team, px, py)) { const u = mkUnit(w, b.team, unit, px, py); w.units.push(u); return u; }
+    if (passableFor(w, b.team, px, py, medium)) { const u = mkUnit(w, b.team, unit, px, py); w.units.push(u); return u; }
   }
   return null;
 }

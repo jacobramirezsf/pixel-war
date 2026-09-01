@@ -3,6 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { newGame } from '../../src/sim/game.ts';
+import { offshore } from '../../src/sim/realmgen.ts';
 import { distField } from '../../src/sim/pathing.ts';
 import { deserialize, restore, serialize, snapshot, stateString } from '../../src/sim/world.ts';
 import { seenAt } from '../../src/sim/vision.ts';
@@ -17,10 +18,14 @@ test('every region center is reachable from the capital on many seeds and sizes'
       const w = realm(seed, size, size === 'large' ? 4 : 2);
       const cap = w.map.bases[0];
       const d = distField(w.map, cap.tx, cap.ty);
+      let sea = 0;
       for (const r of w.regions) {
         const tx = Math.round(r.cx / 8), ty = Math.round(r.cy / 8);
+        // A region whose center is open water is sea: reached by boat, not by road.
+        if (offshore(w.map, tx, ty)) { sea++; continue; }
         assert.ok(d[ty * w.map.cols + tx] < Infinity, size + ' seed ' + seed + ' region ' + r.name + ' cut off');
       }
+      assert.ok(sea <= w.regions.length / 4, 'mostly land: ' + sea + ' sea regions');
       for (const b of w.map.bases) assert.ok(d[b.ty * w.map.cols + b.tx] < Infinity, 'capital reachable');
       assert.ok(w.mines.length >= w.regions.length * 0.6, size + ' mines ' + w.mines.length);
       const water = Array.from(w.map.tiles).filter((t) => t === 3).length / w.map.tiles.length;

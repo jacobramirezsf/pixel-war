@@ -7,11 +7,13 @@ import type { Role } from './units.ts';
 
 export type BldKey =
   | 'brb' | 'stk' | 'wal' | 'stw' | 'gat' | 'twr' | 'stt' | 'trt'
-  | 'house' | 'farm' | 'market' | 'smith' | 'barracks' | 'range' | 'stable' | 'siege' | 'castle' | 'wonder' | 'bridge';
+  | 'house' | 'farm' | 'market' | 'smith' | 'barracks' | 'range' | 'stable' | 'siege' | 'castle' | 'wonder' | 'bridge' | 'dock' | 'port' | 'factory' | 'aatwr';
 export type BldKind = 'trap' | 'wall' | 'gate' | 'tower' | 'town' | 'bridge';
 export type BldGroup = 'defense' | 'economy' | 'military' | 'ground';
 
 export interface BldDef {
+  /** Damage multiplier against flying units. */
+  vsAir?: number;
   name: string;
   /** Gold. */
   cost: number;
@@ -63,6 +65,10 @@ export const BLD: Record<BldKey, BldDef> = {
   stable:   { name: 'STABLE',      cost: 110, hp: 320, kind: 'town', group: 'military', w: 3, h: 2, age: 1, buildT: 30, trains: ['fast', 'air'], town: true, max: 2, hint: 'Trains fast units and fliers.' },
   siege:    { name: 'SIEGE WORKS', cost: 150, hp: 320, kind: 'town', group: 'military', w: 3, h: 2, mat: 40, age: 2, buildT: 40, trains: ['siege'], town: true, max: 2, hint: 'Trains siege engines.' },
   wonder:   { name: 'WONDER',      cost: 800, hp: 1500, kind: 'town', group: 'economy', w: 4, h: 4, mat: 400, age: 2, buildT: 240, pop: 10, income: 2, town: true, max: 1, hint: 'The great work of a realm. Long to build, seen from afar, and every rival will want it gone.' },
+  dock:     { name: 'DOCK',        cost: 90,  hp: 250, kind: 'town', group: 'military', w: 2, h: 2, mat: 30, age: 0, buildT: 25, trains: ['naval'], town: true, max: 3, hint: 'On a shore. Boats and transports. Two jobs.' },
+  port:     { name: 'PORT',        cost: 200, hp: 500, kind: 'town', group: 'military', w: 3, h: 2, mat: 120, age: 1, buildT: 50, trains: ['naval'], income: 1, town: true, max: 2, hint: 'On a shore, town age. The destroyer, four jobs, and a gold a second.' },
+  factory:  { name: 'FACTORY',     cost: 180, hp: 450, kind: 'town', group: 'military', w: 3, h: 2, mat: 100, age: 2, buildT: 45, trains: ['vehicle'], town: true, max: 3, hint: 'City age. Trucks, armored cars, flak, transport helicopters.' },
+  aatwr:    { name: 'FLAK TOWER',  cost: 120, hp: 280, kind: 'tower', group: 'defense', w: 1, h: 1, dmg: 14, range: 40, cd: 0.5, armor: 2, mat: 100, age: 2, buildT: 30, vsAir: 3 },
   castle:   { name: 'CASTLE',      cost: 250, hp: 900, kind: 'tower', group: 'military', w: 3, h: 3, dmg: 14, range: 46, cd: 0.5, armor: 4, mat: 300, age: 2, buildT: 75, pop: 20, trains: ['heavy', 'special'], town: true, max: 3, hint: 'Shoots, trains heavies and specials, holds the region calm.' },
 };
 

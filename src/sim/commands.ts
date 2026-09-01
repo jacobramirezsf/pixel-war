@@ -38,7 +38,7 @@ export function refOf(t: Target): TargetRef {
 
 function ownUnits(w: World, slot: number, ids: number[]): Unit[] {
   const set = new Set(ids);
-  return w.units.filter((u) => u.team === slot && u.hp > 0 && set.has(u.id));
+  return w.units.filter((u) => u.team === slot && u.hp > 0 && u.aboard < 0 && set.has(u.id));
 }
 
 /** Build a command stamped for the next tick. */
@@ -288,6 +288,27 @@ export function applyCommand(w: World, c: Command, quiet = false): boolean {
       say(tgt ? 'Attacking' : dest ? 'Attack-moving' : 'Charge!', 1);
       return true;
     }
+    case 'board': {
+      const t = w.units.find((u) => u.id === c.payload.transport && u.team === slot && u.hp > 0);
+      if (!t || !TYPES[t.type].capacity) return false;
+      const us = ownUnits(w, slot, c.payload.ids).filter((u) => u !== t && !TYPES[u.type].capacity && !TYPES[u.type].naval && TYPES[u.type].role !== 'civ');
+      if (!us.length) { say('Only ground units ride', 1.2); return false; }
+      let inside = 0;
+      for (const o of w.units) if (o.aboard === t.id && o.hp > 0) inside++;
+      const room = (TYPES[t.type].capacity ?? 0) - inside;
+      if (room <= 0) { say(TYPES[t.type].name + ' is full', 1.2); return false; }
+      for (const u of us.slice(0, room)) u.order = { type: 'board', tgt: t };
+      say(Math.min(room, us.length) + ' boarding the ' + TYPES[t.type].name.toLowerCase(), 1.2);
+      return true;
+    }
+    case 'unload': {
+      const ts = ownUnits(w, slot, c.payload.ids).filter((u) => TYPES[u.type].capacity);
+      if (!ts.length) return false;
+      for (const t of ts) t.order = { type: 'unload', x: clamp(c.payload.x, 4, mapW(w) - 4), y: clamp(c.payload.y, 4, mapH(w) - 4), stuck: 0, lx: t.x, ly: t.y };
+      w.fx.push({ k: 'mark', x: c.payload.x, y: c.payload.y, r: 8, t: 0.5, c: '#dde2ec' });
+      say('Unloading there', 1);
+      return true;
+    }
     case 'guard': {
       const us = ownUnits(w, slot, c.payload.ids);
       if (!us.length) return false;
@@ -419,7 +440,7 @@ export function applyCommand(w: World, c: Command, quiet = false): boolean {
       if (count(w, slot) >= w.cap) { say('Cap is ' + w.cap + ' per team', 1.2); return false; }
       x = clamp(x, 4, mapW(w) - 4);
       y = clamp(y, 4, mapH(w) - 4);
-      if (!passableFor(w, slot, x, y) && !TYPES[c.payload.unit].fly) { say('Blocked ground', 1); return false; }
+      if (!passableFor(w, slot, x, y, TYPES[c.payload.unit].naval ? 'sea' : 'ground') && !TYPES[c.payload.unit].fly) { say(TYPES[c.payload.unit].naval ? 'Boats go on water' : 'Blocked ground', 1); return false; }
       w.units.push(mkUnit(w, slot, c.payload.unit, x, y));
       return true;
     }
@@ -486,7 +507,7 @@ function mirror(w: World, me: number, say: (t: string, d?: number) => void): voi
   for (const b of w.blds.filter((b) => b.team === other)) removeBld(w, b);
   for (const u of src) {
     const x = W - u.x, y = H - u.y;
-    if (passableFor(w, other, x, y) || TYPES[u.type].fly) w.units.push(mkUnit(w, other, u.type, x, y));
+    if (passableFor(w, other, x, y, TYPES[u.type].naval ? 'sea' : 'ground') || TYPES[u.type].fly) w.units.push(mkUnit(w, other, u.type, x, y));
   }
   for (const b of sb) {
     let tx = w.map.cols - 1 - b.tx, ty = w.map.rows - 1 - b.ty;

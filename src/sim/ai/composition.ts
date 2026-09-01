@@ -19,6 +19,8 @@ export const ROLES: Role[] = ['line', 'ranged', 'fast', 'siege', 'heavy', 'air',
 
 export const COUNTER: Record<Role, Partial<Record<Role, number>>> = {
   civ: {},
+  naval: {},
+  vehicle: {},
   line:    { line: 0.8, ranged: 1.6, fast: 0.9, siege: 1.4, heavy: 1.1, air: 1.0, support: 1.0 },
   ranged:  { line: 1.1, ranged: 0.7, fast: 1.8, siege: 0.6, heavy: 1.2, air: 1.3, support: 0.9 },
   fast:    { line: 1.8, ranged: 0.6, fast: 0.8, siege: 0.5, heavy: 1.2, air: 0.8, support: 0.9 },
@@ -35,7 +37,7 @@ export function baseline(t: number): Record<Role, number> {
   const late = Math.min(1, t / 240);
   return {
     line: 3 - 1.5 * late, ranged: 2 + 0.5 * late, fast: 1 + 0.5 * late, siege: 0.3 + 1.2 * late,
-    heavy: 0.2 + 1.3 * late, air: 0.4 + 0.4 * late, support: 0.6, scout: 0.3 * (1 - late), special: 0.5 + 0.8 * late, civ: 0,
+    heavy: 0.2 + 1.3 * late, air: 0.4 + 0.4 * late, support: 0.6, scout: 0.3 * (1 - late), special: 0.5 + 0.8 * late, civ: 0, naval: 0, vehicle: 0,
   };
 }
 

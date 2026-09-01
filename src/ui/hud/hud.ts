@@ -257,7 +257,10 @@ export function updateUI(app: App): void {
   // Strips.
   const race = ctlRace(app), list = new Set(roster(race));
   for (const k of ALL_UNITS) {
-    show(unitBtns[k], list.has(k));
+    const T = TYPES[k];
+    // Race units always; shared units (boats, vehicles) once their trainer stands, or in the sandbox; never villagers.
+    const extraOk = !!T.extra && !!w && (sand || (w.rules.town && !!T.trainer && w.blds.some((b) => b.team === app.ctl && (b.type === T.trainer || (T.trainer === 'dock' && b.type === 'port')))));
+    show(unitBtns[k], T.role !== 'civ' && (list.has(k) || extraOk));
     unitBtns[k].classList.toggle('on', sand && edit && app.tool === 'place' && app.brush === k);
     if (sand) unitBtns[k].classList.remove('dis');
   }
@@ -336,6 +339,12 @@ function contextAction(app: App): void {
     else if (b.hp > 0 && selectedUnits(app).length) { const tgt = b; app.act = { label: 'ATTACK IT', danger: true, fn: () => { const sel = selectedUnits(app); issueAction(app, { type: 'attack', payload: { ids: sel.map((u) => u.id), target: refOf(tgt), declare: !!allied(w, tgt.team, app.ctl) } }); } }; }
     return;
   }
+  const sel = selectedUnits(app);
+  const loaded = sel.filter((u) => TYPES[u.type].capacity && w.units.some((o) => o.aboard === u.id && o.hp > 0));
+  if (loaded.length) {
+    app.act = { label: 'UNLOAD HERE', fn: () => { issueAction(app, { type: 'unload', payload: { ids: loaded.map((u) => u.id), x: loaded[0].x, y: loaded[0].y } }); app.ui.updateUI(); } };
+    return;
+  }
   if (app.bld >= 0) {
     const b = w.blds.find((x) => x.id === app.bld && x.team === app.ctl);
     if (!b) { app.bld = -1; return; }
@@ -404,6 +413,14 @@ function renderSelCard(app: App): void {
     return;
   }
   if (!sel.length) { if (el.textContent) el.textContent = ''; return; }
+  if (sel.length === 1 && TYPES[sel[0].type].capacity && w) {
+    const t = sel[0], cap = TYPES[t.type].capacity!;
+    const riders = w.units.filter((u) => u.aboard === t.id && u.hp > 0);
+    const comp = new Map<string, number>();
+    for (const u of riders) comp.set(u.type, (comp.get(u.type) ?? 0) + 1);
+    el.innerHTML = '<span class="town"><b>' + TYPES[t.type].name + '</b> · ' + Math.round(t.hp) + '/' + TYPES[t.type].hp + ' hp · <b>' + riders.length + ' / ' + cap + '</b> aboard' + (riders.length ? '<br><span class="civ">' + [...comp.entries()].map(([k, n]) => n + ' ' + TYPES[k].name).join(', ') + '. Select units and tap it to board; UNLOAD sets them down.</span>' : '<br><span class="civ">Select ground units, then tap this ' + TYPES[t.type].name.toLowerCase() + ' to board them.</span>') + '</span>';
+    return;
+  }
   if (sel.length === 1 && sel[0].type === 'caravan' && w) {
     const u = sel[0];
     const t = w.slots[u.team].settlements.find((x) => x.id === u.job);

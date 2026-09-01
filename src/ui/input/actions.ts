@@ -6,6 +6,7 @@ import { POWERS } from '../../data/powers.ts';
 import { cheatTap } from '../cheats.ts';
 import { refOf } from '../../sim/commands.ts';
 import { BLD } from '../../data/buildings.ts';
+import { TYPES } from '../../data/units.ts';
 import { canBuild } from '../../sim/buildings.ts';
 import { clamp, TILE } from '../../sim/map.ts';
 import { foreignAt, hostileAt, ownGateAt, settleAt, unitAt } from '../../sim/queries.ts';
@@ -118,6 +119,11 @@ export function tapAt(app: App, x: number, y: number): void {
   // An armed mode with a selection takes the tap, whatever is under it.
   if (app.stance !== 'none' && selectedUnits(app).length) { orderAt(app, x, y); return; }
   const own = unitAt(w, app.ctl, x, y);
+  if (own && TYPES[own.type].capacity && !app.selection.has(own.id)) {
+    // Ground units selected, tapping your own transport: they get in.
+    const riders = selectedUnits(app).filter((u) => !TYPES[u.type].capacity && !TYPES[u.type].naval && !TYPES[u.type].fly && TYPES[u.type].role !== 'civ');
+    if (riders.length) { issueAction(app, { type: 'board', payload: { ids: riders.map((u) => u.id), transport: own.id } }); return; }
+  }
   if (own) {
     const now = performance.now();
     if (app.lastTap.id === own.id && now - app.lastTap.t < 350) { selectTypeOnScreen(app, own.type); app.lastTap = { id: -1, t: 0 }; return; }

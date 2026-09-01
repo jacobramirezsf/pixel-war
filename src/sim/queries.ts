@@ -7,7 +7,7 @@ import { bldAtPx } from './buildings.ts';
 export function unitAt(w: World, slot: number, x: number, y: number, r = 7): Unit | null {
   let best: Unit | null = null, bd = r;
   for (const u of w.units) {
-    if (u.team !== slot || u.hp <= 0) continue;
+    if (u.team !== slot || u.hp <= 0 || u.aboard >= 0) continue;
     const d = Math.hypot(u.x - x, u.y - y);
     if (d < bd) { bd = d; best = u; }
   }
@@ -17,7 +17,7 @@ export function unitAt(w: World, slot: number, x: number, y: number, r = 7): Uni
 export function hostileUnitAt(w: World, slot: number, x: number, y: number, r = 8): Unit | null {
   let best: Unit | null = null, bd = r;
   for (const u of w.units) {
-    if (allied(w, u.team, slot) || u.hp <= 0) continue;
+    if (allied(w, u.team, slot) || u.hp <= 0 || u.aboard >= 0) continue;
     const d = Math.hypot(u.x - x, u.y - y);
     if (d < bd) { bd = d; best = u; }
   }

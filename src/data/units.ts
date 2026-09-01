@@ -5,7 +5,7 @@
 import { RACES, RACE_KEYS, type RaceKey } from './races.ts';
 
 export type UnitKey = string;
-export type Role = 'scout' | 'line' | 'ranged' | 'fast' | 'siege' | 'support' | 'heavy' | 'air' | 'special' | 'civ';
+export type Role = 'scout' | 'line' | 'ranged' | 'fast' | 'siege' | 'support' | 'heavy' | 'air' | 'special' | 'civ' | 'naval' | 'vehicle';
 
 export interface UnitDef {
   key: UnitKey;
@@ -32,6 +32,16 @@ export interface UnitDef {
   shot?: string;
   heal?: number;
   fly?: boolean;
+  /** Boats: water only. */
+  naval?: boolean;
+  /** Transports: how many ground units ride inside. */
+  capacity?: number;
+  /** Damage multiplier against flying units. */
+  vsAir?: number;
+  /** Trained by a building of this type, not the role's usual trainer. */
+  trainer?: import('./buildings.ts').BldKey;
+  /** Shared by every race and outside the race rosters: boats, vehicles, aircraft. */
+  extra?: boolean;
   aura?: number;
   minRange?: number;
   // race specials, each used by one race only
@@ -280,6 +290,30 @@ TYPES.caravan = {
   key: 'caravan', name: 'CARAVAN', race: 'kingdom', role: 'civ', cost: 0, hp: 80, dmg: 0, range: 0, speed: 13, cd: 1, aggro: 0, sz: 8, r: 3,
   sprite: ['........', '..DDDD..', '.DBBBBD.', '.DBBBBD.', 'DDDDDDDD', '.O....O.', 'OOO..OOO', '.O....O.'],
 };
+
+// Shared units: boats from the dock and port, vehicles and aircraft from the factory. Every race trains them.
+const EXTRA: Record<string, Omit<UnitDef, 'key' | 'race' | 'sz' | 'r'> & { sprite: readonly string[] }> = {
+  boat:      { name: 'TRANSPORT',  role: 'naval',   cost: 60,  hp: 120, dmg: 0,  range: 0,  speed: 26, cd: 1,   aggro: 0,  naval: true, capacity: 8, extra: true, trainer: 'dock',
+    sprite: ['........', '..DDDD..', '.DBBBBD.', 'DBBBBBBD', 'DDDDDDDD', '.WWWWWW.', '..WWWW..', '........'] },
+  patrol:    { name: 'PATROL BOAT', role: 'naval',  cost: 45,  hp: 70,  dmg: 8,  range: 30, speed: 34, cd: 0.8, aggro: 40, naval: true, extra: true, trainer: 'dock',
+    sprite: ['........', '...DD...', '..DTTD..', '.DTTTTD.', 'DDDDDDDD', '.WWWWWW.', '..WWWW..', '........'] },
+  gunboat:   { name: 'GUNBOAT',    role: 'naval',   cost: 90,  hp: 160, dmg: 18, range: 36, speed: 24, cd: 1.1, aggro: 44, naval: true, splash: 6, bldDmg: 1.5, extra: true, trainer: 'dock', shot: '#f2d34a',
+    sprite: ['...DD...', '..DTTD..', '.DDSSDD.', 'DTTTTTTD', 'DDDDDDDD', '.WWWWWW.', '..WWWW..', '........'] },
+  destroyer: { name: 'DESTROYER',  role: 'naval',   cost: 170, hp: 260, dmg: 30, range: 60, speed: 20, cd: 1.6, aggro: 66, naval: true, splash: 10, bldDmg: 2, vsAir: 2, extra: true, trainer: 'port', shot: '#67e8f9',
+    sprite: ['....D.....', '...DTD....', '..DSSSD...', '.DTTTTTD..', 'DDTTTTTTDD', 'DDDDDDDDDD', '.WWWWWWWW.', '..WWWWWW..', '...WWWW...', '..........'] },
+  truck:     { name: 'TROOP TRUCK', role: 'vehicle', cost: 70, hp: 100, dmg: 0,  range: 0,  speed: 40, cd: 1,   aggro: 0,  capacity: 6, extra: true, trainer: 'factory',
+    sprite: ['........', '.DDDDD..', '.DBBBDD.', '.DBBBDDD', 'DDDDDDDD', '.O.O..O.', '........', '........'] },
+  apc:       { name: 'ARMORED CAR', role: 'vehicle', cost: 80, hp: 140, dmg: 12, range: 20, speed: 36, cd: 0.8, aggro: 34, armor: 2, extra: true, trainer: 'factory',
+    sprite: ['........', '..DDDD..', '.DTTTTD.', 'DDDDDDDD', 'DSSSSSSD', '.O.OO.O.', '........', '........'] },
+  flak:      { name: 'FLAK TRUCK', role: 'vehicle', cost: 85,  hp: 110, dmg: 9,  range: 36, speed: 32, cd: 0.6, aggro: 44, vsAir: 3, extra: true, trainer: 'factory', shot: '#ffb02a',
+    sprite: ['....W.W.', '...WWWW.', '.DDDDDD.', '.DTTTTD.', 'DDDDDDDD', '.O.O..O.', '........', '........'] },
+  heli:      { name: 'TRANSPORT HELI', role: 'vehicle', cost: 110, hp: 90, dmg: 0, range: 0, speed: 46, cd: 1, aggro: 0, fly: true, capacity: 4, extra: true, trainer: 'factory',
+    sprite: ['WWWWWWWW', '...DD...', '..DBBD..', '.DBBBBD.', '.DDDDDD.', '...DD.DD', '..D.D...', '........'] },
+};
+for (const [key, d] of Object.entries(EXTRA)) TYPES[key] = { key, race: 'kingdom', sz: d.sprite.length, r: d.sprite.length > 8 ? 4 : 3, ...d };
+
+/** Shared units a slot can train once the trainer stands. */
+export const EXTRA_UNITS: readonly UnitKey[] = Object.keys(EXTRA);
 
 /** Kingdom build order, kept for the prototype's tests and tools. */
 export const ORDER: readonly UnitKey[] = ROSTER.kingdom;

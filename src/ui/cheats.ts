@@ -1,6 +1,6 @@
 // The CHEATS panel: toggles, one-shot buttons, and tap-target tools. Everything goes through commands.
 
-import { roster, TYPES, type Role, type UnitKey } from '../data/units.ts';
+import { EXTRA_UNITS, roster, TYPES, type Role, type UnitKey } from '../data/units.ts';
 import type { Action, Cheats } from '../sim/types.ts';
 import { ctlRace, issueAction, say, type App } from './app.ts';
 import { $, on, show } from './dom.ts';
@@ -22,7 +22,7 @@ export interface CheatTool {
   r?: number;
 }
 
-const ROLES: [Role, string][] = [['line', 'INFANTRY'], ['ranged', 'RANGED'], ['fast', 'FAST'], ['siege', 'SIEGE'], ['heavy', 'HEAVY'], ['support', 'SUPPORT'], ['special', 'SPECIAL'], ['scout', 'SCOUT']];
+const ROLES: [Role, string][] = [['line', 'INFANTRY'], ['ranged', 'RANGED'], ['fast', 'FAST'], ['siege', 'SIEGE'], ['heavy', 'HEAVY'], ['support', 'SUPPORT'], ['special', 'SPECIAL'], ['scout', 'SCOUT'], ['naval', 'NAVY'], ['vehicle', 'VEHICLES']];
 
 let ui = { unit: 'inf' as UnitKey, n: 5, team: 0, kind: 'small' as CheatTool['kind'] };
 let lastKey = '';
@@ -54,7 +54,7 @@ export function renderCheats(app: App): void {
   const chip = (k: Exclude<keyof Cheats, 'on'>, label: string): string => '<button class="chip' + (w.cheats[k] ? ' on' : '') + '" data-tog="' + k + '">' + label + '</button>';
   const btn = (id: string, label: string, cls = ''): string => '<button class="mini ' + cls + '" data-do="' + id + '">' + label + '</button>';
   const realm = w.mode === 'conquest';
-  const units = roster(race).filter((k) => !TYPES[k].repair && TYPES[k].role !== 'civ');
+  const units = [...roster(race), ...EXTRA_UNITS].filter((k) => !TYPES[k].repair && TYPES[k].role !== 'civ');
   const byRole = ROLES.map(([r, label]) => ({ label, list: units.filter((k) => TYPES[k].role === r) })).filter((g) => g.list.length);
   el.innerHTML = '<div class="thead">CHEATS <button id="chClose" class="mini">CLOSE</button></div>'
     + '<div class="chips">' + CHEAT_TOGGLES.map(([k, l]) => chip(k, l)).join('') + '</div>'

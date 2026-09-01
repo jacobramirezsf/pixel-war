@@ -39,6 +39,8 @@ export const JOBS: Partial<Record<BldKey, { slots: number; income: number }>> = 
   market: { slots: 4, income: 0.4 },
   smith: { slots: 1, income: 0.25 },
   castle: { slots: 1, income: 0.2 },
+  dock: { slots: 2, income: 0.3 },
+  port: { slots: 4, income: 0.45 },
 };
 
 /** Settlement jobs by tier: the town itself keeps a few people busy. */

@@ -57,7 +57,7 @@ export function buildTargetCache(w: World): TargetCache {
     statics.push(staticTargets(w, i));
   }
   for (const u of w.units) {
-    if (u.hp <= 0 || !unitVisible(u)) continue;
+    if (u.hp <= 0 || !unitVisible(u) || u.aboard >= 0) continue;
     // Armies do not chase villagers. Bandits and rebels do, and anyone can be told to.
     const civ = TYPES[u.type].role === 'civ';
     if (civ && inZone(w, u.team, 'sanctuary', u.x, u.y)) continue;
@@ -229,6 +229,7 @@ export function attack(w: World, u: Unit, t: Target, T: UnitDef): void {
   if (hasBanner(w, u)) dmg = Math.round(dmg * 1.3);
   if (T.vsBld && t.ent !== 'unit') dmg = Math.round(dmg * T.vsBld);
   if (T.bldDmg && t.ent !== 'unit') dmg = Math.round(dmg * T.bldDmg);
+  if (T.vsAir && t.ent === 'unit' && TYPES[t.type].fly) dmg = Math.round(dmg * T.vsAir);
   if (T.charge && u.run >= 20) dmg = Math.round(dmg * T.charge);
   if (cheat(w, u.team, 'superUnits')) dmg *= 5;
   if (cheat(w, u.team, 'oneHit')) dmg = 9999;

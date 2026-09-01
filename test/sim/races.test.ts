@@ -19,10 +19,10 @@ test('rosters: 21 kingdom units, 20 for every other race, all distinct', () => {
   for (const r of RACE_KEYS) if (r !== 'kingdom') assert.equal(roster(r).length, 20, r);
   const all = RACE_KEYS.flatMap((r) => roster(r));
   assert.equal(new Set(all).size, all.length);
-  assert.equal(ALL_UNITS.filter((k) => TYPES[k].role !== 'civ').length, 101);
+  assert.equal(ALL_UNITS.filter((k) => TYPES[k].role !== 'civ' && !TYPES[k].extra).length, 101);
   for (const k of ALL_UNITS) {
     const T = TYPES[k];
-    if (T.role === 'civ') continue;
+    if (T.role === 'civ' || T.extra) continue;
     assert.ok(T.sprite.every((row) => row.length === T.sprite.length), k + ' sprite is square');
     assert.ok(T.cost >= 5 && T.hp > 0 && T.speed > 0, k + ' has sane stats');
   }

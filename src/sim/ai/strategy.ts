@@ -96,6 +96,11 @@ function shop(w: World, slot: number, a: Assessment, P: AiProfile): void {
   const horizon = w.t < 120 || a.own.length < 5 ? 5 : 20;
   const budget = Math.max(30, s.gold + income * horizon * P.income);
   if (s.aiWant && (!canTrain(w, slot, s.aiWant) || TYPES[s.aiWant].cost > budget + 40)) s.aiWant = null;
+  // Boats: with a dock standing, keep a few on the water.
+  if (w.mode === 'conquest' && ownBlds(w, slot, 'dock').length && s.gold >= 140 && rand(w.rng) < 0.25) {
+    const boats = a.own.filter((u) => TYPES[u.type].naval).length;
+    if (boats < 4 && buy(w, slot, boats % 2 ? 'gunboat' : 'patrol', true)) return;
+  }
   // Queue a few ahead, never more: gold in the queue cannot answer a raid.
   for (let n = 0; n < 4 && queuedCount(w, slot) < 4; n++) {
     const k = s.aiWant ?? pickUnit(w.rng, race, w.t, budget, enemyMix, P.counter, (u) => !!canTrain(w, slot, u), fortified);
@@ -194,6 +199,11 @@ function buildTown(w: World, slot: number, a: Assessment): boolean {
   if (realm && idle >= 2 && afford('farm') && have('farm') < 6) return placeNear(w, slot, 'farm', home.x, home.y);
   if (realm && idle >= 4 && s.age >= 1 && afford('market') && have('market') < 2) return placeNear(w, slot, 'market', home.x, home.y);
   if (!have('barracks') && afford('barracks')) return placeNear(w, slot, 'barracks', home.x, home.y);
+  // A shore nearby and a town age: a dock, then boats to hold the water.
+  if (realm && s.age >= 1 && !have('dock') && afford('dock')) {
+    const shore = w.map.tiles.some((t, i) => t === 3 && Math.hypot((i % w.map.cols) * 8 + 4 - home.x, ((i / w.map.cols) | 0) * 8 + 4 - home.y) < 96);
+    if (shore && placeNear(w, slot, 'dock', home.x, home.y)) return true;
+  }
   // The great work: a city, a full treasury, and nothing pressing.
   if (realm && ageOf(w, slot) >= 2 && !have('wonder') && s.gold >= BLD.wonder.cost + 300 && (!w.rules.materials || s.mat >= (BLD.wonder.mat ?? 0) + 50) && w.net[slot] > 3) return placeNear(w, slot, 'wonder', home.x, home.y);
   // Second towns: every finished village gets a house, a farm, and in time a barracks of its own.

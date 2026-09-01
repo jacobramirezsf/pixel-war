@@ -212,14 +212,14 @@ export function count(w: World, team: number): number {
 // ---------- snapshot and restore ----------
 
 type SnapRef = { kind: 'unit' | 'bld' | 'base'; id: number };
-type SnapOrder = { type: 'move'; x: number; y: number } | { type: 'attack'; tgt: SnapRef | null; x?: number; y?: number } | { type: 'guard'; x: number; y: number; tgt?: SnapRef | null; hold?: boolean } | { type: 'retreat' };
+type SnapOrder = { type: 'move'; x: number; y: number } | { type: 'attack'; tgt: SnapRef | null; x?: number; y?: number } | { type: 'guard'; x: number; y: number; tgt?: SnapRef | null; hold?: boolean } | { type: 'retreat' } | { type: 'board'; tgt: SnapRef } | { type: 'unload'; x: number; y: number; stuck: number; lx: number; ly: number };
 
 interface SnapUnit {
   id: number; team: number; type: UnitKey; x: number; y: number; hp: number; cd: number;
   order: SnapOrder | null; flash: number; walk: number; moving: boolean; held: boolean;
   blk: number | null; px: number; py: number; ox: number; oy: number;
   slowT: number; rootT: number; reveal: number; run: number; blinkT: number; dropT: number; kills: number; hasteT: number;
-  home: number; job: number; civT: number; fleeT: number;
+  home: number; job: number; civT: number; fleeT: number; aboard: number;
 }
 
 interface SnapBld {
@@ -260,6 +260,8 @@ function snapOrder(o: Order | null): SnapOrder | null {
   if (!o) return null;
   if (o.type === 'move') return { type: 'move', x: o.x, y: o.y };
   if (o.type === 'guard') { const g: SnapOrder = { type: 'guard', x: o.x, y: o.y }; if (o.tgt) g.tgt = ref(o.tgt); if (o.hold) g.hold = true; return g; }
+  if (o.type === 'board') return { type: 'board', tgt: ref(o.tgt) };
+  if (o.type === 'unload') return { type: 'unload', x: o.x, y: o.y, stuck: o.stuck, lx: o.lx, ly: o.ly };
   if (o.type === 'retreat') return { type: 'retreat' };
   const a: SnapOrder = { type: 'attack', tgt: o.tgt ? ref(o.tgt) : null };
   if (o.x !== undefined) { a.x = o.x; a.y = o.y; }
@@ -281,7 +283,7 @@ export function snapshot(w: World): Snapshot {
       id: u.id, team: u.team, type: u.type, x: u.x, y: u.y, hp: u.hp, cd: u.cd, order: snapOrder(u.order),
       flash: u.flash, walk: u.walk, moving: u.moving, held: u.held, blk: u.blk ? u.blk.id : null, px: u.px, py: u.py, ox: u.ox, oy: u.oy,
       slowT: u.slowT, rootT: u.rootT, reveal: u.reveal, run: u.run, blinkT: u.blinkT, dropT: u.dropT, kills: u.kills, hasteT: u.hasteT,
-      home: u.home, job: u.job, civT: u.civT, fleeT: u.fleeT,
+      home: u.home, job: u.job, civT: u.civT, fleeT: u.fleeT, aboard: u.aboard,
     })),
     blds: w.blds.map((b) => ({
       id: b.id, team: b.team, type: b.type, kind: b.kind, tx: b.tx, ty: b.ty, x: b.x, y: b.y, hp: b.hp, max: b.max, cd: b.cd,
@@ -324,7 +326,7 @@ export function restore(s: Snapshot): World {
     ent: 'unit', id: u.id, team: u.team, type: u.type, x: u.x, y: u.y, hp: u.hp, cd: u.cd, order: null,
     flash: u.flash, walk: u.walk, moving: u.moving, held: u.held, blk: u.blk != null ? bldById.get(u.blk) ?? null : null, px: u.px, py: u.py, ox: u.ox, oy: u.oy,
     slowT: u.slowT, rootT: u.rootT, reveal: u.reveal, run: u.run, blinkT: u.blinkT, dropT: u.dropT, ix: 0, kills: u.kills ?? 0, hasteT: u.hasteT ?? 0,
-    home: u.home ?? -1, job: u.job ?? -1, civT: u.civT ?? 0, fleeT: u.fleeT ?? 0,
+    home: u.home ?? -1, job: u.job ?? -1, civT: u.civT ?? 0, fleeT: u.fleeT ?? 0, aboard: u.aboard ?? -1,
   }));
   const unitById = new Map<number, Unit>();
   for (const u of units) unitById.set(u.id, u);
@@ -339,6 +341,8 @@ export function restore(s: Snapshot): World {
     if (!o) return;
     if (o.type === 'move') units[i].order = { type: 'move', x: o.x, y: o.y };
     else if (o.type === 'guard') { const g: Order = { type: 'guard', x: o.x, y: o.y }; if (o.tgt) g.tgt = resolve(o.tgt); if (o.hold) g.hold = true; units[i].order = g; }
+    else if (o.type === 'board') { const t = resolve(o.tgt); units[i].order = t && t.ent === 'unit' ? { type: 'board', tgt: t } : null; }
+    else if (o.type === 'unload') units[i].order = { type: 'unload', x: o.x, y: o.y, stuck: o.stuck ?? 0, lx: o.lx ?? units[i].x, ly: o.ly ?? units[i].y };
     else if (o.type === 'retreat') units[i].order = { type: 'retreat' };
     else { const a: Order = { type: 'attack', tgt: resolve(o.tgt) }; if (o.x !== undefined) { a.x = o.x; a.y = o.y; } units[i].order = a; }
   });

@@ -5,7 +5,7 @@ import { BLD, BUILD_CAP } from '../data/buildings.ts';
 import { TEAM } from '../data/teams.ts';
 import { TYPES, unitVisible, type UnitDef } from '../data/units.ts';
 import { aiTick, PROFILES } from './ai/index.ts';
-import { addBld, bldAtPx, canBuild, passableFor, removeBld } from './buildings.ts';
+import { addBld, bldAtPx, canBuild, passableFor, removeBld, type Medium } from './buildings.ts';
 import { attack, auraTeams, buildTargetCache, damage, dirTo, edist, hasSpeedAura, nearestHostile, type TargetCache } from './combat.ts';
 import { drainQueue } from './commands.ts';
 import { dominationTick, hasEconomy, incomeTick, mineTick, minesHeld, payRepair } from './economy.ts';
@@ -101,6 +101,24 @@ function healAtHome(w: World, dt: number): void {
   }
 }
 
+/** Set every rider down on the nearest ground it can stand on. True when the transport is empty afterward. */
+export function unloadHere(w: World, t: Unit): boolean {
+  const riders = w.units.filter((o) => o.aboard === t.id && o.hp > 0);
+  if (!riders.length) return true;
+  let k = 0;
+  for (const o of riders) {
+    const medium: Medium = TYPES[o.type].fly ? 'air' : TYPES[o.type].naval ? 'sea' : 'ground';
+    let placed = false;
+    for (let s = 0; s < 40 && !placed; s++) {
+      const a = (k + s) * 2.4, r = 6 + Math.sqrt(k + s) * 5;
+      const px = t.x + Math.cos(a) * r, py = t.y + Math.sin(a) * r;
+      if (px < 4 || py < 4 || px > w.map.cols * 8 - 4 || py > w.map.rows * 8 - 4) continue;
+      if (passableFor(w, o.team, px, py, medium)) { o.aboard = -1; o.x = px; o.y = py; o.ox = px; o.oy = py; o.order = null; placed = true; k++; }
+    }
+  }
+  return !w.units.some((o) => o.aboard === t.id && o.hp > 0);
+}
+
 /** Retreating units head for the base by the shortest terrain path and stop near it. */
 function retreatDir(w: World, u: Unit): Vec {
   const b = primaryBase(w, u.team);
@@ -131,6 +149,29 @@ function homeDir(w: World, u: Unit): Vec {
 
 function moveLogic(w: World, u: Unit, T: UnitDef, tgt: Target | null, best: number): Vec {
   if (u.order && u.order.type === 'retreat') return retreatDir(w, u);
+  if (u.order && u.order.type === 'board') {
+    const t = u.order.tgt;
+    const cap = TYPES[t.type].capacity ?? 0;
+    if (t.hp <= 0 || !cap) { u.order = null; return null; }
+    const d = Math.hypot(t.x - u.x, t.y - u.y);
+    if (d <= 14) {
+      let inside = 0;
+      for (const o of w.units) if (o.aboard === t.id && o.hp > 0) inside++;
+      if (inside < cap) { u.aboard = t.id; u.order = null; u.x = t.x; u.y = t.y; w.fx.push({ k: 'mark', x: t.x, y: t.y, r: 5, t: 0.3, c: '#dde2ec' }); }
+      return null;
+    }
+    return dirTo(u, t);
+  }
+  if (u.order && u.order.type === 'unload') {
+    const o = u.order;
+    const d = Math.hypot(o.x - u.x, o.y - u.y);
+    // Close enough, or held at the shore for a third of a second: put everyone on land within reach.
+    o.stuck = Math.hypot(u.x - o.lx, u.y - o.ly) < 0.05 ? o.stuck + 1 : 0;
+    o.lx = u.x; o.ly = u.y;
+    if (d < 20 || (o.stuck >= 20 && d < 60)) { if (unloadHere(w, u)) { u.order = null; return null; } }
+    if (d < 20) return null;
+    return dirTo(u, { x: o.x, y: o.y });
+  }
   if (u.order && u.order.type === 'move') {
     const dx = u.order.x - u.x, dy = u.order.y - u.y, d = Math.hypot(dx, dy);
     if (d < 2.5) { u.order = null; return null; }
@@ -170,14 +211,14 @@ function moveLogic(w: World, u: Unit, T: UnitDef, tgt: Target | null, best: numb
 }
 
 /** Move, sliding along blockers. Returns the enemy building that stopped the move, if any. */
-function tryMove(w: World, u: Unit, mv: [number, number], sp: number, fly: boolean | undefined): Building | null {
+function tryMove(w: World, u: Unit, mv: [number, number], sp: number, medium: Medium): Building | null {
   const nx = u.x + mv[0] * sp, ny = u.y + mv[1] * sp;
   // A unit already standing on blocked ground (pushed there, or a building went up around it) may always step.
-  if (fly || passableFor(w, u.team, nx, ny) || !passableFor(w, u.team, u.x, u.y)) { u.x = nx; u.y = ny; return null; }
+  if (medium === 'air' || passableFor(w, u.team, nx, ny, medium) || !passableFor(w, u.team, u.x, u.y, medium)) { u.x = nx; u.y = ny; return null; }
   const b = bldAtPx(w, nx, ny);
-  const blk = b && !allied(w, b.team, u.team) && b.kind !== 'trap' ? b : null;
-  if (passableFor(w, u.team, nx, u.y)) { u.x = nx; return blk; }
-  if (passableFor(w, u.team, u.x, ny)) u.y = ny;
+  const blk = b && !allied(w, b.team, u.team) && b.kind !== 'trap' && b.kind !== 'bridge' ? b : null;
+  if (passableFor(w, u.team, nx, u.y, medium)) { u.x = nx; return blk; }
+  if (passableFor(w, u.team, u.x, ny, medium)) u.y = ny;
   return blk;
 }
 
@@ -205,6 +246,8 @@ export function step(w: World): void {
   w.t += dt;
   const grid = gridOf(w);
   w.units.forEach((u, i) => { u.ox = u.x; u.oy = u.y; u.ix = i; });
+  const byId = new Map<number, Unit>();
+  for (const u of w.units) if (u.hp > 0 && TYPES[u.type].capacity) byId.set(u.id, u);
   fillGrid(grid, w.units);
   w.auras = auraTeams(w);
   const tc = buildTargetCache(w);
@@ -247,7 +290,7 @@ export function step(w: World): void {
     if (b.cd > 0) continue;
     const D = BLD[b.type];
     const tg = nearestInRange(w, b.x, b.y, b.team, D.range!, tc);
-    if (tg) { b.cd = D.cd!; w.fx.push({ k: 'shot', x1: b.x, y1: b.y - 6, x2: tg.x, y2: tg.y - 2, t: 0.1, c: TEAM[b.team] }); damage(w, tg, D.dmg!); }
+    if (tg) { b.cd = D.cd!; w.fx.push({ k: 'shot', x1: b.x, y1: b.y - 6, x2: tg.x, y2: tg.y - 2, t: 0.1, c: TEAM[b.team] }); damage(w, tg, Math.round(D.dmg! * (TYPES[tg.type].fly && D.vsAir ? D.vsAir : 1))); }
   }
   // Damaged own buildings per slot, for workers.
   const statics = tc.statics, damaged: Building[][] = [];
@@ -261,6 +304,13 @@ export function step(w: World): void {
   for (const u of w.units) {
     if (u.hp <= 0) continue;
     const T = TYPES[u.type];
+    // Riding inside a transport: go where it goes, do nothing else. Lost with it.
+    if (u.aboard >= 0) {
+      const t = byId.get(u.aboard);
+      if (!t || t.hp <= 0) { u.hp = 0; continue; }
+      u.x = t.x; u.y = t.y; u.ox = t.x; u.oy = t.y; u.moving = false;
+      continue;
+    }
     u.cd -= dt;
     u.flash = Math.max(0, u.flash - dt);
     u.blk = null;
@@ -378,7 +428,7 @@ export function step(w: World): void {
       // Sprites hop most of the gap when a target is in reach but out of range.
       const d = dirTo(u, tgt), hop = Math.min(T.blink, best - T.range + 2);
       const nx = u.x + d[0] * hop, ny = u.y + d[1] * hop;
-      if (nx > 4 && ny > 4 && nx < W - 4 && ny < H - 4 && (T.fly || passableFor(w, u.team, nx, ny))) {
+      if (nx > 4 && ny > 4 && nx < W - 4 && ny < H - 4 && (T.fly || passableFor(w, u.team, nx, ny, T.naval ? 'sea' : 'ground'))) {
         w.fx.push({ k: 'ping', x: u.x, y: u.y, t: 0.3 });
         u.x = nx; u.y = ny; u.ox = nx; u.oy = ny; u.blinkT = 4;
         mv = null;
@@ -386,9 +436,9 @@ export function step(w: World): void {
     }
     u.moving = !!mv && slow > 0;
     if (mv && u.hp > 0 && slow > 0) {
-      const sp = T.speed * dt * slow * (!T.fly && !T.woodland && onTree ? 0.5 : 1) * (!T.fly && tileAt(w.map, u.x, u.y) === 1 ? WORK.roadSpeed : 1);
+      const sp = T.speed * dt * slow * (!T.fly && !T.naval && !T.woodland && onTree ? 0.5 : 1) * (!T.fly && !T.naval && tileAt(w.map, u.x, u.y) === 1 ? WORK.roadSpeed : 1);
       const bx = u.x, by = u.y;
-      u.blk = tryMove(w, u, mv, sp, T.fly);
+      u.blk = tryMove(w, u, mv, sp, T.fly ? 'air' : T.naval ? 'sea' : 'ground');
       u.run += Math.hypot(u.x - bx, u.y - by);
       u.walk += dt;
     }
@@ -419,7 +469,7 @@ export function step(w: World): void {
   for (const u of us) {
     u.x = clamp(u.x, 4, W - 4);
     u.y = clamp(u.y, 4, H - 4);
-    if (!TYPES[u.type].fly && !passableFor(w, u.team, u.x, u.y)) { u.x = u.px; u.y = u.py; }
+    if (!TYPES[u.type].fly && !passableFor(w, u.team, u.x, u.y, TYPES[u.type].naval ? 'sea' : 'ground')) { u.x = u.px; u.y = u.py; }
   }
   healAtHome(w, dt);
   const dead = us.filter((u) => u.hp <= 0);

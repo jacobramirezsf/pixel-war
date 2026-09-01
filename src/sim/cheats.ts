@@ -34,7 +34,7 @@ export function spawnUnits(w: World, team: number, unit: UnitKey, n: number, x: 
       const a = (i + k) * 2.4, r = 3 + Math.sqrt(i + k) * 4.5;
       const px = x + Math.cos(a) * r, py = y + Math.sin(a) * r;
       if (px < 4 || py < 4 || px > w.map.cols * 8 - 4 || py > w.map.rows * 8 - 4) continue;
-      if (!TYPES[unit].fly && !passableFor(w, team, px, py)) continue;
+      if (!TYPES[unit].fly && !passableFor(w, team, px, py, TYPES[unit].naval ? 'sea' : 'ground')) continue;
       const u = mkUnit(w, team, unit, px, py);
       if (hostileOrders) u.order = { type: 'attack', tgt: null };
       w.units.push(u);

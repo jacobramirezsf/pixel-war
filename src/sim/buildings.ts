@@ -16,7 +16,15 @@ export function bldAtPx(w: World, x: number, y: number): Building | null {
 }
 
 /** Terrain plus buildings. Traps are passable, own or open gates are passable, walls are not. */
-export function passableFor(w: World, team: number, x: number, y: number): boolean {
+export type Medium = 'ground' | 'sea' | 'air';
+
+export function passableFor(w: World, team: number, x: number, y: number, medium: Medium = 'ground'): boolean {
+  if (medium === 'air') return true;
+  if (medium === 'sea') {
+    // Boats: water only. Bridges are high enough to pass under.
+    const tx = (x / TILE) | 0, ty = (y / TILE) | 0;
+    return tx >= 0 && ty >= 0 && tx < w.map.cols && ty < w.map.rows && w.map.tiles[ty * w.map.cols + tx] === 3;
+  }
   const b = bldAtPx(w, x, y);
   // A bridge is a road over water for everyone.
   if (b && b.kind === 'bridge') return true;
@@ -140,6 +148,11 @@ export function canBuild(w: World, tx: number, ty: number, team: number, type: B
     if ((D.age ?? 0) > age) return 'needs the ' + ['village', 'town', 'city'][D.age ?? 0] + ' age';
     if (D.max && w.blds.filter((b) => b.team === team && b.type === type).length >= D.max) return 'you have enough of those';
     if (D.trains && type !== 'barracks' && D.kind === 'town' && !w.blds.some((b) => b.team === team && b.type === 'barracks' && b.buildT <= 0)) return 'build a barracks first';
+    if (type === 'dock' || type === 'port') {
+      const m = w.map;
+      const shore = footprint(type, tx, ty, dir).some(([cx2, cy2]) => [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => { const x = cx2 + dx, y = cy2 + dy; return x >= 0 && y >= 0 && x < m.cols && y < m.rows && m.tiles[y * m.cols + x] === 3; }));
+      if (!shore) return 'needs a shore: water on one side';
+    }
     // Inside your own territory, or next to your Town Hall's region.
     if (w.regionOf) {
       const cx = tx * TILE + (D.w * TILE) / 2, cy = ty * TILE + (D.h * TILE) / 2;
