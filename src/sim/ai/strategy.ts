@@ -7,7 +7,8 @@ import { roster, TYPES, type UnitKey } from '../../data/units.ts';
 import { addBld, canBuild } from '../buildings.ts';
 import { applyCommand, cmd } from '../commands.ts';
 import { rand } from '../rng.ts';
-import type { Settlement, Unit, World } from '../types.ts';
+import type { Settlement, Target, Unit, World } from '../types.ts';
+import { enemyWonder } from '../wonder.ts';
 import { allied, slotDiff } from '../world.ts';
 import { canAbsorb, canGrow, canSettle, NEXT_TIER, popCap, popUsed, TIERS } from '../conquest.ts';
 import { GROW } from '../../data/realm.ts';
@@ -183,6 +184,8 @@ function buildTown(w: World, slot: number, a: Assessment): boolean {
   if (realm && idle >= 2 && afford('farm') && have('farm') < 8) return placeNear(w, slot, 'farm', home.x, home.y);
   if (realm && idle >= 4 && s.age >= 1 && afford('market') && have('market') < 2) return placeNear(w, slot, 'market', home.x, home.y);
   if (!have('barracks') && afford('barracks')) return placeNear(w, slot, 'barracks', home.x, home.y);
+  // The great work: a city, a full treasury, and nothing pressing.
+  if (realm && ageOf(w, slot) >= 2 && !have('wonder') && s.gold >= BLD.wonder.cost + 300 && (!w.rules.materials || s.mat >= (BLD.wonder.mat ?? 0) + 50) && w.net[slot] > 3) return placeNear(w, slot, 'wonder', home.x, home.y);
   // Whatever the next tier asks for comes next: the town wants to grow.
   if (realm) {
     const cap = s.settlements.find((b) => b.hp > 0 && b.buildT <= 0 && NEXT_TIER[b.tier] && (w.capitals[slot] === b.region || b.tier === 'town'));
@@ -298,7 +301,8 @@ export function decide(w: World, slot: number): void {
   }
   // Mass, then push in a grouped wave from the rally point. Defense at the target counts
   // hostile units and towers within 80px.
-  const target = nearestHostileBase(w, slot, home.x, home.y);
+  // An enemy wonder outranks a capital as the thing to march on.
+  const target: Target | null = enemyWonder(w, slot, allied) ?? nearestHostileBase(w, slot, home.x, home.y);
   const rally = rallyPoint(w, home);
   let defense = target ? hostileValueNear(w, slot, target.x, target.y, 80) : a.enemyValue;
   if (target) for (const b of w.blds) if (b.kind === 'tower' && !allied(w, b.team, slot) && Math.hypot(b.x - target.x, b.y - target.y) < 80) defense += BLD[b.type].cost * 0.8;

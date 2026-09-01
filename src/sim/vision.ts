@@ -6,6 +6,7 @@ import { TYPES } from '../data/units.ts';
 import { unitVision, VISION } from '../data/vision.ts';
 import { TILE } from './map.ts';
 import type { World } from './types.ts';
+import { WONDER } from './wonder.ts';
 
 function stamp(out: Uint8Array, cols: number, rows: number, x: number, y: number, r: number): void {
   const cx = (x / TILE) | 0, cy = (y / TILE) | 0, r2 = r * r;
@@ -22,7 +23,7 @@ export function computeVision(w: World, slot: number, out: Uint8Array): Uint8Arr
   out.fill(0);
   const side = (team: number): boolean => team === slot || w.slots[team].ally === w.slots[slot].ally;
   for (const u of w.units) if (u.hp > 0 && side(u.team)) stamp(out, cols, rows, u.x, u.y, unitVision(TYPES[u.type]));
-  for (const b of w.blds) if (b.hp > 0 && side(b.team)) stamp(out, cols, rows, b.x, b.y, BLD[b.type].kind === 'tower' ? VISION.tower : VISION.building);
+  for (const b of w.blds) if (b.hp > 0 && side(b.team)) stamp(out, cols, rows, b.x, b.y, b.type === 'wonder' && b.buildT <= 0 ? WONDER.vision : BLD[b.type].kind === 'tower' ? VISION.tower : VISION.building);
   for (const s of w.slots) for (const b of s.settlements) if (b.hp > 0 && side(b.team)) stamp(out, cols, rows, b.x, b.y, VISION.settlement);
   return out;
 }

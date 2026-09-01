@@ -84,6 +84,14 @@ function paintTown(f: (col: string, px: number, py: number, w: number, h: number
     f(wall, 1, 6, W - 2, H - 7); f('#a06a35', 0, 3, W, 3); f(tc, 1, 1, 3, 2); f(dark, 4, 9, 6, 6); f(dark, 13, 9, 6, 6); f('#e8b88a', 6, 10, 2, 2);
   } else if (type === 'siege') {
     f(shade, 1, 6, W - 2, H - 7); f(stone, 1, 5, W - 2, 1); f(dark, 3, 9, 8, 3); f('#8a8f9c', 4, 7, 2, 2); f('#f2d34a', 14, 8, 5, 5); f(tc, W - 4, 1, 3, 3);
+  } else if (type === 'wonder') {
+    // A stepped monument: three tiers of pale stone, gold crown, banners at the corners.
+    f('#5a5f6e', 0, H - 8, W, 8); f('#7d8391', 0, H - 8, W, 1);
+    f('#7d8391', 4, H - 15, W - 8, 8); f('#9aa0ae', 4, H - 15, W - 8, 1);
+    f('#9aa0ae', 9, H - 22, W - 18, 8); f('#c9ced8', 9, H - 22, W - 18, 1);
+    f('#f2d34a', 13, H - 27, W - 26, 5); f('#fff2a8', 14, H - 28, W - 28, 1);
+    f('#141520', (W >> 1) - 2, H - 5, 4, 5); f('#141520', 7, H - 12, 2, 3); f('#141520', W - 9, H - 12, 2, 3);
+    f('#dde2ec', 1, H - 14, 1, 7); f(tc, 2, H - 14, 3, 2); f('#dde2ec', W - 2, H - 14, 1, 7); f(tc, W - 5, H - 14, 3, 2);
   } else if (type === 'castle') {
     f(stone, 1, 3, W - 2, H - 4); f(shade, 1, 3, W - 2, 1); f('#4a4f5e', 0, 0, 5, 6); f('#4a4f5e', W - 5, 0, 5, 6); f('#4a4f5e', 0, H - 6, 5, 6); f('#4a4f5e', W - 5, H - 6, 5, 6);
     f('#141520', (W >> 1) - 2, H - 8, 4, 8); f('#dde2ec', W >> 1, 0, 1, 6); f(tc, (W >> 1) + 1, 0, 4, 3); f('#9aa0ae', 6, 8, 2, 2); f('#9aa0ae', W - 8, 8, 2, 2);
@@ -100,7 +108,7 @@ function bldImage(type: BldKey, team: number): HTMLCanvasElement {
   c.width = W; c.height = H + BLD_TOP + 5;
   const g = c.getContext('2d')!;
   const f = (col: string, px: number, py: number, w: number, h: number): void => { g.fillStyle = col; g.fillRect(px, py + BLD_TOP, w, h); };
-  if (D.kind === 'town' || type === 'castle') paintTown(f, type, TEAM[team], W, H);
+  if (D.kind === 'town' || type === 'castle' || type === 'wonder') paintTown(f, type, TEAM[team], W, H);
   else paintBld(f, type, TEAM[team]);
   cache.set(k, c);
   return c;

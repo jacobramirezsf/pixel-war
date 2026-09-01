@@ -39,6 +39,8 @@ export interface UnitDef {
   speedAura?: number;
   /** Horde. Damage multiplier against buildings and bases. */
   vsBld?: number;
+  /** Plain siege bonus against buildings. Not a race mechanic. */
+  bldDmg?: number;
   /** Horde. Damage multiplier on the first hit after running 20px. */
   charge?: number;
   /** Horde. Hit points regained per second. */
@@ -81,7 +83,7 @@ const ARCH: Record<string, Base> = {
   spr: { name: 'SPEAR',    role: 'line',    cost: 25,  hp: 45,  dmg: 10, range: 12, speed: 22, cd: 0.9,  aggro: 30 },
   arc: { name: 'ARCHER',   role: 'ranged',  cost: 30,  hp: 24,  dmg: 6,  range: 36, speed: 22, cd: 0.9,  aggro: 44 },
   wrk: { name: 'WORKER',   role: 'support', cost: 25,  hp: 25,  dmg: 2,  range: 6,  speed: 26, cd: 0.6,  aggro: 24, repair: 8 },
-  bmb: { name: 'BOMBER',   role: 'siege',   cost: 30,  hp: 25,  dmg: 45, range: 5,  speed: 30, cd: 0.1,  aggro: 36, splash: 14, suicide: true },
+  bmb: { name: 'BOMBER',   role: 'siege',   cost: 30,  hp: 25,  dmg: 45, range: 5,  speed: 30, cd: 0.1,  aggro: 36, splash: 14, suicide: true, bldDmg: 2 },
   shd: { name: 'SHIELD',   role: 'line',    cost: 35,  hp: 90,  dmg: 6,  range: 7,  speed: 16, cd: 0.9,  aggro: 28, armor: 3 },
   flm: { name: 'FLAMER',   role: 'line',    cost: 35,  hp: 35,  dmg: 5,  range: 14, speed: 20, cd: 0.25, aggro: 30, splash: 6, shot: '#ff8c2a' },
   brk: { name: 'BERSERK',  role: 'line',    cost: 40,  hp: 50,  dmg: 13, range: 7,  speed: 28, cd: 0.45, aggro: 34 },
@@ -93,7 +95,7 @@ const ARCH: Record<string, Base> = {
   ban: { name: 'BANNER',   role: 'special', cost: 50,  hp: 50,  dmg: 4,  range: 7,  speed: 22, cd: 0.9,  aggro: 28, aura: 18 },
   wiz: { name: 'WIZARD',   role: 'special', cost: 55,  hp: 26,  dmg: 12, range: 40, speed: 18, cd: 1.2,  aggro: 46, splash: 9, shot: '#b06cff' },
   tnk: { name: 'TANK',     role: 'heavy',   cost: 60,  hp: 130, dmg: 20, range: 14, speed: 14, cd: 1.3,  aggro: 34 },
-  mor: { name: 'MORTAR',   role: 'siege',   cost: 60,  hp: 40,  dmg: 24, range: 56, speed: 12, cd: 2.4,  aggro: 60, splash: 12, minRange: 20, shot: '#f2d34a' },
+  mor: { name: 'MORTAR',   role: 'siege',   cost: 60,  hp: 40,  dmg: 24, range: 56, speed: 12, cd: 2.4,  aggro: 60, splash: 12, minRange: 20, shot: '#f2d34a', bldDmg: 2 },
   snp: { name: 'SNIPER',   role: 'ranged',  cost: 70,  hp: 22,  dmg: 40, range: 64, speed: 16, cd: 2.6,  aggro: 70 },
   mch: { name: 'MECH',     role: 'special', cost: 90,  hp: 200, dmg: 22, range: 9,  speed: 12, cd: 1.0,  aggro: 30, splash: 8, armor: 2 },
   gnt: { name: 'GIANT',    role: 'special', cost: 150, hp: 400, dmg: 45, range: 10, speed: 9,  cd: 1.6,  aggro: 30, splash: 10, armor: 4 },

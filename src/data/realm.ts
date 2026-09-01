@@ -8,7 +8,7 @@ export const WORLD_SIZES: Record<WorldSize, { name: string; grid: number; text: 
   large:    { name: 'LARGE',    grid: 5, text: 'Twenty-five wide regions. Long marches, several fronts.' },
 };
 
-export type FeatKey = 'kingdom' | 'greatCity' | 'empire' | 'conqueror' | 'greatPower' | 'survivor';
+export type FeatKey = 'kingdom' | 'greatCity' | 'empire' | 'conqueror' | 'greatPower' | 'survivor' | 'wonder';
 
 export const FEATS: Record<FeatKey, { name: string; text: string }> = {
   kingdom:    { name: 'KINGDOM',     text: 'Three settlements under one banner.' },
@@ -17,6 +17,7 @@ export const FEATS: Record<FeatKey, { name: string; text: string }> = {
   conqueror:  { name: 'CONQUEROR',   text: 'Every rival kingdom has fallen.' },
   greatPower: { name: 'GREAT POWER', text: 'A large army paid for by a strong economy.' },
   survivor:   { name: 'SURVIVOR',    text: 'Thirty days in the realm.' },
+  wonder:     { name: 'GREAT WONDER', text: 'The great work stands finished.' },
 };
 
 export const FEAT_KEYS = Object.keys(FEATS) as FeatKey[];

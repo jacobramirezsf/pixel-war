@@ -217,6 +217,7 @@ export function attack(w: World, u: Unit, t: Target, T: UnitDef): void {
   if (w.rules.veterancy && u.kills) dmg = Math.round(dmg * (1 + 0.1 * rank(u)));
   if (hasBanner(w, u)) dmg = Math.round(dmg * 1.3);
   if (T.vsBld && t.ent !== 'unit') dmg = Math.round(dmg * T.vsBld);
+  if (T.bldDmg && t.ent !== 'unit') dmg = Math.round(dmg * T.bldDmg);
   if (T.charge && u.run >= 20) dmg = Math.round(dmg * T.charge);
   u.run = 0;
   if (T.stealth) u.reveal = 3;

@@ -7,7 +7,7 @@ import { drawEditor, drawWorld } from './render/scene.ts';
 import { buildBg } from './render/terrain.ts';
 import { step } from './sim/step.ts';
 import { DT } from './sim/world.ts';
-import { createApp, fit, loadMap } from './ui/app.ts';
+import { createApp, fit, loadMap, issueAction } from './ui/app.ts';
 import { startBench } from './ui/bench.ts';
 import { autosaveTick, wireAutosave } from './ui/conquest.ts';
 import { watchEvents } from './ui/territory.ts';
@@ -31,6 +31,9 @@ registerServiceWorker();
 const app = createApp(createStorage());
 // Handy in the console and for scripted checks.
 (window as unknown as { pw: unknown }).pw = app;
+// Scripted checks (tools/browser-shot.ts) issue actions through the same path as the HUD.
+(window as unknown as { pwAct: (a: import('./sim/types.ts').Action) => boolean }).pwAct = (a) => issueAction(app, a);
+
 app.ui = { updateUI: () => updateUI(app), showMenu: () => showMenu(app), endScreen: () => endScreen(app) };
 
 applyLayout(app.layout);

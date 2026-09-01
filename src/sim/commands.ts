@@ -11,6 +11,7 @@ import { buildTime, mkUnit } from './units.ts';
 import { absorb, ADVANCED_COST, canGrow, choose, canAbsorb, canSettle, hasCity, NEXT_TIER, placeSettlement, popCap, popUsed, setTruce, startUpgrade, TIERS, truceAccepted } from './conquest.ts';
 import { popOf } from './units.ts';
 import { seedResidents } from './civ.ts';
+import { wonderBegun, wonderDone } from './wonder.ts';
 import { castPower } from './powers.ts';
 import { canResearch, canTrain, pickTrainer, queuedCount, RESEARCH_COST, TECH_NAMES } from './town.ts';
 import { allied, count, mapH, mapW, say as worldSay } from './world.ts';
@@ -266,6 +267,7 @@ export function applyCommand(w: World, c: Command, quiet = false): boolean {
       }
       const nb = addBld(w, slot, bld, tx, ty, gdir, w.rules.town && !editing);
       if (nb.buildT > 0) say(D.name + ' under construction. Workers nearby speed it up.', 1.5);
+      if (bld === 'wonder') { wonderBegun(w, nb); if (nb.buildT <= 0) wonderDone(w, nb); }
       return true;
     }
     case 'sell': {

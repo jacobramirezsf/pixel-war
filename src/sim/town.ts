@@ -11,6 +11,7 @@ import { rnd } from './rng.ts';
 import type { Building, Tech, Unit, World } from './types.ts';
 import { say } from './world.ts';
 import { mkUnit } from './units.ts';
+import { wonderDone } from './wonder.ts';
 
 export const RESEARCH_COST = [120, 240];
 export const TECH_NAMES: Record<Tech, string> = { melee: 'BLADES', ranged: 'BOWS', armor: 'ARMOR' };
@@ -115,7 +116,7 @@ export function townTick(w: World, dt: number): void {
       const rate = (w.cheats.build ? 1e9 : 1) * (1 + Math.min(2, helpers));
       b.buildT = Math.max(0, b.buildT - dt * rate);
       b.hp = Math.min(b.max, Math.max(b.hp, Math.round(b.max * (0.1 + 0.9 * (1 - b.buildT / total)))));
-      if (b.buildT <= 0 && b.team === 0) say(w, BLD[b.type].name + ' finished', 1.5);
+      if (b.buildT <= 0) { if (b.team === 0) say(w, BLD[b.type].name + ' finished', 1.5); wonderDone(w, b); }
       continue;
     }
     if (!b.queue.length || b.hp <= 0) continue;

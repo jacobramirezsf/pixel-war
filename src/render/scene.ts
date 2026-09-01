@@ -72,6 +72,7 @@ function drawBase(ctx: CanvasRenderingContext2D, b: Settlement, H: number, capit
   }
   ctx.fillStyle = '#5f6474'; ctx.fillRect(x, y + 2, 24, 14);
   ctx.fillStyle = '#454a5a'; for (let i = 0; i < 24; i += 4) ctx.fillRect(x + i, y, 2, 3);
+  if (b.buildT <= 0 && b.hp < b.max * 0.6) drawDamage(ctx, x, y + 2, 24, 14, b.hp / b.max, b.id);
   ctx.fillStyle = '#7a8093'; ctx.fillRect(x, y + 3, 24, 1);
   ctx.fillStyle = '#3a3f4e'; ctx.fillRect(x + 3, y + 6, 2, 2); ctx.fillRect(x + 19, y + 6, 2, 2);
   ctx.fillStyle = '#141520'; ctx.fillRect(b.x - 2, b.y < H / 2 ? y + 2 : y + 9, 4, 7);
@@ -117,6 +118,20 @@ function drawGate(ctx: CanvasRenderingContext2D, b: Building): void {
   f(TEAM[b.team], x, y, 2, 2);
 }
 
+/** Cracks below 60% health, soot and a smoke pixel below 30%. Positions hang off the id so they hold still. */
+function drawDamage(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, frac: number, id: number): void {
+  const n = frac < 0.3 ? 5 : 3;
+  ctx.fillStyle = '#141520';
+  for (let i = 0; i < n; i++) {
+    const px = x + 1 + ((id * 7 + i * 13) % Math.max(1, w - 3)), py = y + 1 + ((id * 11 + i * 5) % Math.max(1, h - 3));
+    ctx.fillRect(px, py, 2, 1); ctx.fillRect(px + 1, py + 1, 1, 2);
+  }
+  if (frac < 0.3) {
+    ctx.fillStyle = 'rgba(20,21,32,.45)'; ctx.fillRect(x, y + h - 3, w, 3);
+    ctx.fillStyle = 'rgba(200,200,210,.5)'; ctx.fillRect(x + (w >> 1) - 1, y - 3, 2, 2); ctx.fillRect(x + (w >> 1), y - 5, 1, 2);
+  }
+}
+
 function drawBld(ctx: CanvasRenderingContext2D, b: Building): void {
   if (b.kind === 'gate') {
     drawGate(ctx, b);
@@ -127,8 +142,9 @@ function drawBld(ctx: CanvasRenderingContext2D, b: Building): void {
     }
     return;
   }
-  const x = b.tx * TILE, y = b.ty * TILE, D = BLD[b.type], W = D.w * TILE;
+  const x = b.tx * TILE, y = b.ty * TILE, D = BLD[b.type], W = D.w * TILE, Hh = D.h * TILE;
   drawBldSpr(ctx, b.type, b.team, x, y, 1);
+  if (b.buildT <= 0 && b.hp < b.max * 0.6) drawDamage(ctx, x, y, W, Hh, b.hp / b.max, b.id);
   if (b.buildT > 0) {
     // Scaffold and a progress line while under construction.
     const total = D.buildT ?? 1;

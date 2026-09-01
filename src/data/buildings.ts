@@ -7,7 +7,7 @@ import type { Role } from './units.ts';
 
 export type BldKey =
   | 'brb' | 'stk' | 'wal' | 'stw' | 'gat' | 'twr' | 'stt' | 'trt'
-  | 'house' | 'farm' | 'market' | 'smith' | 'barracks' | 'range' | 'stable' | 'siege' | 'castle';
+  | 'house' | 'farm' | 'market' | 'smith' | 'barracks' | 'range' | 'stable' | 'siege' | 'castle' | 'wonder';
 export type BldKind = 'trap' | 'wall' | 'gate' | 'tower' | 'town';
 export type BldGroup = 'defense' | 'economy' | 'military';
 
@@ -61,6 +61,7 @@ export const BLD: Record<BldKey, BldDef> = {
   range:    { name: 'RANGE',       cost: 100, hp: 300, kind: 'town', group: 'military', w: 3, h: 2, age: 1, buildT: 30, trains: ['ranged'], town: true, hint: 'Trains archers and other ranged units.' },
   stable:   { name: 'STABLE',      cost: 110, hp: 320, kind: 'town', group: 'military', w: 3, h: 2, age: 1, buildT: 30, trains: ['fast', 'air'], town: true, hint: 'Trains fast units and fliers.' },
   siege:    { name: 'SIEGE WORKS', cost: 150, hp: 320, kind: 'town', group: 'military', w: 3, h: 2, mat: 40, age: 2, buildT: 40, trains: ['siege'], town: true, hint: 'Trains siege engines.' },
+  wonder:   { name: 'WONDER',      cost: 800, hp: 1500, kind: 'town', group: 'economy', w: 4, h: 4, mat: 400, age: 2, buildT: 240, pop: 10, income: 2, town: true, max: 1, hint: 'The great work of a realm. Long to build, seen from afar, and every rival will want it gone.' },
   castle:   { name: 'CASTLE',      cost: 250, hp: 900, kind: 'tower', group: 'military', w: 3, h: 3, dmg: 14, range: 46, cd: 0.5, armor: 4, mat: 300, age: 2, buildT: 75, pop: 20, trains: ['heavy', 'special'], town: true, max: 3, hint: 'Shoots, trains heavies and specials, holds the region calm.' },
 };
 
