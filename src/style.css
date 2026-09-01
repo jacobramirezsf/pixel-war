@@ -42,9 +42,11 @@ canvas{image-rendering:pixelated;image-rendering:crisp-edges;display:block}
 #pauseov small{display:block;font-size:12px;letter-spacing:1px;color:#e6e6ee;margin-top:8px}
 #ov .seedrow{align-items:center;gap:8px}#ov .seedrow label{font-size:11px;letter-spacing:2px;color:#b9bccb}#ov .seedrow input{flex:1;min-height:36px;background:#0a0b10;border:1px solid #3a3d4a;color:#e6e6ee;font:inherit;padding:0 8px}
 #ov .pick.dim{opacity:.7}
+#ov .slotacts{display:flex;flex-direction:column;gap:3px}#ov .slotacts .sm{min-height:28px;padding:2px 6px;font-size:10px}
 #terr .card.town .name .cap{color:#f2d34a;font-size:9px;letter-spacing:2px;margin-left:6px}
 #terr .flags.bad{color:#ff6b6b}#terr .flags.warn{color:#ffb02a}
 #terr .dip{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:6px 0;border-bottom:1px solid #1e2130}#terr .dip .acts{display:flex;gap:4px;margin-left:auto}#terr .dip .acts button{min-height:30px}
+#terr .tnav{display:flex;gap:4px;margin-left:auto;margin-right:6px}#terr .blurb.bad{color:#ff6b6b}
 #terr .hist{font-size:11px;color:#b9bccb;padding:3px 0}#terr .hist span{color:#f2d34a;margin-right:6px}
 #msg{cursor:pointer;pointer-events:auto}
 #cheats{position:absolute;left:8px;top:48px;width:min(360px,calc(100% - 16px));max-height:calc(100% - 60px);overflow:auto;background:rgba(10,11,16,.96);border:1px solid #3a3d4a;padding:8px;z-index:4;font-size:11px}

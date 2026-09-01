@@ -18,7 +18,9 @@ import { buildingsOf } from './civ.ts';
 import { canPlaceSettlement as placeOk } from './buildings.ts';
 import { allied, cheat, chronicle, emptyTown, pushEvent, say } from './world.ts';
 
-export const REGION_NAMES = ['Ashford', 'Brine', 'Coldwater', 'Dunmere', 'Elsmoor', 'Fallow', 'Greyholm', 'Hollin', 'Ironmark', 'Kestrel', 'Larkspur', 'Marrow', 'Northam', 'Oakhurst', 'Pale Reach', 'Quarry Hill', 'Rook', 'Saltmere', 'Thornby', 'Umber', 'Vale', 'Wendle', 'Yarrow', 'Zell', 'Ambry'];
+const BASE_NAMES = ['Ashford', 'Brine', 'Coldwater', 'Dunmere', 'Elsmoor', 'Fallow', 'Greyholm', 'Hollin', 'Ironmark', 'Kestrel', 'Larkspur', 'Marrow', 'Northam', 'Oakhurst', 'Pale Reach', 'Quarry Hill', 'Rook', 'Saltmere', 'Thornby', 'Umber', 'Vale', 'Wendle', 'Yarrow', 'Zell', 'Ambry'];
+/** 125 names: the base list, then the same lands by compass. Enough for the largest world. */
+export const REGION_NAMES: readonly string[] = ['', 'North ', 'South ', 'East ', 'West '].flatMap((p) => BASE_NAMES.map((n) => p + n));
 
 export const CLAIM_SECONDS = 30;
 export const WEAK_CLAIM_SECONDS = 10;
@@ -102,11 +104,19 @@ export function regionAt(w: World, x: number, y: number): number {
   return w.regionOf[ty * w.map.cols + tx];
 }
 
+let sinTick = -1, sinWorld: World | null = null, sinMap: Map<number, Settlement[]> = new Map();
+
+/** Living settlements in a region. Built once per tick and reused; the list is fresh when the tick or world changes. */
 export function settlementsIn(w: World, region: number): Settlement[] {
-  const out: Settlement[] = [];
-  for (const s of w.slots) for (const b of s.settlements) if (b.hp > 0 && b.region === region) out.push(b);
-  return out;
+  if (sinWorld !== w || sinTick !== w.tick) {
+    sinWorld = w; sinTick = w.tick; sinMap = new Map();
+    for (const s of w.slots) for (const b of s.settlements) if (b.hp > 0) { const l = sinMap.get(b.region); if (l) l.push(b); else sinMap.set(b.region, [b]); }
+  }
+  return sinMap.get(region) ?? [];
 }
+
+/** Forget the per-tick cache after anything that changes settlements mid-tick. */
+export function settlementsChanged(): void { sinTick = -1; }
 
 const isNeutral = (w: World, team: number): boolean => w.slots[team].neutral;
 
@@ -157,6 +167,7 @@ export function nameRegionFor(w: World, r: Region, race: import('../data/races.t
 }
 
 export function placeSettlement(w: World, slot: number, x: number, y: number, tier: Tier, instant = false): Settlement {
+  settlementsChanged();
   clearFootprint(w, (x / TILE) | 0, (y / TILE) | 0);
   const b = mkSettlement(w, slot, x, y, tier, instant);
   w.slots[slot].settlements.push(b);
@@ -271,6 +282,7 @@ function hostileValueIn(w: World, byRegion: Map<string, number>, team: number, r
 
 /** A region revolts: its settlements go independent and rebels appear sized to the garrison shortfall. */
 function revolt(w: World, r: Region): void {
+  settlementsChanged();
   const owner = r.owner;
   const shortfall = Math.max(40, r.need - r.garrison);
   r.owner = -1;
@@ -357,6 +369,7 @@ function neutralsTick(w: World, dt: number, byRegion: Map<string, number>): void
 const TIER_RANK: Record<Tier, number> = { city: 5, fortress: 4, town: 3, village: 2, outpost: 1, camp: 0, ruin: 0 };
 
 export function onSettlementDeath(w: World, b: Settlement): void {
+  settlementsChanged();
   // The crown passes to the biggest surviving settlement.
   if (!w.slots[b.team].neutral && w.capitals[b.team] === b.region) {
     const heir = w.slots[b.team].settlements.filter((x) => x.hp > 0 && x !== b && x.tier !== 'outpost').sort((p, q) => TIER_RANK[q.tier] - TIER_RANK[p.tier] || q.hp - p.hp)[0];
@@ -395,6 +408,7 @@ export const CAPTURE_COST = 100;
 
 /** Take a razed enemy settlement: it stands again at a third, its buildings change hands, the region follows. */
 export function capture(w: World, slot: number, b: Settlement): void {
+  settlementsChanged();
   const from = b.team;
   const os = w.slots[from];
   os.settlements.splice(os.settlements.indexOf(b), 1);
@@ -426,6 +440,7 @@ export function canAbsorb(w: World, slot: number, b: Settlement): string | null 
 }
 
 export function absorb(w: World, slot: number, b: Settlement): void {
+  settlementsChanged();
   const ns = w.slots[b.team];
   ns.settlements.splice(ns.settlements.indexOf(b), 1);
   b.team = slot;
@@ -705,6 +720,7 @@ function checkFeats(w: World, dt: number): void {
 
 /** Losing the last settlement is a crisis, not the end: the people regroup in free land. */
 function regroup(w: World): void {
+  settlementsChanged();
   const s = w.slots[0];
   if (w.over || s.settlements.some((b) => b.hp > 0)) return;
   const free = w.regions.filter((r) => r.owner < 0 && !settlementsIn(w, r.id).some((b) => !isNeutral(w, b.team) || b.tier === 'camp'));

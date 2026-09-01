@@ -55,7 +55,7 @@ function ridges(m: MapDef, seed: number, amount: number): void {
 }
 
 export function realmMap(seed: number, grid: number, rivals: number): RealmGen {
-  const cell = grid >= 5 ? 18 : 16;
+  const cell = grid >= 7 ? 20 : grid >= 5 ? 18 : 16;
   const cols = grid * cell, rows = grid * cell;
   const m = blankMap('Realm', cols, rows);
   const rng = makeRng(seed ^ 0x2545f491);
@@ -73,6 +73,7 @@ export function realmMap(seed: number, grid: number, rivals: number): RealmGen {
   // Rivers: one on small worlds, two on larger ones, crossing the map with fords.
   carveRiver(m, rng, rand(rng) < 0.5);
   if (grid >= 4) carveRiver(m, rng, rand(rng) < 0.5);
+  for (let k = 5; k <= grid; k += 2) carveRiver(m, rng, rand(rng) < 0.5);
   // Capitals: corners, then the middle of the top edge for a fifth kingdom.
   const e = 5;
   const corners = [{ tx: e, ty: rows - 1 - e }, { tx: cols - 1 - e, ty: e }, { tx: e, ty: e }, { tx: cols - 1 - e, ty: rows - 1 - e }, { tx: cols >> 1, ty: 4 }];

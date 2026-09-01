@@ -84,7 +84,9 @@ export function renderTerritory(app: App): void {
   if (key === lastKey) return;
   lastKey = key;
   const events = w.events.slice(-8).reverse();
-  el.innerHTML = '<div class="thead">KINGDOM <button id="tClose" class="mini">CLOSE</button></div>'
+  const attacked = towns.filter((b) => b.civ.state === 'attacked').length;
+  el.innerHTML = '<div class="thead">KINGDOM <span class="tnav"><button id="tCap" class="mini">CAPITAL</button><button id="tPrev" class="mini">◀</button><button id="tNext" class="mini">▶</button></span><button id="tClose" class="mini">CLOSE</button></div>'
+    + (attacked ? '<p class="blurb bad">' + attacked + ' town' + (attacked === 1 ? '' : 's') + ' under attack</p>' : '')
     + (towns.length ? '<h3>TOWNS</h3>' + towns.map((b) => townCard(app, b)).join('') : '')
     + '<h3>LAND</h3>'
     + (held.length ? held.map((r) => regionCard(app, r)).join('') : '<p>You hold nothing. Settle a region.</p>')
@@ -92,6 +94,12 @@ export function renderTerritory(app: App): void {
     + diplomacy(app)
     + (w.history.length ? '<h3>HISTORY</h3>' + w.history.slice(-8).reverse().map((h) => '<div class="hist"><span>Day ' + h.day + '</span> ' + h.text + '</div>').join('') : '');
   on($('tClose'), 'click', () => { app.terrOpen = false; app.ui.updateUI(); });
+  const goTown = (b: import('../sim/types.ts').Settlement): void => { centerOn(app.cam, b.x, b.y); app.selection.clear(); app.town = b.id; app.ui.updateUI(); };
+  const all = w.slots[0].settlements.filter((b) => b.hp > 0 && b.tier !== 'outpost');
+  on($('tCap'), 'click', () => { const c = all.find((b) => w.capitals[0] === b.region) ?? all[0]; if (c) goTown(c); });
+  const stepTown = (d: number): void => { if (!all.length) return; const i = all.findIndex((b) => b.id === app.town); goTown(all[((i < 0 ? 0 : i + d) + all.length) % all.length]); };
+  on($('tPrev'), 'click', () => stepTown(-1));
+  on($('tNext'), 'click', () => stepTown(1));
   for (const b of el.querySelectorAll<HTMLButtonElement>('button.card[data-r]')) on(b, 'click', () => { const r = w.regions[+b.dataset.r!]; centerOn(app.cam, r.cx, r.cy); if (app.layout === 'mobile') { app.terrOpen = false; app.ui.updateUI(); } });
   for (const b of el.querySelectorAll<HTMLButtonElement>('button.card[data-town]')) on(b, 'click', () => { const t = w.slots[0].settlements.find((x) => x.id === +b.dataset.town!); if (!t) return; centerOn(app.cam, t.x, t.y); app.selection.clear(); app.town = t.id; if (app.layout === 'mobile') app.terrOpen = false; app.ui.updateUI(); });
   for (const b of el.querySelectorAll<HTMLButtonElement>('button.ev')) on(b, 'click', () => { centerOn(app.cam, +b.dataset.ex!, +b.dataset.ey!); if (app.layout === 'mobile') { app.terrOpen = false; app.ui.updateUI(); } });

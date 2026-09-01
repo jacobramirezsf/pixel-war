@@ -8,50 +8,65 @@ import { allied } from './world.ts';
 type CostFn = (i: number) => number;
 
 export function dijk(cols: number, rows: number, starts: number | number[], costFn: CostFn): Float32Array {
-  const dist = new Float32Array(cols * rows).fill(Infinity);
-  const h: [number, number][] = [];
-  const push = (k: number, n: number): void => {
-    h.push([k, n]);
-    let i = h.length - 1;
+  const n = cols * rows;
+  const dist = new Float32Array(n).fill(Infinity);
+  // Costs once per node, not once per neighbor visit.
+  const cost = new Float32Array(n);
+  for (let i = 0; i < n; i++) cost[i] = costFn(i);
+  // Binary heap in typed arrays: keys and node ids side by side, grown when full.
+  let cap = 1024, size = 0;
+  let hk = new Float64Array(cap), hn = new Int32Array(cap);
+  const push = (k: number, node: number): void => {
+    if (size === cap) { cap *= 2; const nk = new Float64Array(cap), nn = new Int32Array(cap); nk.set(hk); nn.set(hn); hk = nk; hn = nn; }
+    let i = size++;
     while (i > 0) {
       const p = (i - 1) >> 1;
-      if (h[p][0] <= h[i][0]) break;
-      const t = h[p]; h[p] = h[i]; h[i] = t; i = p;
+      if (hk[p] <= k) break;
+      hk[i] = hk[p]; hn[i] = hn[p]; i = p;
     }
+    hk[i] = k; hn[i] = node;
   };
-  const pop = (): [number, number] => {
-    const top = h[0], last = h.pop()!;
-    if (h.length) {
-      h[0] = last;
+  const pop = (): number => {
+    const top = hn[0];
+    popKey = hk[0];
+    size--;
+    if (size > 0) {
+      const k = hk[size], node = hn[size];
       let i = 0;
       for (;;) {
         const l = 2 * i + 1, r = l + 1;
-        let m = i;
-        if (l < h.length && h[l][0] < h[m][0]) m = l;
-        if (r < h.length && h[r][0] < h[m][0]) m = r;
-        if (m === i) break;
-        const t = h[m]; h[m] = h[i]; h[i] = t; i = m;
+        let m = -1, mk = k;
+        if (l < size && hk[l] < mk) { m = l; mk = hk[l]; }
+        if (r < size && hk[r] < mk) { m = r; mk = hk[r]; }
+        if (m < 0) break;
+        hk[i] = hk[m]; hn[i] = hn[m]; i = m;
       }
+      hk[i] = k; hn[i] = node;
     }
     return top;
   };
+  let popKey = 0;
   for (const s of Array.isArray(starts) ? starts : [starts]) { dist[s] = 0; push(0, s); }
-  while (h.length) {
-    const [k, cur] = pop();
+  while (size > 0) {
+    const cur = pop(), k = popKey;
     if (k > dist[cur]) continue;
     const cx = cur % cols, cy = (cur / cols) | 0;
-    for (let dy = -1; dy <= 1; dy++)
+    const d0 = dist[cur];
+    for (let dy = -1; dy <= 1; dy++) {
+      const ny = cy + dy;
+      if (ny < 0 || ny >= rows) continue;
       for (let dx = -1; dx <= 1; dx++) {
         if (!dx && !dy) continue;
-        const nx = cx + dx, ny = cy + dy;
-        if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
-        const ni = ny * cols + nx, c = costFn(ni);
+        const nx = cx + dx;
+        if (nx < 0 || nx >= cols) continue;
+        const ni = ny * cols + nx, c = cost[ni];
         if (c === Infinity) continue;
-        if (dx && dy && (costFn(cy * cols + nx) === Infinity || costFn(ny * cols + cx) === Infinity)) continue;
+        if (dx && dy && (cost[cy * cols + nx] === Infinity || cost[ny * cols + cx] === Infinity)) continue;
         // dist is float32: push the value it will actually hold, or the pop-time staleness check drops the node.
-        const nd = Math.fround(dist[cur] + c * (dx && dy ? 1.414 : 1));
+        const nd = Math.fround(d0 + c * (dx && dy ? 1.414 : 1));
         if (nd < dist[ni]) { dist[ni] = nd; push(nd, ni); }
       }
+    }
   }
   return dist;
 }

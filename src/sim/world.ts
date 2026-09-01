@@ -10,6 +10,35 @@ import type { Building, Cheats, Command, Fx, GameEvent, Mode, Work, Zone, Order,
 
 export const BASE_HP = 400;
 
+const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+const B64I = new Map(B64.split('').map((c, i) => [c, i]));
+
+/** Float32 fields as base64 of their bytes, a quarter of the JSON size. Infinity survives. No DOM needed. */
+export function packF32(a: Float32Array): string {
+  const b = new Uint8Array(a.buffer, a.byteOffset, a.byteLength);
+  let out = 'f32:';
+  for (let i = 0; i < b.length; i += 3) {
+    const n = (b[i] << 16) | ((b[i + 1] ?? 0) << 8) | (b[i + 2] ?? 0);
+    out += B64[(n >> 18) & 63] + B64[(n >> 12) & 63] + (i + 1 < b.length ? B64[(n >> 6) & 63] : '=') + (i + 2 < b.length ? B64[n & 63] : '=');
+  }
+  return out;
+}
+
+export function unpackF32(s: string | number[]): Float32Array {
+  if (typeof s !== 'string') return Float32Array.from(s);
+  const t = s.slice(4);
+  const pad = t.endsWith('==') ? 2 : t.endsWith('=') ? 1 : 0;
+  const bytes = new Uint8Array((t.length / 4) * 3 - pad);
+  let k = 0;
+  for (let i = 0; i < t.length; i += 4) {
+    const n = (B64I.get(t[i])! << 18) | (B64I.get(t[i + 1])! << 12) | ((B64I.get(t[i + 2]) ?? 0) << 6) | (B64I.get(t[i + 3]) ?? 0);
+    if (k < bytes.length) bytes[k++] = (n >> 16) & 255;
+    if (k < bytes.length) bytes[k++] = (n >> 8) & 255;
+    if (k < bytes.length) bytes[k++] = n & 255;
+  }
+  return new Float32Array(bytes.buffer);
+}
+
 /** Explored map as a run-length string: pairs of run lengths, unseen first. */
 export function packSeen(a: Uint8Array): string {
   const runs: number[] = [];
@@ -213,7 +242,7 @@ export interface Snapshot {
   tick: number; t: number; income: number; incFlash: number;
   units: SnapUnit[]; blds: SnapBld[]; fx: Fx[]; score: number[]; barbT: number; over: Outcome;
   mines: { x: number; y: number; owner: number; prev: number }[];
-  flow: (number[] | null)[] | null; home: (number[] | null)[] | null; flowDirty: boolean; flowTick: number;
+  flow: (string | number[] | null)[] | null; home: (string | number[] | null)[] | null; flowDirty: boolean; flowTick: number;
   wave: number; waveN: number; nextId: number; rng: Rng; msg: string; msgT: number; snap: SandSnap | null;
   queue: Command[]; log: Command[]; fxRng: Rng;
   regions: Region[]; regionOf: number[] | null; rules: Rules; net: number[]; broke: number[]; capitals: number[];
@@ -262,8 +291,10 @@ export function snapshot(w: World): Snapshot {
     fx: w.fx.map((f) => ({ ...f })),
     score: w.score.slice(), barbT: w.barbT, over: w.over,
     mines: w.mines.map((m) => ({ ...m })),
-    flow: w.flow ? w.flow.map((f) => (f ? Array.from(f) : null)) : null,
-    home: w.home ? w.home.map((f) => (f ? Array.from(f) : null)) : null,
+    // Flow fields are derived from state and rebuilt on restore. They are kept only while a
+    // rebuild is pending, because until then the world still steers by the old ones.
+    flow: w.flowDirty && w.flow ? w.flow.map((f) => (f ? packF32(f) : null)) : null,
+    home: w.flowDirty && w.home ? w.home.map((f) => (f ? packF32(f) : null)) : null,
     flowDirty: w.flowDirty, flowTick: w.flowTick, wave: w.wave, waveN: w.waveN, nextId: w.nextId, rng: { s: w.rng.s }, msg: w.msg, msgT: w.msgT,
     snap: w.snap ? { units: w.snap.units.map((u) => ({ ...u })), blds: w.snap.blds.map((b) => ({ ...b })) } : null,
     queue: w.queue.map(copyCmd), log: w.log.map(copyCmd), fxRng: { s: w.fxRng.s },
@@ -316,8 +347,8 @@ export function restore(s: Snapshot): World {
     tick: s.tick, t: s.t, income: s.income, incFlash: s.incFlash, units, blds, bmap,
     fx: s.fx.map((f) => ({ ...f })), score: s.score.slice(), barbT: s.barbT, over: s.over,
     mines: s.mines.map((m) => ({ ...m })),
-    flow: s.flow ? s.flow.map((f) => (f ? Float32Array.from(f) : null)) : null,
-    home: s.home ? s.home.map((f) => (f ? Float32Array.from(f) : null)) : null,
+    flow: s.flow ? s.flow.map((f) => (f ? unpackF32(f) : null)) : null,
+    home: s.home ? s.home.map((f) => (f ? unpackF32(f) : null)) : null,
     flowDirty: s.flowDirty, flowTick: s.flowTick, grid: null, auras: null, wave: s.wave, waveN: s.waveN, nextId: s.nextId, rng: { s: s.rng.s }, msg: s.msg, msgT: s.msgT,
     snap: s.snap ? { units: s.snap.units.map((u) => ({ ...u })), blds: s.snap.blds.map((b) => ({ ...b })) } : null,
     queue: s.queue.map(copyCmd), log: s.log.map(copyCmd), fxRng: { s: s.fxRng.s },

@@ -59,7 +59,7 @@ const MINI = (): number => (app.layout === 'desktop' ? 160 : 72);
 
 let last = 0, acc = 0, overShown = false;
 const MAX_STEPS = 5;
-let frameErrors = 0;
+let frameErrors = 0, miniFrame = 0;
 
 /** A thrown frame must never end the game. Log it, keep the loop alive, and after a run of them pause with a note. */
 function loop(ts: number): void {
@@ -96,7 +96,8 @@ function frame(ts: number): void {
     soundTick(app, w);
     const shake = shakeTick(app, w, frame);
     drawWorld(app.ctx, app.bg, w, { drag: app.drag, alpha: app.running && !app.paused ? Math.min(1, acc / DT) : 1, selection: app.selection, paused: app.paused, viewer: app.ctl, hover: app.hover, cam: app.cam, dpr: app.dpr, layers: app.layers, damageNumbers: app.settings.damageNumbers, shake, ghost: app.tool === 'power' && app.power != null && app.mouse ? { x: app.cam.x + app.mouse.x / app.cam.zoom, y: app.cam.y + app.mouse.y / app.cam.zoom, r: POWERS[app.power].r } : app.tool === 'cheat' && app.cheatTool?.r && app.mouse ? { x: app.cam.x + app.mouse.x / app.cam.zoom, y: app.cam.y + app.mouse.y / app.cam.zoom, r: app.cheatTool.r } : null, place: placePreview(app) });
-    drawMinimap($<HTMLCanvasElement>('mini'), app.minimap, w.map, w, app.cam, MINI(), app.dpr, app.ctl);
+    // The minimap walks every tile; on big worlds a few frames apart is plenty.
+    if (++miniFrame % (w.map.cols * w.map.rows > 8000 ? 6 : 2) === 0) drawMinimap($<HTMLCanvasElement>('mini'), app.minimap, w.map, w, app.cam, MINI(), app.dpr, app.ctl);
   } else if (app.editor) {
     if (app.msgT > 0) app.msgT -= frame;
     keyPan(app, frame);

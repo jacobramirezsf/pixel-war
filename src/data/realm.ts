@@ -1,11 +1,13 @@
 // Realm: world sizes and accomplishments. A Realm never ends on its own; these are the milestones it notices.
 
-export type WorldSize = 'small' | 'standard' | 'large';
+export type WorldSize = 'small' | 'standard' | 'large' | 'huge' | 'massive';
 
 export const WORLD_SIZES: Record<WorldSize, { name: string; grid: number; text: string }> = {
   small:    { name: 'SMALL',    grid: 3, text: 'Nine regions. Neighbors close by.' },
   standard: { name: 'STANDARD', grid: 4, text: 'Sixteen regions. Room for a second town.' },
   large:    { name: 'LARGE',    grid: 5, text: 'Twenty-five wide regions. Long marches, several fronts.' },
+  huge:     { name: 'HUGE',     grid: 7, text: 'Forty-nine regions, 140 tiles a side. Days of travel. Roads and bridges earn their keep.' },
+  massive:  { name: 'MASSIVE',  grid: 10, text: 'A hundred regions, 200 tiles a side. Distant kingdoms, oceans of forest, whole frontiers to settle.' },
 };
 
 export type FeatKey = 'kingdom' | 'greatCity' | 'empire' | 'conqueror' | 'greatPower' | 'survivor' | 'wonder';

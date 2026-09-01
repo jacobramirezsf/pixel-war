@@ -65,3 +65,13 @@ test('src/sim and src/data reference no browser globals, clocks, or Math.random'
   }
   assert.ok(files.length > 10);
 });
+
+test('flow fields pack to base64 and back exactly, Infinity included', async () => {
+  const { packF32, unpackF32 } = await import('../../src/sim/world.ts');
+  const a = Float32Array.from([0, 1.5, -2.25, Infinity, 1e-7, 12345.678]);
+  const b = unpackF32(packF32(a));
+  assert.equal(b.length, a.length);
+  for (let i = 0; i < a.length; i++) assert.equal(b[i], a[i]);
+  const odd = Float32Array.from([7]);
+  assert.equal(unpackF32(packF32(odd))[0], 7);
+});

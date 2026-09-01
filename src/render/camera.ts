@@ -39,12 +39,13 @@ export function setMap(cam: Camera, mapW: number, mapH: number): void {
   cam.mapH = mapH;
   cam.tx = cam.ty = null;
   // Big worlds may zoom out to half scale so the whole map can be seen at once.
-  cam.minZoom = mapW > cam.vw * 1.2 || mapH > cam.vh * 1.2 ? 0.5 : 1;
+  cam.minZoom = mapW > cam.vw * 3 || mapH > cam.vh * 3 ? 0.25 : mapW > cam.vw * 1.2 || mapH > cam.vh * 1.2 ? 0.5 : 1;
   clampCam(cam);
 }
 
 /** Whole zoom steps, plus the half step on big maps. */
 export function snapZoom(cam: Camera, z: number): number {
+  if (z < 0.375 && cam.minZoom <= 0.25) return 0.25;
   if (z < 0.75 && cam.minZoom < 1) return 0.5;
   return Math.max(1, Math.min(ZOOM_MAX, Math.round(z)));
 }

@@ -27,7 +27,8 @@ import { maxHp, mkUnit, spawn } from './units.ts';
 type Vec = [number, number] | null;
 
 /** Flow fields rebuild at most once every 15 ticks, and right away when none exist yet. */
-const FLOW_EVERY = 15;
+/** Ticks between flow rebuilds while changes keep coming. Bigger worlds wait longer; the map alone decides, so replays agree. */
+const flowEvery = (n: number): number => (n > 20000 ? 90 : n > 8000 ? 45 : n > 3000 ? 30 : 15);
 
 /** Deaths this tick: necromancers raise skeletons, colossi split. Runs before corpses are removed. */
 function onDeaths(w: World, dead: Unit[]): void {
@@ -196,7 +197,10 @@ export function step(w: World): void {
   drainQueue(w);
   if (w.over || w.phase !== 'play') { w.tick++; return; }
   const dt = DT;
-  if (w.flowDirty && (w.flow === null || w.tick - w.flowTick >= FLOW_EVERY)) { computeFlow(w); computeHome(w); w.flowDirty = false; w.flowTick = w.tick; }
+  // A restored world carries no flow fields unless a rebuild was pending. Rebuild them from the
+  // same inputs the original used; flowTick stays so the throttle lines up.
+  if (w.flow === null && !w.flowDirty) { computeFlow(w); computeHome(w); }
+  if (w.flowDirty && (w.flow === null || w.tick - w.flowTick >= flowEvery(w.map.cols * w.map.rows))) { computeFlow(w); computeHome(w); w.flowDirty = false; w.flowTick = w.tick; }
   w.tick++;
   w.t += dt;
   const grid = gridOf(w);

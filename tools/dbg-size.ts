@@ -1,0 +1,10 @@
+import { newGame } from '../src/sim/game.ts';
+import { run } from '../test/sim/helpers.ts';
+import { serialize, snapshot } from '../src/sim/world.ts';
+const w = newGame({} as never, 'conquest', { seed: 5, rivals: 3, size: 'large' });
+run(w, 240);
+const s = snapshot(w) as unknown as Record<string, unknown>;
+const total = serialize(snapshot(w)).length;
+const parts = Object.keys(s).map((k) => [k, JSON.stringify(s[k]).length] as const).sort((a, b) => b[1] - a[1]).slice(0, 8);
+console.log('total', total, parts.map(([k, n]) => k + '=' + n).join(' '));
+console.log('units', w.units.length, 'blds', w.blds.length, 'events', w.events.length);

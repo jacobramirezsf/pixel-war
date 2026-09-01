@@ -8,7 +8,7 @@ import type { WorldSize } from '../data/realm.ts';
 import { getJSON, setJSON } from '../platform/storage.ts';
 import { hideOverlay, loadMap, randomRace, say, type App } from './app.ts';
 
-export const SLOTS = [1, 2, 3];
+export const SLOTS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 const key = (n: number): string => 'realm-' + n;
 const metaKey = (n: number): string => 'realm-meta-' + n;
 const prevKey = (n: number): string => 'realm-prev-' + n;
@@ -28,6 +28,8 @@ export interface SlotMeta {
   feats: number;
   cheats: boolean;
   savedAt: number;
+  /** A name the player gave the slot. */
+  label?: string;
 }
 
 function adoptOldSave(app: App): void {
@@ -68,8 +70,9 @@ export function saveRealm(app: App): boolean {
   const s = w.slots[0];
   let wars = 0;
   for (let i = 1; i < w.nP; i++) if (!w.slots[i].neutral && w.slots[i].alive && !s.truce[i]) wars++;
+  const prevMeta = getJSON<SlotMeta | null>(app.storage, metaKey(n), null);
   const meta: SlotMeta = {
-    race: s.race, seed: w.seed, cols: w.map.cols, day: w.day,
+    label: prevMeta?.label, race: s.race, seed: w.seed, cols: w.map.cols, day: w.day,
     towns: s.settlements.filter((b) => b.hp > 0 && b.tier !== 'outpost').length,
     regions: w.regions.filter((r) => r.owner === 0).length,
     people: w.units.filter((u) => u.team === 0 && u.hp > 0 && TYPES[u.type].role === 'civ').length,
@@ -162,3 +165,22 @@ export function wireAutosave(app: App): void {
 // Older names.
 export const saveConquest = saveRealm;
 export const continueConquest = continueRealm;
+
+export function renameSlot(app: App, n: number, label: string): void {
+  const m = getJSON<SlotMeta | null>(app.storage, metaKey(n), null);
+  if (!m) return;
+  m.label = label.trim().slice(0, 24) || undefined;
+  setJSON(app.storage, metaKey(n), m);
+}
+
+/** Copy a slot into an empty one. Returns the target slot, or -1 with none free. */
+export function copySlot(app: App, from: number): number {
+  const to = SLOTS.find((k) => !app.storage.get(key(k)));
+  if (!to) return -1;
+  const text = app.storage.get(key(from));
+  if (!text) return -1;
+  app.storage.set(key(to), text);
+  const m = getJSON<SlotMeta | null>(app.storage, metaKey(from), null);
+  if (m) setJSON(app.storage, metaKey(to), { ...m, label: (m.label ?? 'Realm') + ' copy', savedAt: Date.now() });
+  return to;
+}
