@@ -38,8 +38,8 @@ export function hostileBaseAt(w: World, slot: number, x: number, y: number): Set
 }
 
 /** What a tap on a point would attack for this slot, if anything. */
-export function hostileAt(w: World, slot: number, x: number, y: number): Target | null {
-  const u = hostileUnitAt(w, slot, x, y);
+export function hostileAt(w: World, slot: number, x: number, y: number, r = 8): Target | null {
+  const u = hostileUnitAt(w, slot, x, y, r);
   if (u) return u;
   const b = bldAtPx(w, x, y);
   if (b && !allied(w, b.team, slot)) return b;

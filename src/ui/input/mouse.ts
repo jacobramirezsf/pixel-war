@@ -21,6 +21,7 @@ export function mouseScheme(app: App): Scheme {
       if (usesTool(app)) { toolAt(app, p.x, p.y, ts, true); placeRelease(app); return; }
       if (app.stance !== 'none' && selectedUnits(app).length) { orderAt(app, p.x, p.y); return; }
       selectAt(app, p.x, p.y, shift);
+      app.ui.updateUI();
     },
     dragStart(x, y, button) {
       if (!app.running) return;

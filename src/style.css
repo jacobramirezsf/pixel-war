@@ -25,7 +25,8 @@ button:focus-visible{outline:2px solid #f2d34a;outline-offset:2px}
 #top .pop{color:#b9bccb}
 #topbtns{display:flex;gap:6px;flex:0 0 auto}
 #tl{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
-.mini{min-height:36px;padding:4px 10px;font-size:11px;border-width:1px}
+.mini{min-height:44px;padding:4px 10px;font-size:11px;border-width:1px}
+body.desktop .mini{min-height:36px}
 #bPause.on{background:#ff9a4a;border-color:#ff9a4a;color:#141520}
 /* stage */
 #main{flex:1;display:flex;min-height:0}

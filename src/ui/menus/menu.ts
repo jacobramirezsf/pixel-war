@@ -36,40 +36,58 @@ function wireDiff(app: App, rerender: () => void): void {
 export function showMenu(app: App): void {
   if (app.world?.mode === 'conquest' && app.running) saveRealm(app);
   app.running = false;
-  const m = app.curMap;
   ov().innerHTML = `<div>
     <h1>PIXEL <span>WAR</span></h1>
-    <p class="ver">v3</p>
+    <p class="ver">v1.0</p>
+    ${hasSave(app) ? '<button class="gold" id="mCont">CONTINUE REALM<small>' + contLine(app) + '</small></button><button data-mode="conquest">NEW REALM<small>Another world, or another save slot.</small></button>' : '<button class="gold" data-mode="conquest">NEW REALM<small>Build a persistent kingdom. Grow cities, fight wars, come back tomorrow.</small></button>'}
+    <button id="mQuick">QUICK BATTLE<small>One match against the AI: skirmish, multi war, domination, or unlimited gold.</small></button>
+    <button data-mode="sand">BATTLE SIM<small>Place armies and defenses for both sides, press PLAY, watch it play out.</small></button>
+    <button id="mEditor">MAP EDITOR<small>Paint a battlefield and play on it.</small></button>
+    <div class="row"><button class="sm" id="mHelp">HOW TO PLAY</button><button class="sm" id="mSettings">SETTINGS</button><button class="sm" id="mStats">STATS</button></div>
+  </div>`;
+  for (const b of ov().querySelectorAll<HTMLButtonElement>('button[data-mode]'))
+    on(b, 'click', () => {
+      const mode = b.dataset.mode as Mode;
+      if (mode === 'conquest') { showConquest(app); return; }
+      startGame(app, mode);
+    });
+  const mc = document.getElementById('mCont');
+  if (mc) on(mc, 'click', () => { if (!continueRealm(app)) { say(app, 'That save could not be read. Pick another slot or clear it.', 3); showConquest(app); } });
+  on($('mQuick'), 'click', () => showQuick(app));
+  on($('mEditor'), 'click', () => { ov().classList.add('hide'); openEditor(app, 'menu'); });
+  on($('mSettings'), 'click', () => showSettings(app, () => showMenu(app)));
+  on($('mHelp'), 'click', () => showHelp(() => showMenu(app)));
+  on($('mStats'), 'click', () => showStats(app, () => showMenu(app)));
+  ov().classList.remove('hide');
+}
+
+/** One match against the AI: pick the map, the sides, the difficulty, and the mode. */
+export function showQuick(app: App): void {
+  const m = app.curMap;
+  ov().innerHTML = `<div>
+    <h2>QUICK BATTLE</h2>
     <button class="pick cur" id="mMap">MAP: ${m.name.toUpperCase()}<span>${m.cols}×${m.rows} · change</span></button>
     <div class="row"><button class="pick" id="mRace">YOU: ${RACES[app.race].name}<span>change</span></button><button class="pick" id="mFoe">FOE: ${raceName(app.foeRace)}<span>change</span></button></div>
     <p class="blurb">${RACES[app.race].blurb}</p>
     ${diffRowHtml(app)}
-    ${hasSave(app) ? '<button class="gold" id="mCont">CONTINUE REALM<small>' + contLine(app) + '</small></button><button data-mode="conquest">NEW REALM<small>Another world, or another save slot.</small></button>' : '<button class="gold" data-mode="conquest">NEW REALM<small>Your own corner of a living world. Build, hold, grow, come back.</small></button>'}
-    <button data-mode="skirmish">SKIRMISH<small>1v1. Destroy the enemy base. It sits behind a fort, so bring siege.</small></button>
+    <button class="gold" data-mode="skirmish">SKIRMISH<small>1v1. Destroy the enemy base. It sits behind a fort, so bring siege.</small></button>
     <button data-mode="multi">MULTI WAR<small>Up to 5 armies. Teams or free for all. Last alliance standing.</small></button>
     <button data-mode="dom">DOMINATION<small>Hold the mines to fill your meter. First to 150 points wins.</small></button>
     <button data-mode="rich">UNLIMITED GOLD<small>Bottomless treasury. Enemy income doubled, army cap 60.</small></button>
-    <button data-mode="sand">BATTLE SIM<small>Place armies and defenses for both sides, hit PLAY, watch it play out. Army presets and every cheat tool included.</small></button>
-    <div class="row"><button class="sm" id="mHelp">HOW TO PLAY</button><button class="sm" id="mSettings">SETTINGS</button><button class="sm" id="mStats">STATS</button></div>
-    <p class="blurb">Walls block both sides, so leave yourself a gate. Mines add 1.5 gold/s. Mortars outrange towers, drones fly over everything.</p>
+    <button id="qBack">BACK</button>
   </div>`;
   for (const b of ov().querySelectorAll<HTMLButtonElement>('button[data-mode]'))
     on(b, 'click', () => {
       const mode = b.dataset.mode as Mode;
       if (mode === 'dom' && !app.curMap.mines.length) { b.textContent = 'THIS MAP HAS NO MINES'; return; }
       if (mode === 'multi') { showSetup(app); return; }
-      if (mode === 'conquest') { showConquest(app); return; }
       startGame(app, mode);
     });
   on($('mMap'), 'click', () => showMaps(app));
-  const mc = document.getElementById('mCont');
-  if (mc) on(mc, 'click', () => { if (!continueRealm(app)) { say(app, 'That save could not be read. Pick another slot or clear it.', 3); showConquest(app); } });
-  on($('mSettings'), 'click', () => showSettings(app, () => showMenu(app)));
-  on($('mHelp'), 'click', () => showHelp(() => showMenu(app)));
-  on($('mStats'), 'click', () => showStats(app, () => showMenu(app)));
-  on($('mRace'), 'click', () => { app.race = nextRace(app.race, false)!; showMenu(app); });
-  on($('mFoe'), 'click', () => { app.foeRace = nextRace(app.foeRace, true); showMenu(app); });
-  wireDiff(app, () => showMenu(app));
+  on($('mRace'), 'click', () => { app.race = nextRace(app.race, false)!; showQuick(app); });
+  on($('mFoe'), 'click', () => { app.foeRace = nextRace(app.foeRace, true); showQuick(app); });
+  on($('qBack'), 'click', () => showMenu(app));
+  wireDiff(app, () => showQuick(app));
   ov().classList.remove('hide');
 }
 

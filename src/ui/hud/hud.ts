@@ -498,6 +498,8 @@ function renderSelCard(app: App): void {
   for (const u of sel) { comp.set(u.type, (comp.get(u.type) ?? 0) + 1); hp += u.hp; max += maxHp(u); }
   const parts = [...comp.entries()].sort((a, b) => b[1] - a[1]).map(([k, n]) => n + ' ' + TYPES[k].name);
   el.innerHTML = '<b>' + sel.length + '</b> ' + parts.join(', ') + ' · ' + Math.round((100 * hp) / max) + '% hp';
+  // Tapping the summary finds the army: the camera goes to it.
+  el.onclick = () => { let cx = 0, cy = 0; for (const u of sel) { cx += u.x; cy += u.y; } centerOn(app.cam, cx / sel.length, cy / sel.length); };
 }
 
 function renderPowers(app: App): void {

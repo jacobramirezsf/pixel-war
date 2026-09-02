@@ -25,6 +25,7 @@ export function boxSelect(app: App, d: Rect, additive = false): void {
   for (const u of w.units) if (u.team === app.ctl && u.hp > 0 && u.x >= d.x && u.x <= d.x + d.w && u.y >= d.y && u.y <= d.y + d.h) app.selection.add(u.id);
   const n = app.selection.size;
   say(app, n ? n + ' selected' : 'No units there', 1.2);
+  app.ui.updateUI();
 }
 
 /** Select the own unit at a point. Returns true when there was one. */
@@ -51,6 +52,11 @@ function friendlyAt(app: App, x: number, y: number): import('../../sim/types.ts'
   return null;
 }
 
+/** Tap targets grow as the camera pulls back, so far-out taps still land on what you meant. */
+export function hitR(app: App): number {
+  return 6 + 10 / Math.max(1, app.cam.zoom);
+}
+
 /** Order the selection to a point. An enemy under the point is always the target; otherwise the armed mode decides. */
 export function orderAt(app: App, x: number, y: number): boolean {
   const w = app.world;
@@ -61,7 +67,7 @@ export function orderAt(app: App, x: number, y: number): boolean {
   const mode = app.stance;
   app.stance = 'none';
   app.ui.updateUI();
-  const en = hostileAt(w, app.ctl, x, y);
+  const en = hostileAt(w, app.ctl, x, y, hitR(app));
   if (en) { app.warAsk = null; return issueAction(app, { type: 'attack', payload: { ids, target: refOf(en) } }); }
   // Someone at peace or allied: the first tap asks, the second declares war and attacks.
   const fo = mode !== 'guard' ? foreignAt(w, app.ctl, x, y) : null;
@@ -118,7 +124,7 @@ export function tapAt(app: App, x: number, y: number): void {
   if (!w) return;
   // An armed mode with a selection takes the tap, whatever is under it.
   if (app.stance !== 'none' && selectedUnits(app).length) { orderAt(app, x, y); return; }
-  const own = unitAt(w, app.ctl, x, y);
+  const own = unitAt(w, app.ctl, x, y, hitR(app));
   if (own && TYPES[own.type].capacity && !app.selection.has(own.id)) {
     // Ground units selected, tapping your own transport: they get in.
     const riders = selectedUnits(app).filter((u) => !TYPES[u.type].capacity && !TYPES[u.type].naval && !TYPES[u.type].fly && TYPES[u.type].role !== 'civ');
@@ -126,9 +132,10 @@ export function tapAt(app: App, x: number, y: number): void {
   }
   if (own) {
     const now = performance.now();
-    if (app.lastTap.id === own.id && now - app.lastTap.t < 350) { selectTypeOnScreen(app, own.type); app.lastTap = { id: -1, t: 0 }; return; }
+    if (app.lastTap.id === own.id && now - app.lastTap.t < 350) { selectTypeOnScreen(app, own.type); app.lastTap = { id: -1, t: 0 }; app.ui.updateUI(); return; }
     app.lastTap = { id: own.id, t: now };
     selectAt(app, x, y);
+    app.ui.updateUI();
     return;
   }
   if (gateAt(app, x, y)) return;
