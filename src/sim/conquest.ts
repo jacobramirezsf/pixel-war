@@ -206,12 +206,29 @@ export function canGrow(w: World, b: Settlement): string | null {
   return missing.length ? 'needs ' + missing.join(', ') : null;
 }
 
-export function startUpgrade(b: Settlement, to: Tier): void {
+export function startUpgrade(b: Settlement, to: Tier, w?: World): void {
   const frac = b.hp / b.max;
   b.tier = to;
   b.max = TIERS[to].hp;
   b.hp = Math.max(1, Math.round(b.max * frac * 0.6));
   b.buildT = TIERS[to].buildT;
+  if (w && (to === 'town' || to === 'city')) pave(w, b, to === 'city' ? 5 : 3);
+}
+
+/** A town paves its square: a plaza around the hall and four short streets. Villagers walk them. */
+function pave(w: World, b: Settlement, spur: number): void {
+  const m = w.map, tx0 = (b.x / TILE) | 0, ty0 = (b.y / TILE) | 0;
+  const lay = (tx: number, ty: number): void => {
+    if (tx < 0 || ty < 0 || tx >= m.cols || ty >= m.rows) return;
+    const i = ty * m.cols + tx;
+    if (m.tiles[i] !== 0 && m.tiles[i] !== 2) return;
+    if (w.bmap.has(i)) return;
+    m.tiles[i] = 1;
+  };
+  for (let dy = -1; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) lay(tx0 + dx, ty0 + dy);
+  for (let d = 1; d <= spur; d++) { lay(tx0 - 2 - d, ty0 + 1); lay(tx0 + 2 + d, ty0 + 1); lay(tx0, ty0 + 2 + d); lay(tx0, ty0 - 1 - d); }
+  w.mapDirty = true;
+  w.flowDirty = true;
 }
 
 export function popCap(w: World, slot: number): number {

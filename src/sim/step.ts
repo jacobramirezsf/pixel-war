@@ -484,7 +484,11 @@ export function step(w: World): void {
   }
   healAtHome(w, dt);
   const dead = us.filter((u) => u.hp <= 0);
-  for (const u of dead) w.fx.push({ k: 'die', x: u.x, y: u.y, t: 0.35 });
+  for (const u of dead) {
+    w.fx.push({ k: 'die', x: u.x, y: u.y, t: 0.35 });
+    // A giant, a bomber, a colossus going down is an event, not a blink.
+    if (TYPES[u.type].cost >= 90) w.fx.push({ k: 'boom', x: u.x, y: u.y, r: 14, t: 0.3, d: 0.3 });
+  }
   if (dead.length) onDeaths(w, dead);
   w.units = w.units.filter((u) => u.hp > 0);
   for (const f of w.fx) f.t -= dt;

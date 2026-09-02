@@ -188,7 +188,7 @@ export function runCheat(w: World, c: Payload, say: (t: string, d: number) => vo
         if (town.hp <= 0 || town.buildT > 0) continue;
         const to = town.tier === 'outpost' ? 'village' : town.tier === 'village' ? 'town' : town.tier === 'town' || town.tier === 'fortress' ? 'city' : null;
         if (!to) continue;
-        startUpgrade(town, to);
+        startUpgrade(town, to, w);
         town.buildT = 0;
         town.hp = town.max;
         k++;
@@ -200,7 +200,7 @@ export function runCheat(w: World, c: Payload, say: (t: string, d: number) => vo
     case 'maxCity': {
       const town = s.settlements.find((b) => b.id === c.id && b.hp > 0) ?? s.settlements.find((b) => b.hp > 0);
       if (!town || town.tier === 'camp' || town.tier === 'ruin') return false;
-      if (town.tier !== 'city') { startUpgrade(town, 'city'); town.buildT = 0; town.hp = town.max; }
+      if (town.tier !== 'city') { startUpgrade(town, 'city', w); town.buildT = 0; town.hp = town.max; }
       s.age = 2;
       const wants: BldKey[] = ['house', 'house', 'house', 'house', 'farm', 'farm', 'farm', 'market', 'smith', 'barracks', 'range', 'stable'];
       for (const k of wants) {

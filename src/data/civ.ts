@@ -26,7 +26,7 @@ export const CIV = {
   wanderMin: 5,
   wanderMax: 11,
   /** How far villagers drift from a workplace, their home, or the center. */
-  wanderRadius: 12,
+  wanderRadius: 17,
   /** Ticks between civilian passes. */
   every: 30,
   /** Buildings closer than this to a settlement belong to it when there are no regions. */

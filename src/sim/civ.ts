@@ -161,7 +161,7 @@ export function civTick(w: World): void {
         const roll = rand(w.rng);
         const house = houses.length ? houses[u.id % houses.length] : null;
         const market = markets.length ? markets[u.id % markets.length] : null;
-        const at = j && roll < 0.55 ? { x: j.x, y: j.y } : market && roll < 0.7 ? { x: market.x, y: market.y + 4 } : house && roll < 0.85 ? { x: house.x, y: house.y + 6 } : { x: s.x, y: s.y + 8 };
+        const at = j && roll < 0.5 ? { x: j.x, y: j.y } : market && roll < 0.65 ? { x: market.x, y: market.y + 4 } : house && roll < 0.88 ? { x: house.x, y: house.y + 6 } : { x: s.x, y: s.y + 8 };
         const a = rand(w.rng) * Math.PI * 2, r = 3 + rand(w.rng) * CIV.wanderRadius;
         let dx = at.x + Math.cos(a) * r, dy = at.y + Math.sin(a) * r;
         // Some walks keep to the streets: a nearby road tile pulls the destination onto it.

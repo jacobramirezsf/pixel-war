@@ -20,5 +20,16 @@ export function buildBg(m: MapDef, into?: HTMLCanvasElement): HTMLCanvasElement 
   const bc = bg.getContext('2d')!;
   for (let ty = 0; ty < m.rows; ty++)
     for (let tx = 0; tx < m.cols; tx++) drawTile(bc, m.tiles[ty * m.cols + tx], tx * TILE, ty * TILE, 1, hash(tx, ty));
+  // Shoreline: water against land gets a light edge, so coasts read at every zoom.
+  bc.fillStyle = '#5b95cf';
+  for (let ty = 0; ty < m.rows; ty++)
+    for (let tx = 0; tx < m.cols; tx++) {
+      if (m.tiles[ty * m.cols + tx] !== 3) continue;
+      const land = (dx: number, dy: number): boolean => { const x = tx + dx, y = ty + dy; return x >= 0 && y >= 0 && x < m.cols && y < m.rows && m.tiles[y * m.cols + x] !== 3; };
+      if (land(0, -1)) bc.fillRect(tx * TILE, ty * TILE, TILE, 1);
+      if (land(0, 1)) bc.fillRect(tx * TILE, ty * TILE + TILE - 1, TILE, 1);
+      if (land(-1, 0)) bc.fillRect(tx * TILE, ty * TILE, 1, TILE);
+      if (land(1, 0)) bc.fillRect(tx * TILE + TILE - 1, ty * TILE, 1, TILE);
+    }
   return bg;
 }

@@ -291,6 +291,21 @@ export function drawWorld(ctx: CanvasRenderingContext2D, bg: HTMLCanvasElement, 
   for (const s of w.slots) for (const b of s.settlements) if (vis(b.x, b.y, 24) && (own(b.team) || known(b.x, b.y))) drawBase(ctx, b, H, w.capitals[b.team] === b.region && b.region >= 0);
   for (const b of w.blds) if (b.kind !== 'tower' && vis(b.x, b.y) && (own(b.team) || known(b.x, b.y))) drawBld(ctx, b);
   for (const b of w.blds) if (b.kind === 'tower' && vis(b.x, b.y) && (own(b.team) || known(b.x, b.y))) drawBld(ctx, b);
+  // Hurt buildings smoke; badly hurt ones burn. Reads at any zoom, costs two fillRects.
+  for (const b of w.blds) {
+    if (b.hp <= 0 || b.buildT > 0 || b.hp >= b.max * 0.55 || !vis(b.x, b.y) || !(own(b.team) || known(b.x, b.y))) continue;
+    const ph = ((w.tick + b.id * 53) % 90) / 90;
+    ctx.fillStyle = 'rgba(60,60,66,' + (0.7 * (1 - ph)).toFixed(2) + ')';
+    ctx.fillRect(Math.round(b.x + Math.sin(b.id + ph * 5) * 2), Math.round(b.y - 4 - ph * 10), 2, 2);
+    if (b.hp < b.max * 0.25) { ctx.fillStyle = (w.tick + b.id * 7) % 16 < 8 ? '#ff8c2a' : '#ffd27a'; ctx.fillRect(Math.round(b.x - 2), Math.round(b.y + 1), 2, 2); }
+  }
+  for (const sl of w.slots) for (const b of sl.settlements) {
+    if (b.hp <= 0 || b.buildT > 0 || b.hp >= b.max * 0.55 || !vis(b.x, b.y) || !(own(b.team) || known(b.x, b.y))) continue;
+    const ph = ((w.tick + b.id * 53) % 90) / 90;
+    ctx.fillStyle = 'rgba(60,60,66,' + (0.7 * (1 - ph)).toFixed(2) + ')';
+    ctx.fillRect(Math.round(b.x + 3 + Math.sin(b.id + ph * 5) * 2), Math.round(b.y - 8 - ph * 10), 2, 2);
+    if (b.hp < b.max * 0.25) { ctx.fillStyle = (w.tick + b.id * 7) % 16 < 8 ? '#ff8c2a' : '#ffd27a'; ctx.fillRect(Math.round(b.x - 4), Math.round(b.y), 2, 3); }
+  }
   // Chimney smoke: a settled town has fires burning. One drifting fleck per lived-in building.
   for (const b of w.blds) {
     if (b.buildT > 0 || b.hp <= 0 || !vis(b.x, b.y) || !(own(b.team) || known(b.x, b.y))) continue;

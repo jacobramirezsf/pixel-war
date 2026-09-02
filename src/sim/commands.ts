@@ -211,7 +211,7 @@ export function applyCommand(w: World, c: Command, quiet = false): boolean {
       if (!growth && s.gold < T.gold) { say('Need ' + T.gold + ' gold', 1.2); return false; }
       if (!growth && s.mat < mat) { say('Need ' + mat + ' materials', 1.2); return false; }
       if (!growth) { s.gold -= T.gold; s.mat -= mat; }
-      startUpgrade(b, to);
+      startUpgrade(b, to, w);
       if (growth) { b.buildT = 0; b.hp = b.max; }
       chronicle(w, (slot === 0 ? '' : TNAME[slot] + ': ') + w.regions[b.region].name + ' began growing into a ' + to);
       say('Upgrading to a ' + to + '. It is weak until done.', 2.5);
