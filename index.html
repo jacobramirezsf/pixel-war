@@ -23,9 +23,10 @@
     <div id="stage">
       <canvas id="c"></canvas>
       <canvas id="mini"></canvas>
-      <div id="viewctl"><button id="bZoomIn" class="vc" title="zoom in">+</button><button id="bZoomOut" class="vc" title="zoom out">−</button><button id="bFit" class="vc" title="fit the map">FIT</button><button id="bHome" class="vc" title="jump to base (F)">HOME</button><button id="bLayers" class="vc" title="map layers">LAYERS</button></div>
-      <div id="layers" class="hide"></div>
+      <div id="viewctl"><button id="bZoomIn" class="vc" title="zoom in">+</button><button id="bZoomOut" class="vc" title="zoom out">−</button><button id="bFit" class="vc" title="fit the map">FIT</button><button id="bHome" class="vc" title="jump to base (F)">HOME</button></div>
       <div id="msg"></div>
+      <button id="modechip" class="hide"></button>
+      <button id="watchExit" class="hide">TAP TO SHOW THE CONTROLS</button>
       <div id="pauseov" class="hide"><div>PAUSED<small>tap or press Space to resume</small></div></div>
       <div id="cheats" class="hide"></div>
       <div id="eventcard" class="hide"><h3>EVENT</h3><p id="evText"></p><div class="row"><button id="evYes" class="gold">YES</button><button id="evNo">NO</button></div></div>
@@ -36,50 +37,51 @@
   <div id="bottom">
     <div id="panel">
       <div id="info"><span id="selcard"></span><span id="queue"></span></div>
-      <div id="cmdrow">
-        <button id="bDesel" class="desel" title="deselect (Esc)">✕</button>
-        <button id="bAct" class="act hide">ACT</button>
-        <button id="bSelect" class="cmd">SELECT</button>
-        <button id="bAll" class="cmd">ALL</button>
-        <button id="bCharge" class="cmd">CHARGE</button>
-        <button id="bMove" class="st">→ MOVE</button>
-        <button id="bAttack" class="st">⚔ ATTACK</button>
-        <button id="bGuard" class="st">◆ GUARD</button>
-        <button id="bRetreat" class="cmd">↩ RETREAT</button>
-        <button id="bHold" class="cmd">■ HOLD</button>
-        <button id="bCancel" class="cancel">CANCEL</button>
-      </div>
-      <div id="tabs">
-        <button id="tUnits" class="tab">UNITS</button>
-        <button id="tBuild" class="tab">BUILD</button>
-        <button id="tPowers" class="tab">POWERS</button>
-        <button id="tMore" class="tab">MORE</button>
-        <button id="tTools" class="tab">TERRAIN</button>
-        <button id="tEdit" class="tab">MAP</button>
+      <div id="ctx" class="hide">
+        <button id="bDesel" class="cx" title="deselect (Esc)"></button>
+        <button id="bAct" class="cx act hide">ACT</button>
+        <button id="bMove" class="cx st"></button>
+        <button id="bAttack" class="cx st"></button>
+        <button id="bGuard" class="cx st"></button>
+        <button id="bHold" class="cx"></button>
+        <button id="bRetreat" class="cx"></button>
       </div>
       <div id="tabpanel">
-        <div id="strip" class="strip"></div>
-        <div id="bstrip" class="strip hide"></div>
+        <div id="armychips" class="chiprow hide">
+          <button id="bSelect" class="chip">DRAG: PAN</button>
+          <button id="bAll" class="chip">ALL</button>
+          <button id="bCharge" class="chip">CHARGE</button>
+          <button id="bG1" class="chip grp">G1</button>
+          <button id="bG2" class="chip grp">G2</button>
+          <button id="bG3" class="chip grp">G3</button>
+          <button id="bRally" class="chip">RALLY</button>
+        </div>
+        <div id="bchips" class="chiprow hide">
+          <button class="chip bc" data-bcat="town">TOWN</button>
+          <button class="chip bc" data-bcat="military">MILITARY</button>
+          <button class="chip bc" data-bcat="defense">DEFENSE</button>
+          <button class="chip bc" data-bcat="ground">GROUND</button>
+        </div>
+        <div id="wchips" class="chiprow hide">
+          <button id="bTerr" class="chip">KINGDOM LIST</button>
+          <button id="bWatch" class="chip">WATCH</button>
+          <span class="wsep">SHOW:</span>
+          <span id="layerchips"></span>
+        </div>
+        <div id="strip" class="strip hide"></div>
+        <div id="bstrip" class="strip hide">
+          <button id="bSettle" class="tool"><span>VILLAGE</span><small>150</small></button>
+          <button id="bOutpost" class="tool"><span>OUTPOST</span><small>50</small></button>
+          <button id="bGrow" class="tool"><span>GROW</span></button>
+          <button id="bFort" class="tool"><span>UPGRADE</span></button>
+          <button id="bAbsorb" class="tool"><span>ABSORB</span><small>200</small></button>
+        </div>
         <div id="pstrip" class="strip hide"></div>
         <div id="tstrip" class="strip hide"></div>
         <div id="more" class="grid hide">
-          <button id="bRally">RALLY</button>
-          <button id="bG1" class="grp">G1</button>
-          <button id="bG2" class="grp">G2</button>
-          <button id="bG3" class="grp">G3</button>
-          <button id="bSell">REMOVE</button>
-          <button id="bLand">LAND</button>
-          <button id="bTerr">LIST</button>
-          <button id="bSettle">VILLAGE</button>
-          <button id="bOutpost">OUTPOST</button>
-          <button id="bFort">UPGRADE</button>
-          <button id="bAbsorb">ABSORB</button>
-          <button id="bGrow">GROW</button>
-          <button id="bTech1">BLADES</button>
-          <button id="bTech2">BOWS</button>
-          <button id="bTech3">ARMOR</button>
           <button id="bSave">SAVE</button>
           <button id="bCheats" class="hide">CHEATS</button>
+          <button id="bSell">REMOVE</button>
           <button id="bTeam">BLUE</button>
           <button id="bEdit">EDIT</button>
           <button id="bErase">ERASE</button>
@@ -98,6 +100,16 @@
           <button id="bCode">CODE</button>
           <button id="bDone">DONE</button>
         </div>
+      </div>
+      <div id="rail">
+        <button id="tUnits" class="rb"><span>ARMY</span></button>
+        <button id="tBuild" class="rb"><span>BUILD</span></button>
+        <button id="tPowers" class="rb"><span>POWERS</span></button>
+        <button id="tKingdom" class="rb"><span>KINGDOM</span></button>
+        <button id="tWorld" class="rb"><span>WORLD</span></button>
+        <button id="tMore" class="rb"><span>MORE</span></button>
+        <button id="tTools" class="rb"><span>TERRAIN</span></button>
+        <button id="tEdit" class="rb"><span>MAP</span></button>
       </div>
     </div>
   </div>

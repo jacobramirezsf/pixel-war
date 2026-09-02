@@ -186,7 +186,11 @@ export function placeRelease(app: App): void {
   const { x, y } = app.placing;
   app.placing = null;
   const w = app.world!;
-  if (issueAction(app, { type: 'build', payload: { x, y, bld: app.bbrush } })) app.lastBuilt = [w.blds[w.blds.length - 1].id];
+  if (issueAction(app, { type: 'build', payload: { x, y, bld: app.bbrush } })) {
+    app.lastBuilt = [w.blds[w.blds.length - 1].id];
+    // A big building places once and puts the tool away. Walls, roads, and cheap pieces stay armed.
+    if (BLD[app.bbrush].cost >= 100 || BLD[app.bbrush].w * BLD[app.bbrush].h >= 4) { app.tool = 'cmd'; app.ui.updateUI(); }
+  }
 }
 
 /** The footprint preview for the HUD: where the building would go and whether it fits. */
@@ -256,7 +260,7 @@ export function toolAt(app: App, x: number, y: number, ts: ToolState, first: boo
   if (app.tool === 'power') {
     if (first && app.power) {
       const ids = POWERS[app.power].selection ? selectedUnits(app).map((u) => u.id) : undefined;
-      if (issueAction(app, { type: 'power', payload: { power: app.power, x, y, ids } })) { app.tool = 'cmd'; app.power = null; app.tab = 'units'; app.ui.updateUI(); }
+      if (issueAction(app, { type: 'power', payload: { power: app.power, x, y, ids } })) { app.tool = 'cmd'; app.power = null; app.tab = 'none'; app.ui.updateUI(); }
     }
     return true;
   }

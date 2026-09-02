@@ -69,10 +69,13 @@ canvas{image-rendering:pixelated;image-rendering:crisp-edges;display:block}
 #queue button{min-height:0;padding:1px 5px;font-size:10px;letter-spacing:0;border-width:1px;position:relative;overflow:hidden}
 #queue button i{position:absolute;left:0;bottom:0;height:2px;background:#f2d34a}
 #queue button.head{border-color:#f2d34a}
-#cmdrow{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
-#cmdrow .st{border-color:#3a3d4a;color:#b9bccb}
-#cmdrow .st.on{background:#7dff7d;border-color:#7dff7d;color:#141520}
-#bAttack.on{background:#ff9a9a;border-color:#ff9a9a}
+/* contextual action row: icon buttons for the selection */
+#ctx{display:flex;gap:6px}
+#ctx .cx{flex:1;min-width:0;min-height:50px;padding:2px 2px 3px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;font-size:9px;letter-spacing:.5px;color:#b9bccb}
+#ctx .cx canvas{width:24px;height:24px}
+#ctx .cx.st.on{background:#7dff7d;border-color:#7dff7d;color:#141520}
+#ctx #bAttack.on{background:#ff9a9a;border-color:#ff9a9a}
+#ctx .act{flex:2.2;border-color:#f2d34a;color:#f2d34a;font-size:11px}#ctx .act.danger{border-color:#ff6b6b;color:#ff9a9a}
 body.armed #c{outline:3px solid rgba(125,255,125,.55);outline-offset:-3px}
 body.armed #bAttack.on ~ #c{outline-color:rgba(255,154,154,.6)}
 #selcard .rename{cursor:pointer;border-bottom:1px dotted #5a5d6a}
@@ -80,21 +83,37 @@ body.armed #bAttack.on ~ #c{outline-color:rgba(255,154,154,.6)}
 #selcard .town{white-space:normal;line-height:1.35;display:block}
 #selcard .civ{color:#b9bccb}
 #selcard .st-growing{color:#7dff7d}#selcard .st-stable{color:#b9bccb}#selcard .st-attacked{color:#ff6b6b}#selcard .st-recovering{color:#ffb02a}
-#cmdrow button{min-width:0;padding:4px 2px;font-size:11px}
 button.undo{border-color:#ffb02a;color:#ffb02a}
-#cmdrow .desel{border-color:#8a8d9e;color:#e6e6ee;font-size:16px}
-#cmdrow .act{border-color:#f2d34a;color:#f2d34a}#cmdrow .act.danger{border-color:#ff6b6b;color:#ff9a9a}
-#layers{position:absolute;right:6px;bottom:290px;background:rgba(10,11,16,.96);border:1px solid #3a3d4a;padding:8px;z-index:3;display:flex;flex-direction:column;gap:4px}
-#layers .chip{min-height:34px;text-align:left}
-#tabs{display:flex;gap:6px}
-#tabs .tab{flex:1;min-height:36px;font-size:11px;border-color:#2a2d3a;color:#8a8d9e;background:#101219}
-#tabs .tab.on{color:#f2d34a;border-color:#f2d34a;background:#171923}
+/* the primary rail: icons with small labels, always at the bottom */
+#rail{display:flex;gap:6px}
+#rail .rb{flex:1;min-width:0;min-height:50px;padding:3px 1px 4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;font-size:8px;letter-spacing:.5px;border-color:#2a2d3a;color:#8a8d9e;background:#101219}
+#rail .rb canvas{width:26px;height:26px;opacity:.8}
+#rail .rb.on{color:#f2d34a;border-color:#f2d34a;background:#171923}
+#rail .rb.on canvas{opacity:1}
+/* chip rows above the rail */
+.chiprow{display:flex;gap:5px;overflow-x:auto;scrollbar-width:none;align-items:center;padding:1px 0}
+.chiprow::-webkit-scrollbar{display:none}
+.chiprow .chip{flex:0 0 auto;min-height:36px}
+.chiprow .chip.on{background:#f2d34a;border-color:#f2d34a;color:#111}
+.chiprow .chip.grp.has{border-color:#7dff7d;color:#d9ffd9}
+.wsep{font-size:9px;letter-spacing:2px;color:#8a8d9e;flex:0 0 auto;padding:0 2px}
+#layerchips{display:contents}
+/* the mode chip: what a tap on the world will do right now. Tapping it cancels. */
+#modechip{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);z-index:4;min-height:40px;padding:6px 14px;background:rgba(10,11,16,.95);border:2px solid #7dff7d;color:#d9ffd9;font-size:12px;letter-spacing:1px;white-space:nowrap;max-width:calc(100% - 130px);overflow:hidden;text-overflow:ellipsis}
+#modechip.danger{border-color:#ff9a9a;color:#ffc3c3}
+#modechip small{color:#8a8d9e;letter-spacing:0;font-weight:400;margin-left:8px}
+#modechip::after{content:'✕';margin-left:10px;color:#ff9a9a}
+/* watch mode: the world alone */
+body.watch #bottom,body.watch #topbtns,body.watch #viewctl,body.watch #mini,body.watch #cheatChip{display:none!important}
+#watchExit{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);z-index:4;min-height:34px;font-size:10px;letter-spacing:2px;background:rgba(10,11,16,.7);border-color:#2a2d3a;color:#8a8d9e}
 .strip{display:flex;gap:6px;overflow-x:auto;overflow-y:hidden;touch-action:pan-x;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding:2px 0}
 .strip::-webkit-scrollbar{display:none}
 .strip button{flex:0 0 auto;width:66px;min-height:64px;padding:4px 2px 5px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;font-size:9px;letter-spacing:.5px}
 .strip button canvas{width:30px;height:30px}
 .strip button small{font-weight:400;color:#f2d34a;font-size:10px;letter-spacing:0}
 .strip button.tab{border-color:#f2d34a;color:#f2d34a;width:56px}
+.strip button.tool{border-color:#8a8d9e;color:#c9cbd6}
+.strip button.tool.on{background:#ffb02a;border-color:#ffb02a;color:#141520}
 .strip button.pw{width:76px}
 .strip button.pw .cd{position:absolute;left:0;bottom:0;height:3px;background:#67e8f9}
 .strip button.pw{position:relative;overflow:hidden}
@@ -109,7 +128,7 @@ body.mobile .strip .ghead{flex:0 0 auto;writing-mode:vertical-rl;transform:rotat
 #bPlay,#bDone{border-color:#f2d34a;color:#f2d34a}
 #bRetreat{border-color:#ffb02a;color:#ffe0a8}
 #bRally.on,#bSettle.on,#bOutpost.on,#bFort.on,#bAbsorb.on,#bSell.on,#bErase.on{background:#ffb02a;border-color:#ffb02a;color:#141520}
-#bLand.on,#bTerr.on,#bSelect.on{background:#7dff7d;color:#141520;border-color:#7dff7d}
+#bTerr.on,#bSelect.on{background:#7dff7d;color:#141520;border-color:#7dff7d}
 .grp.has{border-color:#7dff7d}
 /* territory panel, hints */
 #terr{position:absolute;top:6px;left:6px;bottom:60px;width:min(320px,calc(100% - 12px));overflow-y:auto;background:rgba(10,11,16,.94);border:1px solid #3a3d4a;padding:8px;font-size:11px;color:#b9bccb;z-index:3;touch-action:pan-y}
@@ -133,7 +152,7 @@ body.mobile .strip .ghead{flex:0 0 auto;writing-mode:vertical-rl;transform:rotat
 body.desktop #main{flex-direction:row}
 body.desktop #side{display:flex;flex-direction:column;width:300px;flex:0 0 300px;border-right:1px solid #23252f;overflow-y:auto}
 body.desktop #panel{padding:8px}
-body.desktop #cmdrow{grid-template-columns:repeat(3,1fr)}
+body.desktop #ctx .cx{min-height:56px}
 body.desktop .strip{flex-wrap:wrap;overflow:visible}
 body.desktop .strip button{width:calc(25% - 5px);min-height:60px}
 body.desktop .strip button.pw{width:calc(50% - 3px)}
@@ -141,7 +160,7 @@ body.desktop #bottom{display:none}
 body.desktop #top{padding:8px 14px 6px}
 body.desktop #hints{left:auto;right:6px;top:176px}
 /* narrow phones */
-@media (max-width:430px){#top .race{display:none}#top{gap:6px;padding:6px 8px 4px;font-size:11px}#top .wave{display:none}.mini{padding:4px 7px;font-size:10px}#cmdrow button{font-size:10px;letter-spacing:.5px}}
+@media (max-width:430px){#top .race{display:none}#top{gap:6px;padding:6px 8px 4px;font-size:11px}#top .wave{display:none}.mini{padding:4px 7px;font-size:10px}#rail .rb{font-size:7px}}
 /* overlay menus */
 #ov{position:fixed;inset:0;background:rgba(8,9,14,.94);display:flex;align-items:flex-start;justify-content:center;text-align:center;padding:24px;overflow-y:auto;touch-action:pan-y;z-index:10}
 #ov>div{max-width:380px;width:100%;margin:auto}

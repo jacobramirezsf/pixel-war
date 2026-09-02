@@ -155,6 +155,15 @@ src/render/    scene (fog, damage, silhouettes), atlas, terrain, minimap, camera
                big maps), fx
 src/ui/        app, conquest (slots, autosave), territory (KINGDOM panel), cheats (panel),
                hud/, input/, menus/, settings, feedback (sounds), stats
+               HUD (Sep 2026 rebuild): a persistent icon rail (ARMY BUILD POWERS KINGDOM
+               WORLD MORE; TERRAIN MAP in the editor) opens one shelf at a time above it;
+               rail icons live in src/render/icons.ts. Selection shows a contextual icon
+               row (X MOVE ATTACK GUARD HOLD RETREAT + the gold context action). An armed
+               tool shows one floating mode chip; tapping it cancels. BUILD has TOWN,
+               MILITARY, DEFENSE, GROUND subcategory chips (town tools VILLAGE OUTPOST
+               GROW UPGRADE ABSORB live under TOWN); big buildings place once, walls and
+               roads stay armed. WORLD holds the layer chips and WATCH (hides all UI).
+               KINGDOM toggles the territory panel. Default state is world + rail only.
 tools/         sim-cli, bench, value, realm-sim, browser-shot, make-icons
 test/sim/      93 tests incl. civ, modes, realm, realmgen, diplomacy, cheats, tiers, stances
 ```

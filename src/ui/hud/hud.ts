@@ -21,6 +21,7 @@ import { ctlRace, fit, issueAction, say, saveLayers, selectedUnits, type App, ty
 import { refOf } from '../../sim/commands.ts';
 import { $, on, show } from '../dom.ts';
 import { focusBase } from '../input/hotkeys.ts';
+import { iconCanvas, type UiIcon } from '../../render/icons.ts';
 import { renderTerritory, updateTerritoryVisibility } from '../territory.ts';
 import { renderCheats, updateCheatsVisibility } from '../cheats.ts';
 
@@ -64,12 +65,7 @@ export function buildStrips(app: App): void {
   const strip = $('strip'), bstrip = $('bstrip'), pstrip = $('pstrip'), tstrip = $('tstrip');
   for (const k of ALL_UNITS) { unitBtns[k] = mkStripBtn(strip, TYPES[k].name, TYPES[k].cost, () => unitTap(app, k)); unitBtns[k].title = TYPES[k].name; }
   const groups: [string, string][] = [['ground', 'GROUND'], ['defense', 'DEFENSE'], ['economy', 'TOWN'], ['military', 'MILITARY']];
-  for (const [g, label] of groups) {
-    const head = document.createElement('div');
-    head.className = 'ghead';
-    head.textContent = label;
-    head.id = 'gh-' + g;
-    bstrip.appendChild(head);
+  for (const [g] of groups) {
     if (g === 'ground') {
       for (const gk of ['road', 'clear'] as const) {
         const G = GROUND[gk];
@@ -117,8 +113,37 @@ export function buildStrips(app: App): void {
     }
     toolBtns.set(t.k, b);
   }
-  const tabs: [string, Tab][] = [['tUnits', 'units'], ['tBuild', 'build'], ['tPowers', 'powers'], ['tMore', 'more'], ['tTools', 'tools'], ['tEdit', 'edit']];
-  for (const [id, tab] of tabs) on($(id), 'click', () => { app.tab = tab; if (tab === 'build') app.tool = 'build'; else if (app.tool === 'build' || app.tool === 'sell') app.tool = app.world?.phase === 'edit' ? 'place' : 'cmd'; updateUI(app); });
+  // The rail: icon buttons. Tapping the open category closes it, so the world gets the screen back.
+  const rail: [string, Tab, UiIcon][] = [['tUnits', 'units', 'army'], ['tBuild', 'build', 'build'], ['tPowers', 'powers', 'powers'], ['tWorld', 'world', 'world'], ['tMore', 'more', 'more'], ['tTools', 'tools', 'terrain'], ['tEdit', 'edit', 'map']];
+  for (const [id, tab, icon] of rail) {
+    const b = $(id);
+    b.insertBefore(iconCanvas(icon), b.firstChild);
+    on(b, 'click', () => {
+      const closing = app.tab === tab;
+      app.tab = closing ? 'none' : tab;
+      // Leaving or entering a category drops any armed brush. Tapping a building arms it.
+      if (app.tool === 'build' || app.tool === 'sell' || app.tool === 'terrain') app.tool = app.world?.phase === 'edit' ? 'place' : 'cmd';
+      updateUI(app);
+    });
+  }
+  const kb = $('tKingdom');
+  kb.insertBefore(iconCanvas('kingdom'), kb.firstChild);
+  on(kb, 'click', () => { app.terrOpen = !app.terrOpen; updateUI(app); });
+  // Contextual buttons get icons too.
+  const ctx: [string, UiIcon, string][] = [['bDesel', 'desel', ''], ['bMove', 'move', 'MOVE'], ['bAttack', 'attack', 'ATTACK'], ['bGuard', 'guard', 'GUARD'], ['bHold', 'hold', 'HOLD'], ['bRetreat', 'retreat', 'RETREAT']];
+  for (const [id, icon, label] of ctx) {
+    const b = $(id);
+    b.insertBefore(iconCanvas(icon), b.firstChild);
+    if (label) { const sp = document.createElement('span'); sp.textContent = label; b.appendChild(sp); }
+  }
+  // Build subcategories.
+  for (const b of document.querySelectorAll<HTMLButtonElement>('#bchips .bc')) on(b, 'click', () => { app.bcat = b.dataset.bcat as App['bcat']; updateUI(app); });
+}
+
+/** Which build subcategory a strip button belongs to. */
+function bcatOf(k: string): App['bcat'] {
+  const g = BLD[k as keyof typeof BLD].group;
+  return g === 'economy' ? 'town' : g === 'military' ? 'military' : g === 'defense' ? 'defense' : 'ground';
 }
 
 function drawPowerIcon(c: CanvasRenderingContext2D, k: PowerKey): void {
@@ -189,43 +214,63 @@ export function updateUI(app: App): void {
   const w = app.world, B = (id: string): HTMLElement => $(id);
   const sand = w?.mode === 'sand', map = !!app.editor, edit = w?.phase === 'edit', conq = w?.mode === 'conquest', live = !!w && !map;
   const toolOn = app.tool !== 'cmd' && !(edit && app.tool === 'place');
-  // Tabs: the editor shows terrain and map, everything else units, build, powers, more.
+  // The rail: the editor shows terrain and map, everything else army, build, powers, kingdom, world, more.
   if (map && app.tab !== 'tools' && app.tab !== 'edit') app.tab = 'tools';
-  if (!map && (app.tab === 'tools' || app.tab === 'edit')) app.tab = 'units';
+  if (!map && (app.tab === 'tools' || app.tab === 'edit')) app.tab = 'none';
   show(B('tUnits'), !map); show(B('tBuild'), !map); show(B('tPowers'), app.settings.powersOn && (live && !edit)); show(B('tMore'), !map);
+  show(B('tKingdom'), conq && !map); show(B('tWorld'), live && !edit && !map);
   show(B('tTools'), map); show(B('tEdit'), map);
-  for (const [id, tab] of [['tUnits', 'units'], ['tBuild', 'build'], ['tPowers', 'powers'], ['tMore', 'more'], ['tTools', 'tools'], ['tEdit', 'edit']] as const) B(id).classList.toggle('on', app.tab === tab);
-  show(B('strip'), app.tab === 'units'); show(B('bstrip'), app.tab === 'build'); show(B('pstrip'), app.tab === 'powers'); show(B('more'), app.tab === 'more');
+  for (const [id, tab] of [['tUnits', 'units'], ['tBuild', 'build'], ['tPowers', 'powers'], ['tWorld', 'world'], ['tMore', 'more'], ['tTools', 'tools'], ['tEdit', 'edit']] as const) B(id).classList.toggle('on', app.tab === tab);
+  B('tKingdom').classList.toggle('on', app.terrOpen);
+  show(B('strip'), app.tab === 'units'); show(B('armychips'), app.tab === 'units' && live && !edit && !sand);
+  show(B('bstrip'), app.tab === 'build'); show(B('bchips'), app.tab === 'build' && !map);
+  show(B('pstrip'), app.tab === 'powers'); show(B('more'), app.tab === 'more');
+  show(B('wchips'), app.tab === 'world' && live);
   show(B('tstrip'), app.tab === 'tools'); show(B('estrip'), app.tab === 'edit');
+  if (app.tab === 'world' && live) renderWorldChips(app);
+  document.body.classList.toggle('watch', app.watch);
+  show(B('watchExit'), app.watch);
   // Command row: context sensitive. Units, a town, a building, another side's settlement, or nothing.
   const hasSel = selectedUnits(app).length > 0;
   if (w && app.bld >= 0 && !w.blds.some((b) => b.id === app.bld && b.team === app.ctl)) app.bld = -1;
   const hasCard = app.town >= 0 || app.bld >= 0 || !!app.foreign;
   const armed = app.stance !== 'none' && hasSel;
-  show(B('bDesel'), live && !edit && !toolOn && (hasSel || hasCard || !!app.warAsk));
-  show(B('bSelect'), live && !edit && !toolOn && !hasSel && !hasCard);
-  show(B('bAll'), live && !edit && !toolOn && !hasCard);
-  show(B('bCharge'), live && !edit && !toolOn && !hasSel && !hasCard);
-  for (const [id, st] of [['bMove', 'move'], ['bAttack', 'attack'], ['bGuard', 'guard']] as const) { show(B(id), live && !edit && !toolOn && hasSel); B(id).classList.toggle('on', app.stance === st); }
-  show(B('bHold'), live && !edit && !toolOn && hasSel);
-  show(B('bRetreat'), live && !edit && !toolOn && hasSel && !armed && !app.warAsk);
-  show(B('bCancel'), toolOn || armed || (edit && app.tool === 'erase'));
+  // The contextual row exists only while something is selected.
+  show(B('ctx'), live && !edit && !toolOn && (hasSel || hasCard || !!app.warAsk));
+  show(B('bDesel'), true);
+  for (const [id, st] of [['bMove', 'move'], ['bAttack', 'attack'], ['bGuard', 'guard']] as const) { show(B(id), hasSel); B(id).classList.toggle('on', app.stance === st); }
+  show(B('bHold'), hasSel);
+  show(B('bRetreat'), hasSel && !armed && !app.warAsk);
   document.body.classList.toggle('armed', armed);
+  // One chip says what a tap on the world does right now. Tapping the chip cancels.
   const pw = app.power;
-  B('bCancel').textContent = 'CANCEL ' + (armed ? app.stance.toUpperCase() : app.tool === 'power' && pw ? POWERS[pw].name : app.tool === 'build' ? BLD[app.bbrush].name : app.tool === 'sell' ? 'REMOVE' : app.tool === 'terrain' ? GROUND[app.tbrush].name : app.tool.toUpperCase());
+  const modeOn = toolOn || armed || (edit && app.tool === 'erase');
+  const mode = B('modechip');
+  show(mode, modeOn && !app.watch);
+  if (modeOn) {
+    const name = armed ? (app.stance === 'attack' ? 'ATTACK MOVE' : app.stance.toUpperCase())
+      : app.tool === 'power' && pw ? POWERS[pw].name
+      : app.tool === 'build' ? 'BUILD ' + BLD[app.bbrush].name
+      : app.tool === 'sell' ? 'REMOVE'
+      : app.tool === 'terrain' ? GROUND[app.tbrush].name
+      : app.tool === 'cheat' ? 'CHEAT: ' + (app.cheatTool?.op.toUpperCase() ?? '')
+      : app.tool.toUpperCase();
+    mode.textContent = name;
+    const small = document.createElement('small');
+    small.textContent = armed || app.tool === 'power' || app.tool === 'settle' || app.tool === 'outpost' || app.tool === 'rally' || app.tool === 'cheat' ? 'tap the target' : 'drag on the map';
+    mode.appendChild(small);
+    mode.classList.toggle('danger', app.stance === 'attack' || app.tool === 'sell' || app.cheatTool?.op === 'destroy' || app.cheatTool?.op === 'clearNear');
+  }
   contextAction(app);
   const act = app.act;
   show(B('bAct'), live && !edit && !toolOn && !!act);
   if (act) { B('bAct').textContent = act.label; B('bAct').classList.toggle('danger', !!act.danger); }
-  show(B('bLayers'), conq && !map);
-  show(B('layers'), conq && app.layersOpen);
-  if (conq && app.layersOpen) renderLayers(app);
   B('bSelect').classList.toggle('on', app.selectMode);
   B('bSelect').textContent = app.selectMode ? 'DRAG: BOX' : 'DRAG: PAN';
   // More grid.
   const vis: Record<string, boolean> = {
-    bRally: live && !edit && !sand, bG1: live && !edit && !sand, bG2: live && !edit && !sand, bG3: live && !edit && !sand, bSell: live && !edit,
-    bLand: conq, bTerr: conq, bSettle: conq, bOutpost: conq, bFort: conq, bAbsorb: conq, bSave: conq,
+    bSell: live && !edit, bSave: conq,
+    bSettle: conq, bOutpost: conq, bFort: conq, bAbsorb: conq, bGrow: conq,
     bTeam: sand, bEdit: sand && !edit, bErase: sand && edit, bMirror: sand && edit, bClear: sand && edit, bMap: sand && edit, bPlay: sand && edit,
   };
   for (const k in vis) show(B(k), vis[k]);
@@ -239,7 +284,6 @@ export function updateUI(app: App): void {
   B('bOutpost').classList.toggle('on', app.tool === 'outpost');
   B('bFort').classList.toggle('on', app.tool === 'upgrade');
   B('bAbsorb').classList.toggle('on', app.tool === 'absorb');
-  B('bLand').classList.toggle('on', app.layers.territory);
   B('bTerr').classList.toggle('on', app.terrOpen);
   for (const n of [1, 2, 3]) B('bG' + n).classList.toggle('has', app.groups.has(n));
   // Top bar.
@@ -265,16 +309,17 @@ export function updateUI(app: App): void {
     if (sand) unitBtns[k].classList.remove('dis');
   }
   const town = !!w?.rules.town;
+  for (const b of document.querySelectorAll<HTMLButtonElement>('#bchips .bc')) b.classList.toggle('on', app.bcat === b.dataset.bcat);
   for (const k of BORDER) {
     const D = BLD[k];
-    show(bldBtns[k], !D.town || town);
+    show(bldBtns[k], (!D.town || town) && bcatOf(k) === app.bcat);
     bldBtns[k].classList.toggle('on', app.tool === 'build' && app.bbrush === k);
     if (sand) bldBtns[k].classList.remove('dis');
   }
-  show(B('gh-economy'), town); show(B('gh-military'), town); show(B('gh-defense'), town);
-  for (const gk of ['road', 'clear'] as const) groundBtns[gk]?.classList.toggle('on', app.tool === 'terrain' && app.tbrush === gk);
-  if (undoBtn) show(undoBtn, app.lastBuilt.length > 0 && !!w && w.blds.some((b) => app.lastBuilt.includes(b.id)));
-  show(B('bGrow'), conq); show(B('bTech1'), false); show(B('bTech2'), false); show(B('bTech3'), false);
+  for (const gk of ['road', 'clear'] as const) { const gb = groundBtns[gk]; if (gb) { show(gb, app.bcat === 'ground'); gb.classList.toggle('on', app.tool === 'terrain' && app.tbrush === gk); } }
+  if (undoBtn) show(undoBtn, app.bcat === 'ground' && app.lastBuilt.length > 0 && !!w && w.blds.some((b) => app.lastBuilt.includes(b.id)));
+  const townCat = app.bcat === 'town';
+  for (const id of ['bSettle', 'bOutpost', 'bGrow', 'bFort', 'bAbsorb']) show(B(id), conq && townCat);
   if (w && conq) {
     const towns = w.slots[app.ctl].settlements;
     const cap = towns.find((b) => b.id === app.town && b.hp > 0) ?? towns.find((b) => b.hp > 0 && b.buildT <= 0 && NEXT_TIER[b.tier]);
@@ -359,16 +404,15 @@ function contextAction(app: App): void {
   }
 }
 
-const LAYER_LABELS: [keyof Layers, string][] = [['territory', 'TERRITORY'], ['borders', 'BORDERS'], ['names', 'REGION NAMES'], ['tags', 'REGION STATE']];
+const LAYER_LABELS: [keyof Layers, string][] = [['territory', 'TERRITORY'], ['borders', 'BORDERS'], ['names', 'NAMES'], ['tags', 'STATE']];
 let layersKey = '';
-function renderLayers(app: App): void {
-  const key = LAYER_LABELS.map(([k]) => (app.layers[k] ? 1 : 0)).join('');
+function renderWorldChips(app: App): void {
+  const key = LAYER_LABELS.map(([k]) => (app.layers[k] ? 1 : 0)).join('') + (app.watch ? 'w' : '');
   if (key === layersKey) return;
   layersKey = key;
-  const el = $('layers');
-  el.innerHTML = LAYER_LABELS.map(([k, l]) => '<button class="chip' + (app.layers[k] ? ' on' : '') + '" data-layer="' + k + '">' + (app.layers[k] ? '■ ' : '□ ') + l + '</button>').join('') + '<button class="chip" id="layersClose">CLOSE</button>';
+  const el = $('layerchips');
+  el.innerHTML = LAYER_LABELS.map(([k, l]) => '<button class="chip' + (app.layers[k] ? ' on' : '') + '" data-layer="' + k + '">' + l + '</button>').join('');
   for (const b of el.querySelectorAll<HTMLButtonElement>('button[data-layer]')) on(b, 'click', () => { const k = b.dataset.layer as keyof Layers; app.layers[k] = !app.layers[k]; saveLayers(app); layersKey = ''; app.ui.updateUI(); });
-  on($('layersClose'), 'click', () => { app.layersOpen = false; app.ui.updateUI(); });
 }
 
 function renderSelCard(app: App): void {

@@ -113,7 +113,7 @@ export function wireHotkeys(app: App): void {
     if (/^[0-9]$/.test(k)) {
       const n = k === '0' ? 10 : +k;
       if (e.ctrlKey || e.metaKey) { e.preventDefault(); setGroup(app, n); return; }
-      if (w.mode !== 'sand' && app.groups.has(n) && app.tab !== 'units' && app.tab !== 'build') { recallGroup(app, n); return; }
+      if (w.mode !== 'sand' && app.groups.has(n) && app.tab !== 'units') { recallGroup(app, n); return; }
       const list = roster(ctlRace(app));
       const idx = (e.shiftKey ? 10 : 0) + n - 1;
       const unit = list[idx];
@@ -130,7 +130,7 @@ export function wireHotkeys(app: App): void {
     else if (lk === 'f') focusBase(app);
     else if (lk === 'y') { app.tool = app.tool === 'rally' ? 'cmd' : 'rally'; app.ui.updateUI(); }
     else if (lk === 'l' && w.mode === 'conquest') { app.layers.territory = !app.layers.territory; saveLayers(app); app.ui.updateUI(); }
-    else if (lk === 'b') { app.tab = app.tab === 'build' ? 'units' : 'build'; app.tool = app.tab === 'build' ? 'build' : w.phase === 'edit' ? 'place' : 'cmd'; app.ui.updateUI(); }
+    else if (lk === 'b') { app.tab = app.tab === 'build' ? 'none' : 'build'; if (app.tool === 'build' || app.tool === 'terrain') app.tool = w.phase === 'edit' ? 'place' : 'cmd'; app.ui.updateUI(); }
     else if (lk === 'a' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); selectAll(app); }
   });
   window.addEventListener('keyup', (e) => {

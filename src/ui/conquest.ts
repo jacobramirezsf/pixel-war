@@ -101,7 +101,7 @@ function enter(app: App): void {
   app.groups.clear();
   app.ctl = 0;
   app.tool = 'cmd';
-  app.tab = 'units';
+  app.tab = 'none';
   app.stance = 'none';
   app.town = -1;
   app.drag = null;
