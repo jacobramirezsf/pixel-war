@@ -172,12 +172,32 @@ Invariants: snapshot and restore must stay lossless (tests run 600 ticks after a
 compare state strings; key order in world.ts restore must match snapshot). Every player and AI
 action goes through `applyCommand`. Selection, pause, camera, and panels are UI state.
 
+## Naval and pathing pass (Sep 2026)
+
+- Sea pathing: boats steer by cached sea distance fields (`seaDir`, `seaField`, `seaClear` in
+  `src/sim/pathing.ts`). Open water is a straight line; a blocked line follows the field around
+  coasts. Move, attack-move, target chase, and unload travel all use it.
+- Ground pathing: point-to-point walks farther than 60px follow a per-goal ground distance
+  field (`groundDir`, `groundField`), straight for the last stretch. Fields are cached per
+  (team, goal tile), invalidated with the flow rebuild, and honor roads, trees, bridges, and
+  gates, so long tap-to-move orders no longer strand units in concave terrain and villagers on
+  long errands follow roads. Board orders walk the same way.
+- Landmasses: `landLabels`/`sameLand` label walkable ground by connected component; bridges
+  join labels. All transient caches are pure functions of world state; nothing new is saved.
+- AI overseas war: the wave target prefers a settlement reachable by land. When every rival is
+  across water, `seaAssault` in strategy.ts runs a stateless shuttle each decision: place a
+  dock on water that reaches the target's shore (`landingPoint` verifies), buy transports,
+  board the held wave at the dock, sail to the beach nearest the target, unload, and
+  attack-move whatever is ashore. Loaded ferries leave when nobody is at the gangway;
+  stragglers rejoin the pool for the next trip. Combat boats escort launches, and shop no
+  longer buys boats `held`, so the ground wave logic cannot drag them toward land rally points.
+- Test: `test/sim/amphibious.test.ts` (boat rounds a spit, bridge joins labels, and a full
+  AI island invasion that razes the player capital).
+
 ## Known gaps and next steps
 
-- The AI does not build roads, bridges, DARPA, or the lab, and does not mount amphibious
-  invasions; it builds a dock by a shore and keeps a few boats. Boats have no flow field and
-  steer straight, sliding along coasts.
-- Villagers do not prefer roads when walking; only movement speed and flow fields honor roads.
+- The AI does not build roads, bridges, DARPA, or the lab. Escorted crossings are one wave at
+  a time; there is no multi-ferry coordination or beachhead reinforcement priority.
 - HUGE and MASSIVE run 28x realtime headless; phone performance on them is unverified.
 - No metropolis tier, no settlement priority setting, no sea caravans.
 

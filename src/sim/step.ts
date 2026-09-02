@@ -10,7 +10,7 @@ import { attack, auraTeams, buildTargetCache, damage, dirTo, edist, hasSpeedAura
 import { drainQueue } from './commands.ts';
 import { dominationTick, hasEconomy, incomeTick, mineTick, minesHeld, payRepair } from './economy.ts';
 import { clamp, tileAt } from './map.ts';
-import { computeFlow, computeHome, flowDir } from './pathing.ts';
+import { computeFlow, computeHome, flowDir, groundDir, seaDir } from './pathing.ts';
 import { conquestTick, grossIncome } from './conquest.ts';
 import { powersTick, zonesTick } from './powers.ts';
 import { townTick } from './town.ts';
@@ -160,6 +160,7 @@ function moveLogic(w: World, u: Unit, T: UnitDef, tgt: Target | null, best: numb
       if (inside < cap) { u.aboard = t.id; u.order = null; u.x = t.x; u.y = t.y; w.fx.push({ k: 'mark', x: t.x, y: t.y, r: 5, t: 0.3, c: '#dde2ec' }); }
       return null;
     }
+    if (!T.fly && d > 60) { const f = groundDir(w, u, t.x, t.y); if (f) return f; }
     return dirTo(u, t);
   }
   if (u.order && u.order.type === 'unload') {
@@ -170,11 +171,14 @@ function moveLogic(w: World, u: Unit, T: UnitDef, tgt: Target | null, best: numb
     o.lx = u.x; o.ly = u.y;
     if (d < 20 || (o.stuck >= 20 && d < 60)) { if (unloadHere(w, u)) { u.order = null; return null; } }
     if (d < 20) return null;
+    if (T.naval) { const f = seaDir(w, u, o.x, o.y); if (f) return f; }
     return dirTo(u, { x: o.x, y: o.y });
   }
   if (u.order && u.order.type === 'move') {
     const dx = u.order.x - u.x, dy = u.order.y - u.y, d = Math.hypot(dx, dy);
     if (d < 2.5) { u.order = null; return null; }
+    if (T.naval) { const f = seaDir(w, u, u.order.x, u.order.y); if (f) return f; }
+    else if (!T.fly && d > 60) { const f = groundDir(w, u, u.order.x, u.order.y); if (f) return f; }
     return [dx / d, dy / d];
   }
   if (u.order && u.order.type === 'guard') {
@@ -197,13 +201,15 @@ function moveLogic(w: World, u: Unit, T: UnitDef, tgt: Target | null, best: numb
       if (tgt && best < T.aggro) { if (best <= T.range) return null; return dirTo(u, tgt); }
       const dx = u.order.x - u.x, dy = u.order.y - u.y, d = Math.hypot(dx, dy);
       if (d < 2.5) { u.order.x = undefined; u.order.y = undefined; return null; }
+      if (T.naval) { const f = seaDir(w, u, u.order.x, u.order.y); if (f) return f; }
       return [dx / d, dy / d];
     }
     if (!ct) ct = tgt;
     if (!ct) return null;
     const d = edist(u, ct);
     if (d <= T.range) return null;
-    if (!T.fly && (ct.ent === 'base' || d > 40)) { const f = flowDir(w, u); if (f) return f; }
+    if (T.naval && d > 24) { const f = seaDir(w, u, ct.x, ct.y); if (f) return f; }
+    if (!T.fly && !T.naval && (ct.ent === 'base' || d > 40)) { const f = flowDir(w, u); if (f) return f; }
     return dirTo(u, ct);
   }
   if (tgt && best < T.aggro && best > T.range) return dirTo(u, tgt);

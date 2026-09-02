@@ -18,7 +18,8 @@ import { GROW } from '../../data/realm.ts';
 import { buildingsOf } from '../civ.ts';
 import { ageOf, canResearch, canTrain, findSpot, ownBlds, queuedCount } from '../town.ts';
 import type { BldKey } from '../../data/buildings.ts';
-import { TILE } from '../map.ts';
+import { clamp, TILE } from '../map.ts';
+import { landLabels, sameLand, seaField, seaGoal } from '../pathing.ts';
 import { pickUnit, roleMix } from './composition.ts';
 import { PROFILES, type AiProfile } from './profiles.ts';
 import { attackMove, hostileValueNear, mineTargets, moveTo, nearestHostileBase, order, ownValueNear, pullBack, rallyPoint } from './tactics.ts';
@@ -51,7 +52,8 @@ export function assess(w: World, slot: number): Assessment {
     const v = hostileValueNear(w, slot, b.x, b.y, 64);
     if (v > threat) { threat = v; threatAt = b; }
   }
-  const held = own.filter((u) => u.held);
+  // Boats never join the held wave: waves march on land targets.
+  const held = own.filter((u) => u.held && !TYPES[u.type].naval);
   const s = w.slots[slot];
   return { own, ownValue, enemy, enemyValue, threatAt, threat, held, gold: s.gold, income: 0 };
 }
@@ -96,10 +98,10 @@ function shop(w: World, slot: number, a: Assessment, P: AiProfile): void {
   const horizon = w.t < 120 || a.own.length < 5 ? 5 : 20;
   const budget = Math.max(30, s.gold + income * horizon * P.income);
   if (s.aiWant && (!canTrain(w, slot, s.aiWant) || TYPES[s.aiWant].cost > budget + 40)) s.aiWant = null;
-  // Boats: with a dock standing, keep a few on the water.
+  // Boats: with a dock standing, keep a few on the water. Not held: the wave logic is for land.
   if (w.mode === 'conquest' && ownBlds(w, slot, 'dock').length && s.gold >= 140 && rand(w.rng) < 0.25) {
     const boats = a.own.filter((u) => TYPES[u.type].naval).length;
-    if (boats < 4 && buy(w, slot, boats % 2 ? 'gunboat' : 'patrol', true)) return;
+    if (boats < 4 && buy(w, slot, boats % 2 ? 'gunboat' : 'patrol', false)) return;
   }
   // Queue a few ahead, never more: gold in the queue cannot answer a raid.
   for (let n = 0; n < 4 && queuedCount(w, slot) < 4; n++) {
@@ -201,6 +203,18 @@ function buildTown(w: World, slot: number, a: Assessment): boolean {
   if (!have('barracks') && afford('barracks')) return placeNear(w, slot, 'barracks', home.x, home.y);
   // A shore nearby and a town age: a dock, then boats to hold the water.
   if (realm && s.age >= 1 && !have('dock') && afford('dock')) {
+    // Every rival across the water and none by land: the dock must stand on water that
+    // reaches their shore, at whichever of our towns touches it.
+    const land = nearestHostileBase(w, slot, home.x, home.y, (b) => sameLand(w, home.x, home.y, b.x, b.y));
+    const sea = !land ? nearestHostileBase(w, slot, home.x, home.y) : null;
+    if (sea) {
+      for (const b of s.settlements) {
+        if (b.hp <= 0) continue;
+        const e = waterNear(w, b.x, b.y);
+        if (!e || !landingPoint(w, e, sea)) continue;
+        if (placeNear(w, slot, 'dock', b.x, b.y)) return true;
+      }
+    }
     const shore = w.map.tiles.some((t, i) => t === 3 && Math.hypot((i % w.map.cols) * 8 + 4 - home.x, ((i / w.map.cols) | 0) * 8 + 4 - home.y) < 96);
     if (shore && placeNear(w, slot, 'dock', home.x, home.y)) return true;
   }
@@ -275,6 +289,115 @@ function announceMarch(w: World, slot: number, target: Target): void {
   pushEvent(w, 'raid', text, home.x, home.y, r?.id ?? -1);
 }
 
+/** Center of the nearest water tile to a point, or null. */
+function waterNear(w: World, x: number, y: number): { x: number; y: number } | null {
+  const i = seaGoal(w.map, x, y);
+  if (i < 0) return null;
+  return { x: (i % w.map.cols) * TILE + TILE / 2, y: ((i / w.map.cols) | 0) * TILE + TILE / 2 };
+}
+
+/**
+ * A beach on the target's landmass: land with water beside it that boats from the embark water
+ * can reach, close to the target. Returns the land side, for the unload order.
+ */
+function landingPoint(w: World, E: { x: number; y: number }, target: Target): { x: number; y: number } | null {
+  const m = w.map, cols = m.cols, lab = landLabels(w);
+  const tl = lab[clamp((target.y / TILE) | 0, 0, m.rows - 1) * cols + clamp((target.x / TILE) | 0, 0, cols - 1)];
+  if (tl < 0) return null;
+  const eg = seaGoal(m, E.x, E.y);
+  if (eg < 0) return null;
+  const F = seaField(w, eg);
+  let best = -1, bs = Infinity;
+  for (let i = 0; i < m.tiles.length; i++) {
+    if (m.tiles[i] !== 3 || F[i] === Infinity) continue;
+    const x = i % cols, y = (i / cols) | 0;
+    let land = -1;
+    if (x > 0 && lab[i - 1] === tl) land = i - 1;
+    else if (x < cols - 1 && lab[i + 1] === tl) land = i + 1;
+    else if (y > 0 && lab[i - cols] === tl) land = i - cols;
+    else if (y < m.rows - 1 && lab[i + cols] === tl) land = i + cols;
+    if (land < 0) continue;
+    const px = (land % cols) * TILE + TILE / 2, py = ((land / cols) | 0) * TILE + TILE / 2;
+    const sc = Math.hypot(px - target.x, py - target.y) + F[i] * TILE * 0.35;
+    if (sc < bs) { bs = sc; best = land; }
+  }
+  if (best < 0) return null;
+  return { x: (best % cols) * TILE + TILE / 2, y: ((best / cols) | 0) * TILE + TILE / 2 };
+}
+
+/** Can this unit ride a transport into a landing? */
+const rides = (u: Unit): boolean => { const T = TYPES[u.type]; return !T.naval && !T.fly && !T.capacity && !T.repair && T.role !== 'civ'; };
+
+/**
+ * March over water, one nudge per decision, no saved state: whatever the world shows is the
+ * plan. Idle troops already on the target's land press the attack. Transports queue on the
+ * water by the dock, the held wave boards, and a loaded boat sails for the beach nearest the
+ * target and sets everyone down. Combat boats escort the crossing.
+ */
+function seaAssault(w: World, slot: number, a: Assessment, P: AiProfile, target: Target): void {
+  const s = w.slots[slot];
+  const ashore = a.own.filter((u) => u.aboard < 0 && rides(u) && sameLand(w, u.x, u.y, target.x, target.y) && (u.held || !u.order));
+  if (ashore.length) {
+    for (const u of ashore) u.held = false;
+    attackMove(w, slot, ashore, target.x, target.y);
+  }
+  const docks = [...ownBlds(w, slot, 'dock'), ...ownBlds(w, slot, 'port')].filter((b) => b.buildT <= 0);
+  if (!docks.length) return; // buildTown raises one when a rival sits across the water
+  // The first dock whose water reaches a beach on the target's land carries the invasion.
+  let E: { x: number; y: number } | null = null, L: { x: number; y: number } | null = null;
+  for (const d of docks) {
+    const e = waterNear(w, d.x, d.y);
+    if (!e) continue;
+    const l = landingPoint(w, e, target);
+    if (l) { E = e; L = l; break; }
+  }
+  if (!E || !L) return;
+  // Hulls for at least half the wave before anything else goes to sea.
+  const transports = a.own.filter((u) => TYPES[u.type].naval && (TYPES[u.type].capacity ?? 0) > 0);
+  if (transports.length * (TYPES.boat.capacity ?? 8) < Math.max(4, P.minWave) && s.gold >= TYPES.boat.cost + 20) buy(w, slot, 'boat', false);
+  const riders = new Map<number, number>(), inbound = new Map<number, number>(), nearIn = new Map<number, number>();
+  for (const u of w.units) if (u.hp > 0 && u.aboard >= 0) riders.set(u.aboard, (riders.get(u.aboard) ?? 0) + 1);
+  for (const u of a.own)
+    if (u.order && u.order.type === 'board') {
+      const t = u.order.tgt;
+      // A ferry that already sailed does not wait: the boarder falls back in for the next trip.
+      if (t.order && t.order.type === 'unload' && Math.hypot(t.x - u.x, t.y - u.y) > 80) { u.order = null; u.held = true; continue; }
+      inbound.set(t.id, (inbound.get(t.id) ?? 0) + 1);
+      const d = Math.hypot(t.x - u.x, t.y - u.y);
+      if (d < (nearIn.get(t.id) ?? Infinity)) nearIn.set(t.id, d);
+    }
+  let launched = false;
+  for (const t of transports) {
+    const aboardN = riders.get(t.id) ?? 0, coming = inbound.get(t.id) ?? 0;
+    // Sail when loaded and nobody is at the gangway: stragglers catch the next ferry.
+    if (aboardN > 0 && (coming === 0 || (nearIn.get(t.id) ?? Infinity) > 80)) {
+      if (!(t.order && t.order.type === 'unload')) {
+        applyCommand(w, cmd(w, slot, { type: 'unload', payload: { ids: [t.id], x: L.x, y: L.y } }), true);
+        launched = true;
+      }
+      continue;
+    }
+    if (!t.order && Math.hypot(t.x - E.x, t.y - E.y) > 24) moveTo(w, slot, [t], E.x, E.y);
+  }
+  if (launched) {
+    announceMarch(w, slot, target);
+    const escorts = a.own.filter((u) => TYPES[u.type].naval && !TYPES[u.type].capacity && !u.order);
+    if (escorts.length) attackMove(w, slot, escorts, L.x, L.y);
+  }
+  // Board once the wave is worth carrying.
+  if (a.held.length < Math.max(3, Math.ceil(P.minWave / 2))) return;
+  let pool = a.held.filter((u) => rides(u) && !u.order);
+  for (const t of transports) {
+    if (!pool.length) break;
+    const room = (TYPES[t.type].capacity ?? 0) - (riders.get(t.id) ?? 0) - (inbound.get(t.id) ?? 0);
+    if (room <= 0 || Math.hypot(t.x - E.x, t.y - E.y) > 40) continue;
+    const party = pool.slice(0, room);
+    pool = pool.slice(room);
+    for (const u of party) u.held = false;
+    applyCommand(w, cmd(w, slot, { type: 'board', payload: { ids: party.map((u) => u.id), transport: t.id } }), true);
+  }
+}
+
 export function decide(w: World, slot: number): void {
   const s = w.slots[slot], P = profileFor(w, slot);
   const a = assess(w, slot);
@@ -325,9 +448,10 @@ export function decide(w: World, slot: number): void {
     // The wave that is out stays out: pressure on the enemy is also defense.
     return;
   }
-  // Reinforce: while a push is alive, fresh units go straight to it.
+  // Reinforce: while a push is alive, fresh units go straight to it. Only over land; an
+  // overseas front is fed by the transport shuttle instead.
   if (P.reinforces && w.t - s.aiLast < 45 && a.own.some((u) => !u.held && u.order && u.order.type === 'attack')) {
-    const target = nearestHostileBase(w, slot, home.x, home.y);
+    const target = nearestHostileBase(w, slot, home.x, home.y, (b) => sameLand(w, home.x, home.y, b.x, b.y));
     if (target && a.held.length) { for (const u of a.held) u.held = false; attackMove(w, slot, a.held, target.x, target.y); }
   }
   // Retreat: units losing a local fight pull back to heal.
@@ -365,7 +489,14 @@ export function decide(w: World, slot: number): void {
   // Mass, then push in a grouped wave from the rally point. Defense at the target counts
   // hostile units and towers within 80px.
   // An enemy wonder outranks a capital as the thing to march on.
-  const target: Target | null = enemyWonder(w, slot, allied) ?? nearestHostileBase(w, slot, home.x, home.y);
+  let target: Target | null = enemyWonder(w, slot, allied) ?? nearestHostileBase(w, slot, home.x, home.y);
+  // Across the water: march on a rival the army can walk to instead, and when there is none,
+  // the war goes by sea.
+  if (target && !sameLand(w, home.x, home.y, target.x, target.y)) {
+    const landT = nearestHostileBase(w, slot, home.x, home.y, (b) => sameLand(w, home.x, home.y, b.x, b.y));
+    if (landT) target = landT;
+    else { seaAssault(w, slot, a, P, target); return; }
+  }
   const rally = rallyPoint(w, home);
   let defense = target ? hostileValueNear(w, slot, target.x, target.y, 80) : a.enemyValue;
   if (target) for (const b of w.blds) if (b.kind === 'tower' && !allied(w, b.team, slot) && Math.hypot(b.x - target.x, b.y - target.y) < 80) defense += BLD[b.type].cost * 0.8;

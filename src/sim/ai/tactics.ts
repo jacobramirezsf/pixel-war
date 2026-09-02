@@ -13,13 +13,13 @@ export function rallyPoint(w: World, b: Settlement): { x: number; y: number } {
   return { x: b.x + (dx / d) * 3 * TILE, y: b.y + (dy / d) * 3 * TILE };
 }
 
-/** Nearest living hostile settlement to a point. */
-export function nearestHostileBase(w: World, slot: number, x: number, y: number): Settlement | null {
+/** Nearest living hostile settlement to a point, optionally only those a filter accepts. */
+export function nearestHostileBase(w: World, slot: number, x: number, y: number, ok?: (b: Settlement) => boolean): Settlement | null {
   let best: Settlement | null = null, bd = Infinity;
   for (let i = 0; i < w.nP; i++) {
     if (allied(w, i, slot) || !w.slots[i].alive) continue;
     for (const b of w.slots[i].settlements) {
-      if (b.hp <= 0) continue;
+      if (b.hp <= 0 || (ok && !ok(b))) continue;
       const d = Math.hypot(b.x - x, b.y - y);
       if (d < bd) { bd = d; best = b; }
     }
