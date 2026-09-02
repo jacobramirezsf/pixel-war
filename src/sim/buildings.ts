@@ -104,8 +104,10 @@ function cellBlock(w: World, tx: number, ty: number, team: number, type: BldKey)
   // would always leave a corridor around its end.
   if (tx < 0 || ty < 0 || tx >= m.cols || ty >= m.rows) return 'map edge';
   const t = m.tiles[ty * m.cols + tx];
-  // Town buildings clear trees; walls and towers need open ground.
-  if (t === 3 || t === 4 || (t === 2 && BLD[type].kind !== 'town' && type !== 'castle')) return 'bad ground';
+  // Town buildings clear trees; walls and towers need open ground. Docks and ports are piers:
+  // their planks may stand over water, only rock stops them.
+  const pier = type === 'dock' || type === 'port';
+  if (pier ? t === 4 : t === 3 || t === 4 || (t === 2 && BLD[type].kind !== 'town' && type !== 'castle')) return 'bad ground';
   if (bldAt(w, tx, ty)) return 'occupied';
   if (nearBase(m, tx, ty)) return 'base ground';
   for (const s of w.slots) for (const b of s.settlements) if (b.hp > 0 && Math.abs(b.x - (tx * TILE + 4)) <= 20 && Math.abs(b.y - (ty * TILE + 4)) <= 12) return 'base ground';
@@ -147,15 +149,19 @@ export function canBuild(w: World, tx: number, ty: number, team: number, type: B
     if (why) return why;
   }
   if (w.rules.town) {
-    const age = cheat(w, team, 'allAges') || !w.rules.ages ? 2 : w.slots[team].age;
+    // The ALL BUILDINGS cheat unlocks every structure: no age, no prerequisites, no caps.
+    const unlocked = cheat(w, team, 'allAges');
+    const age = unlocked || !w.rules.ages ? 2 : w.slots[team].age;
     if ((D.age ?? 0) > age) return 'needs the ' + ['village', 'town', 'city'][D.age ?? 0] + ' age';
-    if (D.max && w.blds.filter((b) => b.team === team && b.type === type).length >= D.max) return 'you have enough of those';
-    if (D.needs) for (const n of D.needs) if (!w.blds.some((b) => b.team === team && b.type === n && b.buildT <= 0)) return 'needs a finished ' + BLD[n].name.toLowerCase();
-    if (D.trains && type !== 'barracks' && D.kind === 'town' && !w.blds.some((b) => b.team === team && b.type === 'barracks' && b.buildT <= 0)) return 'build a barracks first';
+    if (!unlocked && D.max && w.blds.filter((b) => b.team === team && b.type === type).length >= D.max) return 'you have enough of those';
+    if (!unlocked && D.needs) for (const n of D.needs) if (!w.blds.some((b) => b.team === team && b.type === n && b.buildT <= 0)) return 'needs a finished ' + BLD[n].name.toLowerCase();
+    if (!unlocked && D.trains && type !== 'barracks' && D.kind === 'town' && !w.blds.some((b) => b.team === team && b.type === 'barracks' && b.buildT <= 0)) return 'build a barracks first';
     if (type === 'dock' || type === 'port') {
       const m = w.map;
-      const shore = footprint(type, tx, ty, dir).some(([cx2, cy2]) => [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => { const x = cx2 + dx, y = cy2 + dy; return x >= 0 && y >= 0 && x < m.cols && y < m.rows && m.tiles[y * m.cols + x] === 3; }));
-      if (!shore) return 'needs a shore: water on one side';
+      const cells = footprint(type, tx, ty, dir);
+      const touches = (want: number): boolean => cells.some(([cx2, cy2]) => m.tiles[cy2 * m.cols + cx2] === want || [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => { const x = cx2 + dx, y = cy2 + dy; return x >= 0 && y >= 0 && x < m.cols && y < m.rows && m.tiles[y * m.cols + x] === want; }));
+      if (!touches(3)) return 'needs a shore: water on one side';
+      if (!cells.some(([cx2, cy2]) => m.tiles[cy2 * m.cols + cx2] !== 3)) return 'needs a shore: land under one corner';
     }
     // Inside your own territory, or next to your Town Hall's region.
     if (w.regionOf) {

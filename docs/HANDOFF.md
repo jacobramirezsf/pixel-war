@@ -194,6 +194,11 @@ action goes through `applyCommand`. Selection, pause, camera, and panels are UI 
 - Test: `test/sim/amphibious.test.ts` (boat rounds a spit, bridge joins labels, and a full
   AI island invasion that razes the player capital).
 
+Sandbox is surfaced as BATTLE SIM: cheats are implicitly on there (both chairs can use
+them), and SMALL, LARGE, and ELITE army presets sit in the edit grid. Docks and ports are
+piers (footprint may overhang water; needs land under one corner). Cheats: GROW ALL steps
+every settlement a tier; ALL BUILDINGS (key allAges) unlocks age, prerequisites, and caps.
+
 ## Known gaps and next steps
 
 - Arena leans toward the north slot (~75/25 in a Standard mirror) even though its terrain is

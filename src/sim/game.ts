@@ -63,6 +63,8 @@ export function newGame(map: MapDef, mode: Mode, cfg?: GameConfig): World {
   const allies = cfg?.allies ?? [0, 1];
   const w = reset(prepareMap(map, allies.length), { allies, diff: cfg?.diff ?? 'std', seed: cfg?.seed, ai: cfg?.ai, races: cfg?.races, diffs: cfg?.diffs, instant: cfg?.instant, cheats: cfg?.cheats });
   w.mode = mode;
+  // The sandbox is a toy box: every cheat tool is available without flipping settings.
+  if (mode === 'sand') w.cheats.on = true;
   if (mode === 'sand') {
     w.phase = 'edit';
     w.cap = 80;

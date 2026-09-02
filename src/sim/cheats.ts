@@ -182,6 +182,21 @@ export function runCheat(w: World, c: Payload, say: (t: string, d: number) => vo
       if (people < 8) { seedResidents(w, town, 8 - people); town.civ.residents = 8; }
       say(w.regions[town.region]?.name + ' is rebuilt', 1.5); return true;
     }
+    case 'growAll': {
+      let k = 0;
+      for (const town of s.settlements) {
+        if (town.hp <= 0 || town.buildT > 0) continue;
+        const to = town.tier === 'outpost' ? 'village' : town.tier === 'village' ? 'town' : town.tier === 'town' || town.tier === 'fortress' ? 'city' : null;
+        if (!to) continue;
+        startUpgrade(town, to);
+        town.buildT = 0;
+        town.hp = town.max;
+        k++;
+      }
+      if (k && s.age < 2) s.age = s.settlements.some((b) => b.tier === 'city') ? 2 : Math.max(s.age, 1) as 0 | 1 | 2;
+      say(k ? k + ' settlement' + (k === 1 ? '' : 's') + ' grew a tier' : 'Everything is grown already', 1.5);
+      return true;
+    }
     case 'maxCity': {
       const town = s.settlements.find((b) => b.id === c.id && b.hp > 0) ?? s.settlements.find((b) => b.hp > 0);
       if (!town || town.tier === 'camp' || town.tier === 'ruin') return false;

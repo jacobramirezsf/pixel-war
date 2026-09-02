@@ -126,7 +126,8 @@ export function applyCommand(w: World, c: Command, quiet = false): boolean {
       return true;
     }
     case 'cheat': {
-      if (slot !== 0 || !w.cheats.on) return false;
+      // The sandbox lets you command either side, so its cheat tools work from both chairs.
+      if ((slot !== 0 && w.mode !== 'sand') || !w.cheats.on) return false;
       return runCheat(w, c.payload, say);
     }
     case 'rename': {

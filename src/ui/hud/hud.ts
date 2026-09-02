@@ -272,6 +272,7 @@ export function updateUI(app: App): void {
     bSell: live && !edit, bSave: conq,
     bSettle: conq, bOutpost: conq, bFort: conq, bAbsorb: conq, bGrow: conq,
     bTeam: sand, bEdit: sand && !edit, bErase: sand && edit, bMirror: sand && edit, bClear: sand && edit, bMap: sand && edit, bPlay: sand && edit,
+    bArmyS: sand && edit, bArmyL: sand && edit, bArmyE: sand && edit,
   };
   for (const k in vis) show(B(k), vis[k]);
   const bTeam = B('bTeam');
@@ -336,8 +337,8 @@ export function updateUI(app: App): void {
     powerBtns[k].classList.toggle('on', app.tool === 'power' && app.power === k);
     show(powerBtns[k], (!P.realm || w?.mode === 'conquest') && (P.group !== 'chaos' || app.settings.cheats.on));
   }
-  show(B('bCheats'), live && !edit && app.settings.cheats.on);
-  show(B('cheatChip'), live && app.settings.cheats.on);
+  show(B('bCheats'), live && (app.settings.cheats.on || sand));
+  show(B('cheatChip'), live && app.settings.cheats.on && !sand);
   updateCheatsVisibility(app);
   renderCheats(app);
   for (const t of TOOLS) toolBtns.get(t.k)!.classList.toggle('on', map && app.editor?.tool === t.k);

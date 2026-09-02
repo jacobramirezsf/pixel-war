@@ -9,7 +9,7 @@ import { applyCheats } from './menus/settings.ts';
 export const CHEAT_TOGGLES: [Exclude<keyof Cheats, 'on'>, string][] = [
   ['gold', 'GOLD'], ['resources', 'MATERIALS'], ['noPop', 'NO POP CAP'], ['instant', 'INSTANT UNITS'], ['build', 'INSTANT BUILDS'],
   ['powers', 'NO COOLDOWNS'], ['god', 'GOD MODE'], ['oneHit', 'ONE HIT'], ['superUnits', 'SUPER UNITS'], ['fastEcon', 'FAST ECONOMY'],
-  ['growth', 'INSTANT GROWTH'], ['allAges', 'ALL AGES'], ['freeBuild', 'FREE BUILD'], ['freeUnits', 'FREE UNITS'], ['territory', 'ANYWHERE'], ['reveal', 'REVEAL MAP'],
+  ['growth', 'INSTANT GROWTH'], ['allAges', 'ALL BUILDINGS'], ['freeBuild', 'FREE BUILD'], ['freeUnits', 'FREE UNITS'], ['territory', 'ANYWHERE'], ['reveal', 'REVEAL MAP'],
 ];
 
 export interface CheatTool {
@@ -64,7 +64,7 @@ export function renderCheats(app: App): void {
     + '<h3>SPAWN</h3><div class="row wrap"><select id="chUnit">' + byRole.map((g) => '<optgroup label="' + g.label + '">' + g.list.map((k) => '<option value="' + k + '"' + (k === ui.unit ? ' selected' : '') + '>' + TYPES[k].name + ' ' + TYPES[k].cost + '</option>').join('') + '</optgroup>').join('') + '</select></div>'
     + '<div class="row wrap">' + [1, 5, 10, 25].map((n) => '<button class="chip' + (ui.n === n ? ' on' : '') + '" data-n="' + n + '">x' + n + '</button>').join('') + '<button class="chip' + (ui.team === 0 ? ' on' : '') + '" data-team="0">YOURS</button><button class="chip' + (ui.team === 1 ? ' on' : '') + '" data-team="1">ENEMY</button>' + btn('spawn', 'SPAWN: TAP MAP', 'gold') + '</div>'
     + '<div class="row wrap">' + (['small', 'large', 'siege', 'elite', 'navy', 'air', 'darpa'] as const).map((k) => '<button class="chip' + (ui.kind === k ? ' on' : '') + '" data-kind="' + k + '">' + k.toUpperCase() + '</button>').join('') + btn('army', 'ARMY: TAP MAP', 'gold') + btn('enemyArmy', 'ENEMY ARMY: TAP MAP') + '</div>'
-    + (realm ? '<h3>REALM</h3><div class="row wrap">' + btn('raidS', 'RAID S') + btn('raidM', 'RAID M') + btn('raidL', 'RAID L') + btn('bandits', 'BANDITS: TAP') + btn('settle', 'FOUND: TAP') + btn('rebuild', 'REBUILD CITY') + btn('maxCity', 'MAX CITY') + btn('peace', 'PEACE') + btn('totalWar', 'TOTAL WAR', 'danger') + '</div><p class="blurb">Raids, rebuild, and max city use the selected town, else the capital.</p>' : '');
+    + (realm ? '<h3>REALM</h3><div class="row wrap">' + btn('raidS', 'RAID S') + btn('raidM', 'RAID M') + btn('raidL', 'RAID L') + btn('bandits', 'BANDITS: TAP') + btn('settle', 'FOUND: TAP') + btn('rebuild', 'REBUILD CITY') + btn('maxCity', 'MAX CITY') + btn('growAll', 'GROW ALL') + btn('peace', 'PEACE') + btn('totalWar', 'TOTAL WAR', 'danger') + '</div><p class="blurb">Raids, rebuild, and max city use the selected town, else the capital.</p>' : '');
   on($('chClose'), 'click', () => { app.cheatsOpen = false; app.ui.updateUI(); });
   for (const b of el.querySelectorAll<HTMLButtonElement>('button[data-tog]')) on(b, 'click', () => { const k = b.dataset.tog as Exclude<keyof Cheats, 'on'>; app.settings.cheats[k] = !app.settings.cheats[k]; applyCheats(app); lastKey = ''; });
   for (const b of el.querySelectorAll<HTMLButtonElement>('button[data-n]')) on(b, 'click', () => { ui.n = +b.dataset.n!; lastKey = ''; });
@@ -97,6 +97,7 @@ export function renderCheats(app: App): void {
       case 'settle': arm(app, { op: 'settle' }, 'FOUND: tap open ground for a new village.'); break;
       case 'rebuild': cheat(app, { op: 'rebuild', id: town }); break;
       case 'maxCity': cheat(app, { op: 'maxCity', id: town }); break;
+      case 'growAll': cheat(app, { op: 'growAll' }); break;
       case 'peace': cheat(app, { op: 'peace' }); break;
       case 'totalWar': if (confirm('Set every kingdom at war with every other?')) cheat(app, { op: 'totalWar' }); break;
     }

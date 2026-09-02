@@ -49,7 +49,7 @@ export function showMenu(app: App): void {
     <button data-mode="multi">MULTI WAR<small>Up to 5 armies. Teams or free for all. Last alliance standing.</small></button>
     <button data-mode="dom">DOMINATION<small>Hold the mines to fill your meter. First to 150 points wins.</small></button>
     <button data-mode="rich">UNLIMITED GOLD<small>Bottomless treasury. Enemy income doubled, army cap 60.</small></button>
-    <button data-mode="sand">SANDBOX<small>Place armies AND fortifications for both sides, then hit PLAY.</small></button>
+    <button data-mode="sand">BATTLE SIM<small>Place armies and defenses for both sides, hit PLAY, watch it play out. Army presets and every cheat tool included.</small></button>
     <div class="row"><button class="sm" id="mHelp">HOW TO PLAY</button><button class="sm" id="mSettings">SETTINGS</button><button class="sm" id="mStats">STATS</button></div>
     <p class="blurb">Walls block both sides, so leave yourself a gate. Mines add 1.5 gold/s. Mortars outrange towers, drones fly over everything.</p>
   </div>`;

@@ -136,6 +136,14 @@ export function wireCommands(app: App): void {
   on($('bMirror'), 'click', () => issueAction(app, { type: 'mirror', payload: null }));
   on($('bPause'), 'click', () => { if (app.world) togglePause(app); });
   on($('bSpeed'), 'click', () => cycleSpeed(app));
+  for (const [id, kind] of [['bArmyS', 'small'], ['bArmyL', 'large'], ['bArmyE', 'elite']] as const)
+    on($(id), 'click', () => {
+      if (!app.world) return;
+      app.cheatTool = { op: 'army', kind, team: app.ctl, r: 30 };
+      app.tool = 'cheat';
+      app.ui.updateUI();
+      say(app, kind.toUpperCase() + ' ARMY for ' + TNAME[app.ctl] + ': tap where it should stand. Tap again for more.', 2.5);
+    });
   on($('bPlay'), 'click', () => startBattle(app));
   on($('bEdit'), 'click', () => toEdit(app));
   on($('bMap'), 'click', () => openEditor(app, 'sand'));

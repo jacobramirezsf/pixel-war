@@ -54,7 +54,7 @@ export interface Cheats {
   territory: boolean;
 }
 
-export type CheatOp = 'gold' | 'mat' | 'heal' | 'revive' | 'finish' | 'queues' | 'clearNear' | 'clearAll' | 'destroy' | 'spawn' | 'army' | 'raid' | 'bandits' | 'settle' | 'peace' | 'totalWar' | 'rebuild' | 'maxCity' | 'research';
+export type CheatOp = 'gold' | 'mat' | 'heal' | 'revive' | 'finish' | 'queues' | 'clearNear' | 'clearAll' | 'destroy' | 'spawn' | 'army' | 'raid' | 'bandits' | 'settle' | 'peace' | 'totalWar' | 'rebuild' | 'maxCity' | 'growAll' | 'research';
 
 /** A change to the land under way. */
 export interface Work {
