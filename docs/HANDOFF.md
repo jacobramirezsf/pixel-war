@@ -196,6 +196,11 @@ action goes through `applyCommand`. Selection, pause, camera, and panels are UI 
 
 ## Known gaps and next steps
 
+- Arena leans toward the north slot (~75/25 in a Standard mirror) even though its terrain is
+  reflection-fair; the suspect is deterministic pathing tie-breaks in dense rock. Other builtin
+  1v1 maps mirror at ~50/50. tools/audit.ts is the functional audit (cheats, powers, war logic);
+  run it after touching any of those.
+
 - The AI does not build roads, bridges, DARPA, or the lab. Escorted crossings are one wave at
   a time; there is no multi-ferry coordination or beachhead reinforcement priority.
 - HUGE and MASSIVE run 28x realtime headless; phone performance on them is unverified.

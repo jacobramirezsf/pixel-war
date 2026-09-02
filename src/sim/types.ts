@@ -157,6 +157,8 @@ export interface Rules {
   ages: boolean;
   /** Villagers live in towns, take jobs, and flee raids. Realm only. */
   civilians: boolean;
+  /** Movement multiplier for every land and sea unit. Realm slows the world down. */
+  pace: number;
   /** Fog of war for the player. Realm only. */
   fog: boolean;
   upkeep: boolean;

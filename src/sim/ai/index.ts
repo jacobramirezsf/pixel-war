@@ -6,7 +6,11 @@ import { PROFILES } from './profiles.ts';
 import { decide } from './strategy.ts';
 
 export function aiTick(w: World, dt: number): void {
-  for (let i = 0; i < w.nP; i++) {
+  // Rotate who thinks first: factions act on the world as the earlier thinkers left it, so a
+  // fixed order hands the last slot a standing counter-picking edge. Rotation shares it out.
+  const rot = ((w.tick / 60) | 0) % w.nP;
+  for (let k = 0; k < w.nP; k++) {
+    const i = (k + rot) % w.nP;
     const s = w.slots[i];
     if (!s.alive || !s.ai) continue;
     s.aiT -= dt;

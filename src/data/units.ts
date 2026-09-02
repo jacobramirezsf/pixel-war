@@ -108,7 +108,7 @@ const ARCH: Record<string, Base> = {
   kni: { name: 'KNIGHT',   role: 'fast',    cost: 50,  hp: 80,  dmg: 14, range: 8,  speed: 34, cd: 0.8,  aggro: 36 },
   ban: { name: 'BANNER',   role: 'special', cost: 50,  hp: 70,  dmg: 6,  range: 7,  speed: 22, cd: 0.9,  aggro: 28, aura: 18 },
   wiz: { name: 'WIZARD',   role: 'special', cost: 55,  hp: 26,  dmg: 12, range: 40, speed: 18, cd: 1.2,  aggro: 46, splash: 9, shot: '#b06cff' },
-  tnk: { name: 'TANK',     role: 'heavy',   cost: 60,  hp: 130, dmg: 20, range: 14, speed: 14, cd: 1.3,  aggro: 34 },
+  tnk: { name: 'TANK',     role: 'heavy',   cost: 60,  hp: 130, dmg: 20, range: 14, speed: 14, cd: 1.3,  aggro: 34, splash: 5 },
   mor: { name: 'MORTAR',   role: 'siege',   cost: 60,  hp: 40,  dmg: 24, range: 56, speed: 12, cd: 2.4,  aggro: 60, splash: 12, minRange: 20, shot: '#f2d34a', bldDmg: 2 },
   snp: { name: 'SNIPER',   role: 'ranged',  cost: 70,  hp: 26,  dmg: 40, range: 64, speed: 16, cd: 2.6,  aggro: 70 },
   mch: { name: 'MECH',     role: 'special', cost: 90,  hp: 150, dmg: 16, range: 9,  speed: 12, cd: 1.0,  aggro: 30, splash: 8, armor: 2 },
@@ -247,7 +247,7 @@ const SPECIALS: Record<Exclude<RaceKey, 'kingdom'>, (Omit<UnitDef, 'race' | 'sz'
       sprite: ['....NNNN....', '...NDNNDN...', '...NNNNNN...', '..NNTTTTNN..', '.NNNTTTTNNN.', 'NN.NTTTTN.NN', '...NNNNNN...', '...N.NN.N...', '...NN..NN...', '...NN..NN...', '..NNN..NNN..', '..DD....DD..'] },
   ],
   forge: [
-    { key: 'f_bulw', name: 'BULWARK', role: 'special', cost: 70, hp: 160, dmg: 13, range: 8, speed: 12, cd: 1.0, aggro: 28, armor: 3, guardAura: 20,
+    { key: 'f_bulw', name: 'BULWARK', role: 'special', cost: 70, hp: 185, dmg: 14, range: 8, speed: 12, cd: 1.0, aggro: 28, armor: 4, guardAura: 20,
       sprite: ['..IIIIII..', '.IMMMMMMI.', '.IMTTTTMI.', 'IIMTTTTMII', 'IIMMMMMMII', 'IIMMCCMMII', '.IMMMMMMI.', '..IIIIII..', '..II..II..', '..II..II..'] },
     { key: 'f_rail', name: 'RAILGUN', role: 'ranged', cost: 85, hp: 36, dmg: 26, range: 60, speed: 12, cd: 2.2, aggro: 66, pierce: true, shot: '#67e8f9',
       sprite: ['..IIII.C', '..IMMI.C', '..MMMM.C', '.TTTTIIC', '.TTTTIIC', '.IDDI..C', '..I..I..', '.II..II.'] },

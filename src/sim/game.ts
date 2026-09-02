@@ -101,7 +101,7 @@ export function newConquest(cfg?: GameConfig): World {
   const w = reset(map, { allies, diff: cfg?.diff ?? 'std', seed, ai: allies.map((i) => i !== 0), races, diffs: cfg?.diffs, instant: cfg?.instant, cheats: cfg?.cheats });
   w.mode = 'conquest';
   w.cap = 80;
-  w.rules = { town: true, ages: true, civilians: true, fog: true, upkeep: true, connection: true, garrison: true, unrest: true, materials: true, population: true, diplomacy: true, veterancy: true, ...(cfg?.rules ?? {}) };
+  w.rules = { town: true, ages: true, civilians: true, pace: 0.75, fog: true, upkeep: true, connection: true, garrison: true, unrest: true, materials: true, population: true, diplomacy: true, veterancy: true, ...(cfg?.rules ?? {}) };
   w.regions = regions;
   w.regionOf = regionOf;
   w.seen = new Uint8Array(map.cols * map.rows);

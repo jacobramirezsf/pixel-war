@@ -32,8 +32,21 @@ function pick(race: import('../data/races.ts').RaceKey, role: Role, i: number): 
   return list[i % list.length];
 }
 
+/** The nearest water tile center to a point, or null. For boats spawned from dry land. */
+function nearestWater(w: World, x: number, y: number): { x: number; y: number } | null {
+  const m = w.map, tx0 = (x / 8) | 0, ty0 = (y / 8) | 0;
+  let best: { x: number; y: number } | null = null, bd = Infinity;
+  for (let ty = 0; ty < m.rows; ty++) for (let tx = 0; tx < m.cols; tx++) {
+    if (m.tiles[ty * m.cols + tx] !== 3) continue;
+    const d = (tx - tx0) * (tx - tx0) + (ty - ty0) * (ty - ty0);
+    if (d < bd) { bd = d; best = { x: tx * 8 + 4, y: ty * 8 + 4 }; }
+  }
+  return best;
+}
+
 /** Drop units of a team around a point on open ground. Returns how many landed. */
 export function spawnUnits(w: World, team: number, unit: UnitKey, n: number, x: number, y: number, hostileOrders = false): number {
+  if (TYPES[unit].naval) { const wtr = nearestWater(w, x, y); if (wtr) { x = wtr.x; y = wtr.y; } }
   let placed = 0;
   for (let i = 0; i < n && i < 200; i++) {
     for (let k = 0; k < (TYPES[unit].naval ? 400 : 80); k++) {

@@ -2,7 +2,7 @@
 
 import { AGE_NAMES, BLD, BORDER } from '../../data/buildings.ts';
 import { canTrain, RESEARCH_COST, TECH_NAMES, canResearch, canUpgradeBld, nextType, TECH_INFO, TECH_KEYS, upgradeCost } from '../../sim/town.ts';
-import { canGrow, NEXT_TIER, TIERS, canCapture, CAPTURE_COST, relation } from '../../sim/conquest.ts';
+import { canGrow, growNeeds, NEXT_TIER, TIERS, canCapture, CAPTURE_COST, relation } from '../../sim/conquest.ts';
 import { DIFF } from '../../data/difficulty.ts';
 import { TOOLS, type EditorTool } from '../../data/maps.ts';
 import { POWER_KEYS, POWERS, type PowerKey } from '../../data/powers.ts';
@@ -427,7 +427,10 @@ function renderSelCard(app: App): void {
     const to = s.buildT <= 0 ? NEXT_TIER[s.tier] : undefined;
     const why = to ? canGrow(w, s) : null;
     const cap = w.capitals[app.ctl] === s.region ? ' · capital' : '';
-    const next = s.buildT > 0 ? '<br><span class="civ">growing into a ' + s.tier + '</span>' : to ? '<br><span class="civ">next: ' + to + (why ? ', ' + why : ', ready (' + TIERS[to].gold + ' gold)') + '</span>' : '';
+    const needs = to ? growNeeds(w, s) : [];
+    void why;
+    const next = s.buildT > 0 ? '<br><span class="civ">growing into a ' + s.tier + '</span>'
+      : to ? '<br><span class="civ">next, ' + to + ': </span>' + needs.map((n) => '<span class="' + (n.ok ? 'req-ok' : 'req-no') + '">' + (n.ok ? '✓' : '✗') + n.label + '</span>').join(' ') : '';
     el.innerHTML = '<span class="town"><b class="rename" title="rename">' + name.toUpperCase() + '</b> ' + s.tier + cap + (w.rules.civilians ? ' · <span class="st-' + st + '">' + STATE_LABEL[st] + '</span><br><span class="civ">' + c.residents + '/' + c.housing + ' people · ' + c.employed + '/' + c.jobs + ' jobs · +' + c.income.toFixed(1) + '/s</span>' : '') + next + '</span>';
     const rn = el.querySelector<HTMLElement>('.rename');
     if (rn) rn.onclick = () => { const v = prompt('Name this settlement', name); if (v != null) issueAction(app, { type: 'rename', payload: { region: s.region, name: v } }); };

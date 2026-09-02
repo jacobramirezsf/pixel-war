@@ -82,6 +82,7 @@ body.armed #bAttack.on ~ #c{outline-color:rgba(255,154,154,.6)}
 #selcard .acts{display:inline-flex;flex-wrap:wrap;gap:4px;margin-top:3px}#selcard .acts .mini{min-height:30px}#selcard .acts .mini.gold{border-color:#f2d34a;color:#f2d34a}#selcard .acts .mini.dis{opacity:.5}
 #selcard .town{white-space:normal;line-height:1.35;display:block}
 #selcard .civ{color:#b9bccb}
+#selcard .req-ok{color:#7dff7d;font-size:10px;margin-right:2px}#selcard .req-no{color:#ffb02a;font-size:10px;margin-right:2px}
 #selcard .st-growing{color:#7dff7d}#selcard .st-stable{color:#b9bccb}#selcard .st-attacked{color:#ff6b6b}#selcard .st-recovering{color:#ffb02a}
 button.undo{border-color:#ffb02a;color:#ffb02a}
 /* the primary rail: icons with small labels, always at the bottom */

@@ -117,9 +117,12 @@ export function watchEvents(app: App): void {
   if (!w || w.mode !== 'conquest') return;
   if (w.pending && !app.paused && app.running) { app.paused = true; app.ui.updateUI(); }
   const n = w.events.length, last = w.events[n - 1];
-  if (n > app.seenEvents && last && (app.settings.autoPause || app.layout === 'mobile') && app.running && !app.paused && w.tick - last.tick < 30) {
-    const kinds: GameEvent['kind'][] = ['attack', 'unrest', 'built', 'broke', 'war', 'revolt'];
-    if (kinds.includes(last.kind)) { app.paused = true; say(app, last.text + '. Paused.', 3); app.ui.updateUI(); }
+  if (n > app.seenEvents && last && app.running && w.tick - last.tick < 30) {
+    // Losing something pauses when auto-pause is on. Everything else is an alert: a sound and a
+    // tappable toast, so a war does not stop the world every few seconds.
+    const grave: GameEvent['kind'][] = ['revolt', 'lost'];
+    if (app.settings.autoPause && grave.includes(last.kind) && !app.paused) { app.paused = true; say(app, last.text + '. Paused.', 3); app.ui.updateUI(); }
+    else if (['attack', 'war', 'raid', 'broke'].includes(last.kind)) say(app, last.text + ' (tap to look)', 2.5);
   }
   app.seenEvents = n;
 }

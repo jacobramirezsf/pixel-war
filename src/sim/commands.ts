@@ -84,7 +84,7 @@ export function applyCommand(w: World, c: Command, quiet = false): boolean {
       if (why) { say(T.name + ' ' + why, 1.5); return false; }
       const trainer = pickTrainer(w, slot, c.payload.unit, c.payload.building, c.payload.near);
       const queue = trainer ? trainer.queue : s.queue;
-      if (queue.length >= (trainer ? levelQueue(trainer.level) : 12)) { say('Queue is full', 1.2); return false; }
+      if (queue.length >= (cheat(w, slot, 'noPop') ? 99 : trainer ? levelQueue(trainer.level) : 12)) { say('Queue is full', 1.2); return false; }
       if (!cheat(w, slot, 'noPop') && w.mode === 'conquest' && w.rules.population && popUsed(w, slot) + popOf(c.payload.unit) > popCap(w, slot)) { say('No room. Houses and settlements add population.', 1.5); return false; }
       if (w.mode === 'conquest' && !w.rules.town && T.cost >= ADVANCED_COST && !hasCity(w, slot)) { say('Needs a city', 1.5); return false; }
       if (!freeUnit) s.gold -= T.cost;

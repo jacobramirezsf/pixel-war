@@ -96,8 +96,8 @@ export const BUILD_CAP = 120;
 /** Ground works: not buildings, changes to the land itself. Painted like walls. */
 export type GroundKey = 'road' | 'clear';
 export const GROUND: Record<GroundKey, { name: string; cost: number; hint: string }> = {
-  road:  { name: 'ROAD',  cost: 2, hint: 'Drag a path. Units move a quarter faster on it and prefer it.' },
+  road:  { name: 'ROAD',  cost: 2, hint: 'Drag a path. Units move a third faster on it and prefer it. Forests without a road are slow going.' },
   clear: { name: 'CLEAR', cost: 3, hint: 'Drag over trees or rock on your land to clear it. Takes a moment.' },
 };
 /** Seconds a work takes and what it costs beyond gold. */
-export const WORK = { roadT: 2, treeT: 6, rockT: 12, rockGold: 6, rockMat: 5, roadSpeed: 1.25, roadCost: 0.75 };
+export const WORK = { roadT: 2, treeT: 6, rockT: 12, rockGold: 6, rockMat: 5, roadSpeed: 1.35, roadCost: 0.75 };

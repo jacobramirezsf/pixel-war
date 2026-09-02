@@ -291,6 +291,17 @@ export function drawWorld(ctx: CanvasRenderingContext2D, bg: HTMLCanvasElement, 
   for (const s of w.slots) for (const b of s.settlements) if (vis(b.x, b.y, 24) && (own(b.team) || known(b.x, b.y))) drawBase(ctx, b, H, w.capitals[b.team] === b.region && b.region >= 0);
   for (const b of w.blds) if (b.kind !== 'tower' && vis(b.x, b.y) && (own(b.team) || known(b.x, b.y))) drawBld(ctx, b);
   for (const b of w.blds) if (b.kind === 'tower' && vis(b.x, b.y) && (own(b.team) || known(b.x, b.y))) drawBld(ctx, b);
+  // Chimney smoke: a settled town has fires burning. One drifting fleck per lived-in building.
+  for (const b of w.blds) {
+    if (b.buildT > 0 || b.hp <= 0 || !vis(b.x, b.y) || !(own(b.team) || known(b.x, b.y))) continue;
+    if (b.type !== 'house' && b.type !== 'smith' && b.type !== 'market') continue;
+    const phase = ((w.tick + b.id * 97) % 160) / 160;
+    if (phase > 0.75) continue;
+    const drift = Math.sin((b.id % 7) + phase * 6) * 1.5;
+    ctx.fillStyle = 'rgba(200,200,210,' + (0.5 * (1 - phase)).toFixed(2) + ')';
+    ctx.fillRect(Math.round(b.x + 2 + drift), Math.round(b.y - 6 - phase * 9), 1, 1);
+    if (b.type === 'smith') { ctx.fillStyle = 'rgba(255,170,90,' + (0.4 * (1 - phase)).toFixed(2) + ')'; ctx.fillRect(Math.round(b.x - 2 - drift), Math.round(b.y - 5 - phase * 7), 1, 1); }
+  }
   const us = w.units.filter((u) => u.aboard < 0 && vis(u.x, u.y) && (own(u.team) || inSight(u.x, u.y))).sort((a, b) => a.y - b.y);
   for (const u of us) {
     const T = TYPES[u.type], sz = T.sz, h = sz / 2;

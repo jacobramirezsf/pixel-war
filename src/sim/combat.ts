@@ -76,7 +76,9 @@ export function nearestHostile(w: World, u: Unit, R: number, tc: TargetCache): {
   // The grid pays off only when there are more hostiles than cells inside R.
   const cells = ((2 * R) / 16 + 1) ** 2;
   const near = list.length > cells ? nearestHostileWithin(gridOf(w), u.x, u.y, R, tc.hostile[u.team], u, unitVisible) : { u: null, d2: Infinity };
-  let tgt: Target | null = near.u, best = near.u ? Math.sqrt(near.d2) : Infinity;
+  // Distances to units are edge distances: a giant's body counts, or a chaser locked out by
+  // separation at arm's length would follow it across the whole map without ever swinging.
+  let tgt: Target | null = near.u, best = near.u ? Math.max(0, Math.sqrt(near.d2) - TYPES[near.u.type].r) : Infinity;
   if (!near.u) {
     let bd = Infinity;
     for (let i = 0; i < list.length; i++) {
@@ -85,7 +87,7 @@ export function nearestHostile(w: World, u: Unit, R: number, tc: TargetCache): {
       const dx = o.x - u.x, dy = o.y - u.y, d2 = dx * dx + dy * dy;
       if (d2 < bd) { bd = d2; tgt = o; }
     }
-    best = tgt ? Math.sqrt(bd) : Infinity;
+    best = tgt && tgt.ent === 'unit' ? Math.max(0, Math.sqrt(bd) - TYPES[tgt.type].r) : tgt ? Math.sqrt(bd) : Infinity;
   }
   const st = tc.statics[u.team];
   for (let i = 0; i < st.length; i++) { const d = edist(u, st[i]); if (d < best) { best = d; tgt = st[i]; } }

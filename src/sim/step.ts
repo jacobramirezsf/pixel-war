@@ -446,7 +446,8 @@ export function step(w: World): void {
     }
     u.moving = !!mv && slow > 0;
     if (mv && u.hp > 0 && slow > 0) {
-      const sp = T.speed * dt * slow * (!T.fly && !T.naval && !T.woodland && onTree ? 0.5 : 1) * (!T.fly && !T.naval && tileAt(w.map, u.x, u.y) === 1 ? WORK.roadSpeed : 1);
+      // Realm pace, deep forest, and roads. A march across the world should feel like one.
+      const sp = T.speed * dt * slow * w.rules.pace * (!T.fly && !T.naval && !T.woodland && onTree ? 0.35 : 1) * (!T.fly && !T.naval && tileAt(w.map, u.x, u.y) === 1 ? WORK.roadSpeed : 1);
       const bx = u.x, by = u.y;
       u.blk = tryMove(w, u, mv, sp, T.fly ? 'air' : T.naval ? 'sea' : 'ground');
       u.run += Math.hypot(u.x - bx, u.y - by);

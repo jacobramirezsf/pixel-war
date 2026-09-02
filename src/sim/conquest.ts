@@ -178,20 +178,31 @@ export function placeSettlement(w: World, slot: number, x: number, y: number, ti
 export const isCapital = (w: World, b: Settlement): boolean => w.capitals[b.team] === b.region && b.hp > 0;
 
 /** Why a settlement cannot grow yet, or null. Gold and materials are checked by the command. */
+/** Every requirement for the next tier, each with its current standing. The UI draws this as a checklist. */
+export function growNeeds(w: World, b: Settlement): { label: string; ok: boolean }[] {
+  const to = NEXT_TIER[b.tier];
+  if (!to || b.buildT > 0) return [];
+  const need = GROW[to];
+  if (!need) return [];
+  const blds = buildingsOf(w, b);
+  const has = (k: BldKey): boolean => blds.some((x) => x.type === k && x.buildT <= 0);
+  const out: { label: string; ok: boolean }[] = [];
+  if (w.rules.civilians) out.push({ label: need.people + ' people (' + b.civ.residents + ')', ok: b.civ.residents >= need.people });
+  const houses = blds.filter((x) => x.type === 'house').length;
+  if (need.houses) out.push({ label: need.houses + ' house' + (need.houses > 1 ? 's' : '') + ' (' + houses + ')', ok: houses >= need.houses });
+  for (const k of need.all) out.push({ label: BLD[k].name.toLowerCase(), ok: has(k) });
+  for (const group of need.any) out.push({ label: group.map((k) => BLD[k].name.toLowerCase()).join(' or '), ok: group.some(has) });
+  const T = TIERS[to];
+  out.push({ label: T.gold + ' gold', ok: w.slots[b.team].gold >= T.gold });
+  if (w.rules.materials && T.mat) out.push({ label: T.mat + ' materials', ok: w.slots[b.team].mat >= T.mat });
+  return out;
+}
+
 export function canGrow(w: World, b: Settlement): string | null {
   const to = NEXT_TIER[b.tier];
   if (!to) return 'a city is as big as it gets';
   if (b.buildT > 0) return 'still building';
-  const need = GROW[to];
-  if (!need) return null;
-  const blds = buildingsOf(w, b);
-  const has = (k: BldKey): boolean => blds.some((x) => x.type === k);
-  const missing: string[] = [];
-  if (w.rules.civilians && b.civ.residents < need.people) missing.push(need.people + ' people (' + b.civ.residents + ')');
-  const houses = blds.filter((x) => x.type === 'house').length;
-  if (houses < need.houses) missing.push(need.houses + ' house' + (need.houses > 1 ? 's' : '') + ' (' + houses + ')');
-  for (const k of need.all) if (!has(k)) missing.push('a ' + BLD[k].name.toLowerCase());
-  for (const group of need.any) if (!group.some(has)) missing.push('a ' + group.map((k) => BLD[k].name.toLowerCase()).join(' or '));
+  const missing = growNeeds(w, b).filter((n) => !n.ok && !n.label.includes('gold') && !n.label.includes('materials')).map((n) => n.label);
   return missing.length ? 'needs ' + missing.join(', ') : null;
 }
 
@@ -463,6 +474,8 @@ function diplomacyTick(w: World, dt: number, value: number[]): void {
       if (value[j] > value[i] * 1.5) d -= 0.15;
       for (let k = 0; k < w.nP; k++) if (k !== i && k !== j && !w.slots[k].neutral && !w.slots[i].truce[k] && !w.slots[j].truce[k] && w.slots[k].ally !== A.ally && w.slots[k].ally !== w.slots[j].ally) d += 0.1;
       if (A.pact[j]) d += 0.08;
+      // War weariness: a long war going nowhere softens both courts toward peace.
+      if (!A.truce[j] && w.t - A.truceT[j] > 300 && Math.abs(value[i] - value[j]) < Math.max(value[i], value[j], 1) * 0.4) d += 0.35;
       A.attitude[j] = Math.max(-100, Math.min(100, A.attitude[j] + d * dt + (A.attitude[j] > 0 ? -0.02 : 0.02) * dt));
     }
   }
@@ -477,7 +490,8 @@ function diplomacyTick(w: World, dt: number, value: number[]): void {
       if (A.pact[j] && A.attitude[j] < -20) setPact(w, i, j, false);
       const truce = A.truce[j];
       const peace = truce && w.t - A.truceT[j] > PEACE_AFTER;
-      if (!truce && A.attitude[j] > 20 && value[i] < value[j] * 0.8) setTruce(w, i, j, true);
+      const weary = !truce && w.t - A.truceT[j] > 420 && A.attitude[j] > 0 && value[i] < value[j] * 1.1;
+      if (!truce && (weary || (A.attitude[j] > 20 && value[i] < value[j] * 0.8))) setTruce(w, i, j, true);
       else if (truce && !peace && A.attitude[j] < -40 && value[i] > value[j] * 1.5) setTruce(w, i, j, false);
       else if (peace && A.attitude[j] < -70) setTruce(w, i, j, false);
     }
@@ -490,6 +504,16 @@ export function setTruce(w: World, a: number, b: number, on: boolean): void {
   A.truce[b] = on; B.truce[a] = on;
   A.truceT[b] = w.t; B.truceT[a] = w.t;
   if (!on) { A.attitude[b] = Math.min(A.attitude[b], -30); B.attitude[a] = Math.min(B.attitude[a], -30); if (A.pact[b]) { A.pact[b] = false; B.pact[a] = false; } }
+  if (!on) {
+    // A fresh war is fought, not filed: AI sides muster a push soon instead of waiting out a timer.
+    for (const S of [A, B]) if (S.ai) S.aiLast = Math.min(S.aiLast, w.t - 600);
+    // Allies honor their pacts and join against the other side.
+    for (let k = 0; k < w.nP; k++) {
+      if (k === a || k === b || w.slots[k].neutral || !w.slots[k].alive) continue;
+      if (w.slots[k].pact[a] && w.slots[k].truce[b]) setTruce(w, k, b, false);
+      if (w.slots[k].pact[b] && w.slots[k].truce[a]) setTruce(w, k, a, false);
+    }
+  }
   w.flowDirty = true;
   const other = a === 0 ? b : b === 0 ? a : -1;
   if (other >= 0) {
