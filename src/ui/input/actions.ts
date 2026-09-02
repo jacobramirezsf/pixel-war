@@ -205,6 +205,24 @@ export function placePreview(app: App): { tx: number; ty: number; w: number; h: 
 }
 
 /** Editor painting, building, selling, and sandbox placement. Returns true when a tool took the pointer. */
+/**
+ * Paint every tile from the last painted one to here, stepping through neighbors so a fast drag
+ * leaves a connected line: first across, then down. Holes in walls let armies through.
+ */
+function paintLine(app: App, ts: ToolState, x: number, y: number, first: boolean, put: (px: number, py: number) => void): void {
+  const w = app.world!;
+  const tx = clamp((x / TILE) | 0, 0, w.map.cols - 1), ty = clamp((y / TILE) | 0, 0, w.map.rows - 1), i = ty * w.map.cols + tx;
+  if (ts.lt === i) return;
+  if (first || ts.lt < 0) { ts.lt = i; put(tx * TILE + 4, ty * TILE + 4); return; }
+  let cx = ts.lt % w.map.cols, cy = (ts.lt / w.map.cols) | 0;
+  let guard = w.map.cols + w.map.rows;
+  while ((cx !== tx || cy !== ty) && guard-- > 0) {
+    if (cx !== tx) cx += Math.sign(tx - cx); else cy += Math.sign(ty - cy);
+    put(cx * TILE + 4, cy * TILE + 4);
+  }
+  ts.lt = i;
+}
+
 export function toolAt(app: App, x: number, y: number, ts: ToolState, first: boolean): boolean {
   if (app.editor) { paint(app, x, y, ts); return true; }
   const w = app.world;
@@ -214,25 +232,18 @@ export function toolAt(app: App, x: number, y: number, ts: ToolState, first: boo
     if (first) app.lastBuilt = [];
     // Footprint buildings: drag to aim, release to place. Walls and bridges paint as you drag.
     if (D.w > 1 || D.h > 1 || D.kind === 'town') { app.placing = { x, y }; return true; }
-    const tx = clamp((x / TILE) | 0, 0, w.map.cols - 1), ty = clamp((y / TILE) | 0, 0, w.map.rows - 1), i = ty * w.map.cols + tx;
-    if (ts.lt === i) return true;
-    ts.lt = i;
-    if (issueAction(app, { type: 'build', payload: { x, y, bld: app.bbrush } })) app.lastBuilt.push(w.blds[w.blds.length - 1].id);
+    paintLine(app, ts, x, y, first, (px, py) => {
+      if (issueAction(app, { type: 'build', payload: { x: px, y: py, bld: app.bbrush } })) app.lastBuilt.push(w.blds[w.blds.length - 1].id);
+    });
     return true;
   }
   if (app.tool === 'terrain') {
-    const tx = clamp((x / TILE) | 0, 0, w.map.cols - 1), ty = clamp((y / TILE) | 0, 0, w.map.rows - 1), i = ty * w.map.cols + tx;
-    if (ts.lt === i) return true;
-    ts.lt = i;
-    issueAction(app, { type: 'terrain', payload: { x, y, kind: app.tbrush } });
+    paintLine(app, ts, x, y, first, (px, py) => issueAction(app, { type: 'terrain', payload: { x: px, y: py, kind: app.tbrush } }));
     return true;
   }
   if (app.tool === 'sell') {
     // Remove paints: drag across walls and roads, tap a building.
-    const tx = clamp((x / TILE) | 0, 0, w.map.cols - 1), ty = clamp((y / TILE) | 0, 0, w.map.rows - 1), i = ty * w.map.cols + tx;
-    if (ts.lt === i) return true;
-    ts.lt = i;
-    issueAction(app, { type: 'sell', payload: { x, y } });
+    paintLine(app, ts, x, y, first, (px, py) => issueAction(app, { type: 'sell', payload: { x: px, y: py } }));
     return true;
   }
   if (app.tool === 'settle' || app.tool === 'outpost') {

@@ -384,6 +384,19 @@ export function applyCommand(w: World, c: Command, quiet = false): boolean {
       const tx = clamp((c.payload.x / TILE) | 0, 0, mapW(w) / TILE - 1), ty = clamp((c.payload.y / TILE) | 0, 0, mapH(w) / TILE - 1);
       return startWork(w, slot, tx, ty, c.payload.kind);
     }
+    case 'repairBld': {
+      // Pay half the missing fraction of the price, made whole at once. Workers do it free, slowly.
+      const b = w.blds.find((x) => x.id === c.payload.id && x.team === slot);
+      const t: { hp: number; max: number; cost: number } | null = b ? { hp: b.hp, max: b.max, cost: BLD[b.type].cost } : (() => { const st = s.settlements.find((x) => x.id === c.payload.id && x.hp > 0); return st ? { hp: st.hp, max: st.max, cost: TIERS[st.tier].gold || 150 } : null; })();
+      if (!t) return false;
+      if (t.hp >= t.max) { say('Nothing to repair', 1); return false; }
+      const gold = Math.max(1, Math.ceil(((t.max - t.hp) / t.max) * t.cost * 0.5));
+      if (!cheat(w, slot, 'freeBuild') && s.gold < gold) { say('Need ' + gold + ' gold', 1.2); return false; }
+      if (!cheat(w, slot, 'freeBuild')) s.gold -= gold;
+      if (b) b.hp = b.max; else { const st = s.settlements.find((x) => x.id === c.payload.id)!; st.hp = st.max; }
+      say('Repaired', 1);
+      return true;
+    }
     case 'upgradeBld': {
       const b = w.blds.find((x) => x.id === c.payload.id && x.team === slot);
       if (!b) return false;

@@ -432,6 +432,11 @@ function renderSelCard(app: App): void {
     const next = s.buildT > 0 ? '<br><span class="civ">growing into a ' + s.tier + '</span>'
       : to ? '<br><span class="civ">next, ' + to + ': </span>' + needs.map((n) => '<span class="' + (n.ok ? 'req-ok' : 'req-no') + '">' + (n.ok ? '✓' : '✗') + n.label + '</span>').join(' ') : '';
     el.innerHTML = '<span class="town"><b class="rename" title="rename">' + name.toUpperCase() + '</b> ' + s.tier + cap + (w.rules.civilians ? ' · <span class="st-' + st + '">' + STATE_LABEL[st] + '</span><br><span class="civ">' + c.residents + '/' + c.housing + ' people · ' + c.employed + '/' + c.jobs + ' jobs · +' + c.income.toFixed(1) + '/s</span>' : '') + next + '</span>';
+    if (s.hp < s.max && s.buildT <= 0) {
+      el.innerHTML += '<span class="acts"><button class="mini gold" id="townFix">REPAIR · ' + Math.max(1, Math.ceil(((s.max - s.hp) / s.max) * (TIERS[s.tier].gold || 150) * 0.5)) + 'g</button></span>';
+      const fx = el.querySelector<HTMLButtonElement>('#townFix');
+      if (fx) fx.onclick = () => { issueAction(app, { type: 'repairBld', payload: { id: s.id } }); app.ui.updateUI(); };
+    }
     const rn = el.querySelector<HTMLElement>('.rename');
     if (rn) rn.onclick = () => { const v = prompt('Name this settlement', name); if (v != null) issueAction(app, { type: 'rename', payload: { region: s.region, name: v } }); };
     return;
@@ -449,11 +454,13 @@ function renderSelCard(app: App): void {
     const techs = w.rules.town ? TECH_KEYS.filter((t) => TECH_INFO[t].at === b.type || (b.type === 'port' && TECH_INFO[t].at === 'dock')) : [];
     const tech = w.slots[app.ctl].tech;
     const rows = techs.map((t) => { const lvl = tech[t], I = TECH_INFO[t], why = canResearch(w, app.ctl, t); return '<button class="mini' + (why ? ' dis' : '') + '" data-tech="' + t + '" title="' + I.text + (why ? '. ' + why : '') + '">' + TECH_NAMES[t] + ' ' + (lvl >= I.levels ? 'MAX' : (lvl + 1) + ' · ' + RESEARCH_COST[lvl] + 'g') + '</button>'; });
+    if (b.hp < b.max && b.buildT <= 0) rows.push('<button class="mini gold" data-fix="' + b.id + '">REPAIR · ' + Math.max(1, Math.ceil(((b.max - b.hp) / b.max) * D.cost * 0.5)) + 'g</button>');
     const upWhy = canUpgradeBld(w, app.ctl, b), nt = nextType(b.type), cost = upgradeCost(b);
     if (!upWhy) rows.push('<button class="mini gold" data-up="' + b.id + '">' + (nt ? 'UPGRADE TO ' + BLD[nt].name + ' · ' + cost.mat + 'm' : 'LEVEL ' + (b.level + 1) + ' · ' + cost.gold + 'g') + '</button>' + (nt ? '<button class="mini" data-upall="' + b.id + '">ALL CONNECTED</button>' : ''));
     else if (D.trains || nt) rows.push('<span class="civ">upgrade: ' + upWhy + '</span>');
     el.innerHTML = '<span class="town"><b>' + lines[0] + '</b>' + (lines.length > 1 ? '<br><span class="civ">' + lines.slice(1).join(' · ') + '</span>' : '') + (rows.length ? '<br><span class="acts">' + rows.join(' ') + '</span>' : '') + '</span>';
     for (const btn of el.querySelectorAll<HTMLButtonElement>('button[data-tech]')) btn.onclick = () => { issueAction(app, { type: 'research', payload: { tech: btn.dataset.tech as import('../../sim/types.ts').Tech } }); app.ui.updateUI(); };
+    for (const btn of el.querySelectorAll<HTMLButtonElement>('button[data-fix]')) btn.onclick = () => { issueAction(app, { type: 'repairBld', payload: { id: +btn.dataset.fix! } }); app.ui.updateUI(); };
     for (const btn of el.querySelectorAll<HTMLButtonElement>('button[data-up]')) btn.onclick = () => { issueAction(app, { type: 'upgradeBld', payload: { id: +btn.dataset.up! } }); app.ui.updateUI(); };
     for (const btn of el.querySelectorAll<HTMLButtonElement>('button[data-upall]')) btn.onclick = () => { issueAction(app, { type: 'upgradeBld', payload: { id: +btn.dataset.upall!, connected: true } }); app.ui.updateUI(); };
     return;

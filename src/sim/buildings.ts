@@ -100,7 +100,9 @@ function cellBlock(w: World, tx: number, ty: number, team: number, type: BldKey)
     return touch ? null : 'start from a bank';
   }
   const m = w.map;
-  if (tx < 1 || ty < 1 || tx >= m.cols - 1 || ty >= m.rows - 1) return 'map edge';
+  // The edge ring is buildable: units can walk it, so a wall that stops short of the border
+  // would always leave a corridor around its end.
+  if (tx < 0 || ty < 0 || tx >= m.cols || ty >= m.rows) return 'map edge';
   const t = m.tiles[ty * m.cols + tx];
   // Town buildings clear trees; walls and towers need open ground.
   if (t === 3 || t === 4 || (t === 2 && BLD[type].kind !== 'town' && type !== 'castle')) return 'bad ground';

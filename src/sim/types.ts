@@ -477,6 +477,7 @@ export type Action =
   | { type: 'terrain'; payload: { x: number; y: number; kind: import('../data/buildings.ts').GroundKey } }
   | { type: 'unbuild'; payload: { ids: number[] } }
   | { type: 'upgradeBld'; payload: { id: number; connected?: boolean } }
+  | { type: 'repairBld'; payload: { id: number } }
   | { type: 'place'; payload: { unit: UnitKey; x: number; y: number } }
   | { type: 'erase'; payload: { x: number; y: number } }
   | { type: 'clear'; payload: null }
