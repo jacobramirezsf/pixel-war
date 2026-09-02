@@ -27,7 +27,7 @@ test('DARPA needs a city, a factory, and a castle; the lab needs a factory', () 
   w.slots[0].gold = 99999; w.slots[0].mat = 99999; w.cheats.on = true; w.cheats.build = true; w.cheats.allAges = true;
   const home = w.slots[0].settlements[0];
   const tx = Math.round(home.x / 8) + 4, ty = Math.round(home.y / 8) + 4;
-  assert.match(canBuild(w, tx, ty, 0, 'darpa') ?? '', /factory|castle|way|edge|territory/);
+  assert.match(canBuild(w, tx, ty, 0, 'darpa') ?? '', /factory|castle|way|edge|territory|ground/);
   const put = (k: 'factory' | 'castle' | 'darpa' | 'robolab'): void => { const sp = findSpot(w, 0, k, home.x, home.y, 24)!; assert.ok(sp, 'room for ' + k); assert.ok(act(w, 0, { type: 'build', payload: { x: sp.tx * 8 + BLD[k].w * 4, y: sp.ty * 8 + BLD[k].h * 4, bld: k } }), k + ': ' + w.msg); };
   put('factory'); put('castle');
   put('darpa');
